@@ -170,83 +170,85 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
 
         int mapSizeBefore = savedItemMap.size();
 
-        try {
-            // Force a slave-view + armed latch, then invoke finalizeSlaveSync — under Task
-            // #22 this would run createDefaultItemIDs() and grow the map to ~1300 entries.
-            // Under Task #23 the map must stay EXACTLY at mapSizeBefore.
-            final int[] mapSizeAfter = { -1 };
-            final int[] arrsFiredAfter = { -1 };
-            withIsSlaveServer(true, () -> {
-                // Arm the latch without touching the map (clear() would wipe it — we want to
-                // verify finalizeSlaveSync doesn't ADD entries, so keep the current map as-is).
-                // The latch-arming state is normally set by clear(); the production
-                // finalizeSlaveSync gates on it via early-return-if-not-armed, so we must arm
-                // it here to actually exercise the release branch.
-                // Since there's no direct arm-only helper, we clear() and re-install the map
-                // via replaceState_forTesting (which does NOT touch the latch), then keep the
-                // latch in its post-clear armed state.
-                ItemIDManager.clear();
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                // Force a slave-view + armed latch, then invoke finalizeSlaveSync — under Task
+                // #22 this would run createDefaultItemIDs() and grow the map to ~1300 entries.
+                // Under Task #23 the map must stay EXACTLY at mapSizeBefore.
+                final int[] mapSizeAfter = { -1 };
+                final int[] arrsFiredAfter = { -1 };
+                withIsSlaveServer(true, () -> {
+                    // Arm the latch without touching the map (clear() would wipe it — we want to
+                    // verify finalizeSlaveSync doesn't ADD entries, so keep the current map as-is).
+                    // The latch-arming state is normally set by clear(); the production
+                    // finalizeSlaveSync gates on it via early-return-if-not-armed, so we must arm
+                    // it here to actually exercise the release branch.
+                    // Since there's no direct arm-only helper, we clear() and re-install the map
+                    // via replaceState_forTesting (which does NOT touch the latch), then keep the
+                    // latch in its post-clear armed state.
+                    ItemIDManager.clear();
+                    ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                    // clear() armed the latch; replaceState_forTesting does not release it.
+                    // (Verify assumption explicitly to prevent silent test rot.)
+                    if (!ItemIDManager.isRegistrationLatchArmed_forTesting()) {
+                        mapSizeAfter[0] = -2;
+                        return;
+                    }
+
+                    // Strengthened assertion (2026-07-17 code-review): reset the ARRS counter
+                    // to a known zero right BEFORE finalizeSlaveSync so a hypothetical Task #22
+                    // regression — createDefaultItemIDs() sneaking back into finalizeSlaveSync
+                    // — is caught even when register-if-absent no-ops leave map SIZE unchanged.
+                    // On a slave those ~1300 default registrations would each flow through the
+                    // delegated slave path and fire an ARRS, so the counter jumping from 0 to a
+                    // large N is the loud, direction-independent regression signal.
+                    ItemIDManager.resetSlaveArrsCounter_forTesting();
+
+                    // Task #23: this must NOT run createDefaultItemIDs anymore.
+                    ItemIDManager.finalizeSlaveSync();
+                    mapSizeAfter[0] = ItemIDManager.getItemIDMap().size();
+                    arrsFiredAfter[0] = ItemIDManager.getSlaveArrsRequestsFired_forTesting();
+                });
+
+                if (mapSizeAfter[0] == -2)
+                    return fail("Latch was released by replaceState_forTesting — test premise broken");
+                TestResult r = assertEquals(
+                        "finalizeSlaveSync did not add default items on the slave (map size unchanged)",
+                        mapSizeBefore, mapSizeAfter[0]);
+                if (!r.passed()) return r;
+                // Belt-and-braces (2026-07-17): under a Task #22 regression the reintroduced
+                // createDefaultItemIDs() would drive registerItemStackServerSide_direct_slave
+                // once per registry item — even if register-if-absent hid the size delta, the
+                // ARRS counter would jump from 0 into the thousands. Assert it stayed at 0.
+                r = assertEquals(
+                        "finalizeSlaveSync did not fire any ARRS requests (createDefaultItemIDs "
+                                + "reintroduction would flood this counter with ~1300 registry hits)",
+                        0, arrsFiredAfter[0]);
+                if (!r.passed()) return r;
+                r = assertFalse("finalizeSlaveSync released the latch",
+                        ItemIDManager.isRegistrationLatchArmed_forTesting());
+                if (!r.passed()) return r;
+
+                return pass("finalizeSlaveSync no longer runs createDefaultItemIDs on the slave "
+                        + "(map size stayed at " + mapSizeBefore + ", ARRS counter stayed at 0)");
+            } catch (Throwable t) {
+                return fail("finalizeSlaveSync test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                // Restore bit-exact. finalizeSlaveSync (Task #23) released the latch — on a live
+                // server that was already the case, so leaving it released matches the pre-test
+                // steady state (whether savedLatch was true or false, the live post-load server
+                // has the latch released). Explicitly release just in case a fixture load left it
+                // armed, since neither replaceState_forTesting nor the *_forTesting restores of
+                // quarantine/persistedShorts touch the latch.
                 ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-                // clear() armed the latch; replaceState_forTesting does not release it.
-                // (Verify assumption explicitly to prevent silent test rot.)
-                if (!ItemIDManager.isRegistrationLatchArmed_forTesting()) {
-                    mapSizeAfter[0] = -2;
-                    return;
-                }
-
-                // Strengthened assertion (2026-07-17 code-review): reset the ARRS counter
-                // to a known zero right BEFORE finalizeSlaveSync so a hypothetical Task #22
-                // regression — createDefaultItemIDs() sneaking back into finalizeSlaveSync
-                // — is caught even when register-if-absent no-ops leave map SIZE unchanged.
-                // On a slave those ~1300 default registrations would each flow through the
-                // delegated slave path and fire an ARRS, so the counter jumping from 0 to a
-                // large N is the loud, direction-independent regression signal.
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                ItemIDManager.clearSlaveNegativeCache_forTesting();
                 ItemIDManager.resetSlaveArrsCounter_forTesting();
-
-                // Task #23: this must NOT run createDefaultItemIDs anymore.
-                ItemIDManager.finalizeSlaveSync();
-                mapSizeAfter[0] = ItemIDManager.getItemIDMap().size();
-                arrsFiredAfter[0] = ItemIDManager.getSlaveArrsRequestsFired_forTesting();
-            });
-
-            if (mapSizeAfter[0] == -2)
-                return fail("Latch was released by replaceState_forTesting — test premise broken");
-            TestResult r = assertEquals(
-                    "finalizeSlaveSync did not add default items on the slave (map size unchanged)",
-                    mapSizeBefore, mapSizeAfter[0]);
-            if (!r.passed()) return r;
-            // Belt-and-braces (2026-07-17): under a Task #22 regression the reintroduced
-            // createDefaultItemIDs() would drive registerItemStackServerSide_direct_slave
-            // once per registry item — even if register-if-absent hid the size delta, the
-            // ARRS counter would jump from 0 into the thousands. Assert it stayed at 0.
-            r = assertEquals(
-                    "finalizeSlaveSync did not fire any ARRS requests (createDefaultItemIDs "
-                            + "reintroduction would flood this counter with ~1300 registry hits)",
-                    0, arrsFiredAfter[0]);
-            if (!r.passed()) return r;
-            r = assertFalse("finalizeSlaveSync released the latch",
-                    ItemIDManager.isRegistrationLatchArmed_forTesting());
-            if (!r.passed()) return r;
-
-            return pass("finalizeSlaveSync no longer runs createDefaultItemIDs on the slave "
-                    + "(map size stayed at " + mapSizeBefore + ", ARRS counter stayed at 0)");
-        } catch (Throwable t) {
-            return fail("finalizeSlaveSync test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            // Restore bit-exact. finalizeSlaveSync (Task #23) released the latch — on a live
-            // server that was already the case, so leaving it released matches the pre-test
-            // steady state (whether savedLatch was true or false, the live post-load server
-            // has the latch released). Explicitly release just in case a fixture load left it
-            // armed, since neither replaceState_forTesting nor the *_forTesting restores of
-            // quarantine/persistedShorts touch the latch.
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            ItemIDManager.clearSlaveNegativeCache_forTesting();
-            ItemIDManager.resetSlaveArrsCounter_forTesting();
-            if (!savedLatch)
-                ItemIDManager.markRegistryReady();
+                if (!savedLatch)
+                    ItemIDManager.markRegistryReady();
+            }
         }
     }
 
@@ -366,50 +368,52 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
 
         ItemStack unknown = paperWithCustomData("slave-latch");
 
-        try {
-            // Reset ARRS counter first.
-            ItemIDManager.resetSlaveArrsCounter_forTesting();
-            ItemIDManager.clearSlaveNegativeCache_forTesting();
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                // Reset ARRS counter first.
+                ItemIDManager.resetSlaveArrsCounter_forTesting();
+                ItemIDManager.clearSlaveNegativeCache_forTesting();
 
-            final ItemID[] resultRef = { ItemID.INVALID_ID };
-            final int[] arrsAfterRef = { -1 };
-            final boolean[] cachedRef = { false };
-            withIsSlaveServer(true, () -> {
-                // Arm the latch via clear() (production release path); we do NOT release it.
-                ItemIDManager.clear();
+                final ItemID[] resultRef = { ItemID.INVALID_ID };
+                final int[] arrsAfterRef = { -1 };
+                final boolean[] cachedRef = { false };
+                withIsSlaveServer(true, () -> {
+                    // Arm the latch via clear() (production release path); we do NOT release it.
+                    ItemIDManager.clear();
 
-                resultRef[0] = registerScratch(unknown);
-                arrsAfterRef[0] = ItemIDManager.getSlaveArrsRequestsFired_forTesting();
-                cachedRef[0] = ItemIDManager.isInSlaveNegativeCache_forTesting(unknown);
-            });
+                    resultRef[0] = registerScratch(unknown);
+                    arrsAfterRef[0] = ItemIDManager.getSlaveArrsRequestsFired_forTesting();
+                    cachedRef[0] = ItemIDManager.isInSlaveNegativeCache_forTesting(unknown);
+                });
 
-            TestResult r = assertFalse("latch-armed slave register returns INVALID_ID",
-                    resultRef[0].isValid());
-            if (!r.passed()) return r;
-            r = assertEquals("latch-armed slave register fires ZERO ARRS requests",
-                    0, arrsAfterRef[0]);
-            if (!r.passed()) return r;
-            r = assertFalse("latch-armed rejection does not populate the negative cache "
-                            + "(the miss will be re-attempted after the sync packet arrives)",
-                    cachedRef[0]);
-            if (!r.passed()) return r;
+                TestResult r = assertFalse("latch-armed slave register returns INVALID_ID",
+                        resultRef[0].isValid());
+                if (!r.passed()) return r;
+                r = assertEquals("latch-armed slave register fires ZERO ARRS requests",
+                        0, arrsAfterRef[0]);
+                if (!r.passed()) return r;
+                r = assertFalse("latch-armed rejection does not populate the negative cache "
+                                + "(the miss will be re-attempted after the sync packet arrives)",
+                        cachedRef[0]);
+                if (!r.passed()) return r;
 
-            return pass("latch-armed slave register returns INVALID_ID without firing ARRS "
-                    + "and without polluting the negative cache");
-        } catch (Throwable t) {
-            return fail("latch-armed test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            // clear() wiped everything — restore bit-exact.
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            ItemIDManager.clearSlaveNegativeCache_forTesting();
-            ItemIDManager.resetSlaveArrsCounter_forTesting();
-            if (!savedLatch)
-                ItemIDManager.markRegistryReady();
-            // If savedLatch was true (pre-test armed), we've re-armed it via clear() above —
-            // no additional action needed.
+                return pass("latch-armed slave register returns INVALID_ID without firing ARRS "
+                        + "and without polluting the negative cache");
+            } catch (Throwable t) {
+                return fail("latch-armed test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                // clear() wiped everything — restore bit-exact.
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                ItemIDManager.clearSlaveNegativeCache_forTesting();
+                ItemIDManager.resetSlaveArrsCounter_forTesting();
+                if (!savedLatch)
+                    ItemIDManager.markRegistryReady();
+                // If savedLatch was true (pre-test armed), we've re-armed it via clear() above —
+                // no additional action needed.
+            }
         }
     }
 
@@ -484,94 +488,96 @@ public class ItemIDSlaveDelegationTests extends TestSuite {
         ItemID fabricatedId = new ItemID(fabricatedShort);
         ItemStack raw = paperWithCustomData("populate-positive");
 
-        try {
-            ItemIDManager.markRegistryReady();
-            ItemIDManager.clearSlaveNegativeCache_forTesting();
-            ItemIDManager.resetSlaveArrsCounter_forTesting();
-
-            // Test premise: short 9999 must not already be registered (otherwise the
-            // putIfAbsent inside the populator no-ops and the defensive-copy assertion
-            // has nothing to verify).
-            if (ItemIDManager.getItemIDMap().containsKey(fabricatedId)
-                    || ItemIDManager.getItemIDAliasMap().containsKey(fabricatedId))
-                return pass("skipped: fabricated short " + fabricatedShort
-                        + " is already registered or aliased — pick a different short if this recurs");
-
-            // Normalize the stack exactly the way the production register-path does,
-            // then seed the negative cache with a wire-consistent key so we can assert
-            // the positive response REMOVES the in-flight mark.
-            ItemStack normalized = VolatileItemComponents.normalize(raw);
-            normalized.setCount(1);
-            Object key = newNormalizedStackKey(normalized);
-
-            List<ItemStack> stacks = new ArrayList<>();
-            stacks.add(normalized);
-            List<Object> keys = new ArrayList<>();
-            keys.add(key);
-            List<ItemID> response = new ArrayList<>();
-            response.add(fabricatedId);
-
-            // Seed the negative cache with the same key by running the register path —
-            // this both mirrors the production sequence (register → ARRS fires → response
-            // hops back and calls populate) AND lets us assert the positive response
-            // REMOVES the mark.
-            withIsSlaveServer(true, () -> {
-                registerScratch(raw);
-            });
-            if (!ItemIDManager.isInSlaveNegativeCache_forTesting(raw))
-                return fail("test setup: register path did not seed the negative cache "
-                        + "for the synthetic stack");
-
-            // Invoke the populator directly with the fabricated positive response.
-            invokePopulateSlaveCacheFromResponse(stacks, keys, response, null);
-
-            // Assertion 1: itemIDMap now contains fabricatedShort → equivalent stack.
-            Map<ItemID, ItemStack> mapAfter = ItemIDManager.getItemIDMap();
-            ItemStack stored = mapAfter.get(fabricatedId);
-            TestResult r = assertNotNull(
-                    "populateSlaveCacheFromResponse installed the fabricated short in itemIDMap",
-                    stored);
-            if (!r.passed()) return r;
-            r = assertTrue(
-                    "stored template is isSameItemSameComponents-equal to the input normalized stack",
-                    ItemStack.isSameItemSameComponents(stored, normalized));
-            if (!r.passed()) return r;
-
-            // Assertion 2: the stored stack is a DEFENSIVE COPY, not the same instance
-            // that was passed in. Guards against a future edit dropping the .copy() call
-            // inside the positive branch — the map would then alias the caller's stack
-            // and any subsequent mutation on it (e.g. setCount) would poison the registry.
-            r = assertFalse(
-                    "stored template is a defensive copy, not the same instance as the input "
-                            + "normalized stack (guard against dropped .copy() call)",
-                    stored == normalized);
-            if (!r.passed()) return r;
-
-            // Assertion 3: positive response REMOVED the in-flight / negative mark so
-            // the next lookup hits the positive map.
-            r = assertFalse(
-                    "positive response cleared the negative / in-flight cache entry",
-                    ItemIDManager.isInSlaveNegativeCache_forTesting(raw));
-            if (!r.passed()) return r;
-
-            return pass("populateSlaveCacheFromResponse positive branch installs a defensive "
-                    + "copy under the master-supplied short and clears the negative-cache mark");
-        } catch (Throwable t) {
-            return fail("positive-response populator test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            // Drop the fabricated short from the live registry so the next test / live
-            // world does not observe a leftover entry with our synthetic template.
-            // The manager has no public "remove one short" helper — replaceState_forTesting
-            // preserves the alias / counter state and rebuilds the map minus our entry.
-            Map<ItemID, ItemStack> current = ItemIDManager.getItemIDMap();
-            current.remove(new ItemID(fabricatedShort));
-            ItemIDManager.replaceState_forTesting(current, ItemIDManager.getItemIDAliasMap(),
-                    ItemIDManager.getNextShortCounter_forTesting());
-            ItemIDManager.clearSlaveNegativeCache_forTesting();
-            ItemIDManager.resetSlaveArrsCounter_forTesting();
-            if (!savedLatch)
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
                 ItemIDManager.markRegistryReady();
+                ItemIDManager.clearSlaveNegativeCache_forTesting();
+                ItemIDManager.resetSlaveArrsCounter_forTesting();
+
+                // Test premise: short 9999 must not already be registered (otherwise the
+                // putIfAbsent inside the populator no-ops and the defensive-copy assertion
+                // has nothing to verify).
+                if (ItemIDManager.getItemIDMap().containsKey(fabricatedId)
+                        || ItemIDManager.getItemIDAliasMap().containsKey(fabricatedId))
+                    return pass("skipped: fabricated short " + fabricatedShort
+                            + " is already registered or aliased — pick a different short if this recurs");
+
+                // Normalize the stack exactly the way the production register-path does,
+                // then seed the negative cache with a wire-consistent key so we can assert
+                // the positive response REMOVES the in-flight mark.
+                ItemStack normalized = VolatileItemComponents.normalize(raw);
+                normalized.setCount(1);
+                Object key = newNormalizedStackKey(normalized);
+
+                List<ItemStack> stacks = new ArrayList<>();
+                stacks.add(normalized);
+                List<Object> keys = new ArrayList<>();
+                keys.add(key);
+                List<ItemID> response = new ArrayList<>();
+                response.add(fabricatedId);
+
+                // Seed the negative cache with the same key by running the register path —
+                // this both mirrors the production sequence (register → ARRS fires → response
+                // hops back and calls populate) AND lets us assert the positive response
+                // REMOVES the mark.
+                withIsSlaveServer(true, () -> {
+                    registerScratch(raw);
+                });
+                if (!ItemIDManager.isInSlaveNegativeCache_forTesting(raw))
+                    return fail("test setup: register path did not seed the negative cache "
+                            + "for the synthetic stack");
+
+                // Invoke the populator directly with the fabricated positive response.
+                invokePopulateSlaveCacheFromResponse(stacks, keys, response, null);
+
+                // Assertion 1: itemIDMap now contains fabricatedShort → equivalent stack.
+                Map<ItemID, ItemStack> mapAfter = ItemIDManager.getItemIDMap();
+                ItemStack stored = mapAfter.get(fabricatedId);
+                TestResult r = assertNotNull(
+                        "populateSlaveCacheFromResponse installed the fabricated short in itemIDMap",
+                        stored);
+                if (!r.passed()) return r;
+                r = assertTrue(
+                        "stored template is isSameItemSameComponents-equal to the input normalized stack",
+                        ItemStack.isSameItemSameComponents(stored, normalized));
+                if (!r.passed()) return r;
+
+                // Assertion 2: the stored stack is a DEFENSIVE COPY, not the same instance
+                // that was passed in. Guards against a future edit dropping the .copy() call
+                // inside the positive branch — the map would then alias the caller's stack
+                // and any subsequent mutation on it (e.g. setCount) would poison the registry.
+                r = assertFalse(
+                        "stored template is a defensive copy, not the same instance as the input "
+                                + "normalized stack (guard against dropped .copy() call)",
+                        stored == normalized);
+                if (!r.passed()) return r;
+
+                // Assertion 3: positive response REMOVED the in-flight / negative mark so
+                // the next lookup hits the positive map.
+                r = assertFalse(
+                        "positive response cleared the negative / in-flight cache entry",
+                        ItemIDManager.isInSlaveNegativeCache_forTesting(raw));
+                if (!r.passed()) return r;
+
+                return pass("populateSlaveCacheFromResponse positive branch installs a defensive "
+                        + "copy under the master-supplied short and clears the negative-cache mark");
+            } catch (Throwable t) {
+                return fail("positive-response populator test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                // Drop the fabricated short from the live registry so the next test / live
+                // world does not observe a leftover entry with our synthetic template.
+                // The manager has no public "remove one short" helper — replaceState_forTesting
+                // preserves the alias / counter state and rebuilds the map minus our entry.
+                Map<ItemID, ItemStack> current = ItemIDManager.getItemIDMap();
+                current.remove(new ItemID(fabricatedShort));
+                ItemIDManager.replaceState_forTesting(current, ItemIDManager.getItemIDAliasMap(),
+                        ItemIDManager.getNextShortCounter_forTesting());
+                ItemIDManager.clearSlaveNegativeCache_forTesting();
+                ItemIDManager.resetSlaveArrsCounter_forTesting();
+                if (!savedLatch)
+                    ItemIDManager.markRegistryReady();
+            }
         }
     }
 

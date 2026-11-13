@@ -1471,6 +1471,10 @@ public class ItemIDManager implements ServerSaveable {
 
     private static void onNewItemAdded(Map<ItemID, ItemStack> newItems)
     {
+        // BS-264: a test fixture's items must not reach slaves or players
+        if (fixtureWindowDepth.get() > 0)
+            return;
+        newItemBroadcasts.incrementAndGet();
         // Broadcast update to players
         SyncItemIDsPacket packet = new SyncItemIDsPacket(newItems, false);
         if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
@@ -1484,6 +1488,63 @@ public class ItemIDManager implements ServerSaveable {
         Map<ItemID, ItemStack> items = new HashMap<>(itemIDMap);
         SyncItemIDsPacket packet = new SyncItemIDsPacket(items, true);
         packet.sendToClient(player);
+    }
+
+    /** BS-264: open {@link FixtureWindow}s; while above 0, new items are not broadcast. */
+    private static final java.util.concurrent.atomic.AtomicInteger fixtureWindowDepth = new java.util.concurrent.atomic.AtomicInteger();
+    /** BS-264: incremental "new item" broadcasts sent so far (test observation only). */
+    private static final java.util.concurrent.atomic.AtomicLong newItemBroadcasts = new java.util.concurrent.atomic.AtomicLong();
+
+    /**
+     * BS-264, test-only: sends the master's current full table (same content as the reconnect
+     * sync) to every connected slave and every online player, so receivers drop anything a
+     * test fixture left behind. No-op on a slave or without a running server.
+     */
+    public static void broadcastFullSync_forTesting()
+    {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server == null || (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer))
+            return;
+        if (MultiServerManager.isRunning() && MultiServerManager.isMaster())
+            for (String slaveID : MultiServerManager.getConnectedSlaveIDs())
+                SyncItemIDsPacket.sendAllItemsToSlave(slaveID);
+        for (ServerPlayer player : server.getPlayerList().getPlayers())
+            onPlayerJoined(player);
+    }
+
+    /**
+     * BS-264, test-only: opens a window in which newly registered items are not broadcast.
+     * Windows nest; closing the outermost one sends {@link #broadcastFullSync_forTesting()}.
+     * Close it AFTER restoring the live table.
+     */
+    public static FixtureWindow fixtureWindow_forTesting()
+    {
+        fixtureWindowDepth.incrementAndGet();
+        return new FixtureWindow();
+    }
+
+    /** @return the number of incremental "new item" broadcasts sent so far (test-only). */
+    public static long getNewItemBroadcastCount_forTesting()
+    {
+        return newItemBroadcasts.get();
+    }
+
+    /** See {@link #fixtureWindow_forTesting()}. */
+    public static final class FixtureWindow implements AutoCloseable
+    {
+        private boolean closed;
+
+        private FixtureWindow() {}
+
+        @Override
+        public void close()
+        {
+            if (closed)
+                return;
+            closed = true;
+            if (fixtureWindowDepth.decrementAndGet() == 0)
+                broadcastFullSync_forTesting();
+        }
     }
     /**
      * Receive-path insert for clients and slave servers (BS-259): the master's short → item

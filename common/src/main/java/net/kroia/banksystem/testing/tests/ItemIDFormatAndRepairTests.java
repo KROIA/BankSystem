@@ -272,45 +272,47 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         // so the live world's persisted-wins merge protection is not degraded by the test.
         java.util.Set<ItemID> savedPersisted = ItemIDManager.getPersistedShorts_forTesting();
         final int fixtureCounter = 4242;
-        try {
-            Map<ItemID, ItemStack> fixture = buildTwoEntryFixture();
-            if (fixture == null)
-                return fail("could not register the synthetic fixture templates");
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                Map<ItemID, ItemStack> fixture = buildTwoEntryFixture();
+                if (fixture == null)
+                    return fail("could not register the synthetic fixture templates");
 
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), fixtureCounter);
-            CompoundTag tag = new CompoundTag();
-            if (!new ItemIDManager().save(tag))
-                return fail("could not serialize the fixture");
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), fixtureCounter);
+                CompoundTag tag = new CompoundTag();
+                if (!new ItemIDManager().save(tag))
+                    return fail("could not serialize the fixture");
 
-            ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
-            drainLoadSignals();
-            boolean loaded = new ItemIDManager().load(tag);
-            TestResult r = assertTrue("load() returned true", loaded);
-            if (!r.passed()) return r;
-
-            Map<ItemID, ItemStack> loadedMap = ItemIDManager.getItemIDMap();
-            for (Map.Entry<ItemID, ItemStack> entry : fixture.entrySet()) {
-                ItemStack loadedTemplate = loadedMap.get(entry.getKey());
-                r = assertTrue("fixture entry #" + entry.getKey().getShort() + " survives the round-trip",
-                        loadedTemplate != null
-                                && ItemStack.isSameItemSameComponents(entry.getValue(), loadedTemplate));
+                ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
+                drainLoadSignals();
+                boolean loaded = new ItemIDManager().load(tag);
+                TestResult r = assertTrue("load() returned true", loaded);
                 if (!r.passed()) return r;
+
+                Map<ItemID, ItemStack> loadedMap = ItemIDManager.getItemIDMap();
+                for (Map.Entry<ItemID, ItemStack> entry : fixture.entrySet()) {
+                    ItemStack loadedTemplate = loadedMap.get(entry.getKey());
+                    r = assertTrue("fixture entry #" + entry.getKey().getShort() + " survives the round-trip",
+                            loadedTemplate != null
+                                    && ItemStack.isSameItemSameComponents(entry.getValue(), loadedTemplate));
+                    if (!r.passed()) return r;
+                }
+                r = assertEquals("counter survives the round-trip",
+                        fixtureCounter, ItemIDManager.getNextShortCounter_forTesting());
+                if (!r.passed()) return r;
+                r = assertEquals("loaded format version is reported as CURRENT",
+                        BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT,
+                        ItemIDManager.getLoadedFormatVersion_forTesting());
+                if (!r.passed()) return r;
+                return pass("versioned save/load round-trip preserves maps and counter");
+            } catch (Throwable t) {
+                return fail("round-trip test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                drainLoadSignals();
             }
-            r = assertEquals("counter survives the round-trip",
-                    fixtureCounter, ItemIDManager.getNextShortCounter_forTesting());
-            if (!r.passed()) return r;
-            r = assertEquals("loaded format version is reported as CURRENT",
-                    BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT,
-                    ItemIDManager.getLoadedFormatVersion_forTesting());
-            if (!r.passed()) return r;
-            return pass("versioned save/load round-trip preserves maps and counter");
-        } catch (Throwable t) {
-            return fail("round-trip test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
-        } finally {
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            drainLoadSignals();
         }
     }
 
@@ -328,55 +330,57 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         int savedCounter = ItemIDManager.getNextShortCounter_forTesting();
         Map<ItemID, ItemID> savedQuarantine = ItemIDManager.getQuarantinedAliases_forTesting();
         java.util.Set<ItemID> savedPersisted = ItemIDManager.getPersistedShorts_forTesting();
-        try {
-            Map<ItemID, ItemStack> fixture = buildTwoEntryFixture();
-            if (fixture == null)
-                return fail("could not register the synthetic fixture templates");
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                Map<ItemID, ItemStack> fixture = buildTwoEntryFixture();
+                if (fixture == null)
+                    return fail("could not register the synthetic fixture templates");
 
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
-            CompoundTag tag = new CompoundTag();
-            if (!new ItemIDManager().save(tag))
-                return fail("could not serialize the fixture");
-            // Strip the version key — the exact shape every pre-v2.0.4 ItemIDs.nbt has.
-            tag.remove(BankSystemSaveFormat.KEY_FORMAT_VERSION);
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
+                CompoundTag tag = new CompoundTag();
+                if (!new ItemIDManager().save(tag))
+                    return fail("could not serialize the fixture");
+                // Strip the version key — the exact shape every pre-v2.0.4 ItemIDs.nbt has.
+                tag.remove(BankSystemSaveFormat.KEY_FORMAT_VERSION);
 
-            ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
-            drainLoadSignals();
-            boolean loaded = new ItemIDManager().load(tag);
-            TestResult r = assertTrue("legacy tag load() returned true (tolerant path)", loaded);
-            if (!r.passed()) return r;
-            r = assertEquals("loaded format version is reported as LEGACY",
-                    BankSystemSaveFormat.ITEM_IDS_FORMAT_LEGACY,
-                    ItemIDManager.getLoadedFormatVersion_forTesting());
-            if (!r.passed()) return r;
-            Map<ItemID, ItemStack> loadedMap = ItemIDManager.getItemIDMap();
-            for (ItemID id : fixture.keySet()) {
-                r = assertTrue("legacy fixture entry #" + id.getShort() + " loaded", loadedMap.containsKey(id));
+                ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
+                drainLoadSignals();
+                boolean loaded = new ItemIDManager().load(tag);
+                TestResult r = assertTrue("legacy tag load() returned true (tolerant path)", loaded);
                 if (!r.passed()) return r;
-            }
-            r = assertTrue("legacy load flags the one-shot conversion re-save",
-                    ItemIDManager.consumeLastLoadRequiresResave());
-            if (!r.passed()) return r;
-            r = assertFalse("the re-save flag is one-shot (second consume returns false)",
-                    ItemIDManager.consumeLastLoadRequiresResave());
-            if (!r.passed()) return r;
+                r = assertEquals("loaded format version is reported as LEGACY",
+                        BankSystemSaveFormat.ITEM_IDS_FORMAT_LEGACY,
+                        ItemIDManager.getLoadedFormatVersion_forTesting());
+                if (!r.passed()) return r;
+                Map<ItemID, ItemStack> loadedMap = ItemIDManager.getItemIDMap();
+                for (ItemID id : fixture.keySet()) {
+                    r = assertTrue("legacy fixture entry #" + id.getShort() + " loaded", loadedMap.containsKey(id));
+                    if (!r.passed()) return r;
+                }
+                r = assertTrue("legacy load flags the one-shot conversion re-save",
+                        ItemIDManager.consumeLastLoadRequiresResave());
+                if (!r.passed()) return r;
+                r = assertFalse("the re-save flag is one-shot (second consume returns false)",
+                        ItemIDManager.consumeLastLoadRequiresResave());
+                if (!r.passed()) return r;
 
-            // The conversion save stamps the current format version.
-            CompoundTag resaved = new CompoundTag();
-            if (!new ItemIDManager().save(resaved))
-                return fail("conversion re-save failed");
-            r = assertEquals("conversion re-save stamps the current format version",
-                    BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT,
-                    NbtCompat.getInt(resaved, BankSystemSaveFormat.KEY_FORMAT_VERSION));
-            if (!r.passed()) return r;
-            return pass("legacy version-less files load tolerantly and are converted by the next save");
-        } catch (Throwable t) {
-            return fail("legacy-load test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
-        } finally {
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            drainLoadSignals();
+                // The conversion save stamps the current format version.
+                CompoundTag resaved = new CompoundTag();
+                if (!new ItemIDManager().save(resaved))
+                    return fail("conversion re-save failed");
+                r = assertEquals("conversion re-save stamps the current format version",
+                        BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT,
+                        NbtCompat.getInt(resaved, BankSystemSaveFormat.KEY_FORMAT_VERSION));
+                if (!r.passed()) return r;
+                return pass("legacy version-less files load tolerantly and are converted by the next save");
+            } catch (Throwable t) {
+                return fail("legacy-load test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                drainLoadSignals();
+            }
         }
     }
 
@@ -392,62 +396,64 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         Map<ItemID, ItemStack> savedItemMap = new HashMap<>(ItemIDManager.getItemIDMap());
         Map<ItemID, ItemID> savedAliasMap = new HashMap<>(ItemIDManager.getItemIDAliasMap());
         int savedCounter = ItemIDManager.getNextShortCounter_forTesting();
-        try {
-            Map<ItemID, ItemStack> fixture = buildTwoEntryFixture();
-            if (fixture == null)
-                return fail("could not register the synthetic fixture templates");
-
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
-            CompoundTag tag = new CompoundTag();
-            if (!new ItemIDManager().save(tag))
-                return fail("could not serialize the fixture");
-            // Fake a file written by a newer BankSystem build.
-            tag.putInt(BankSystemSaveFormat.KEY_FORMAT_VERSION,
-                    BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT + 1);
-
-            // Snapshot the exact pre-load state (the fixture) for the zero-mutation compare.
-            Map<ItemID, ItemStack> beforeMap = new HashMap<>(ItemIDManager.getItemIDMap());
-            Map<ItemID, ItemID> beforeAliases = new HashMap<>(ItemIDManager.getItemIDAliasMap());
-            int beforeCounter = ItemIDManager.getNextShortCounter_forTesting();
-            int beforeLoadedVersion = ItemIDManager.getLoadedFormatVersion_forTesting();
-            drainLoadSignals();
-
-            boolean threw = false;
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
             try {
-                new ItemIDManager().load(tag);
-            } catch (ItemIDsNewerFormatException e) {
-                threw = true;
-                TestResult msg = assertTrue("refusal message names the file version, the supported "
-                                + "version and the update instruction",
-                        e.getMessage().contains(String.valueOf(BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT + 1))
-                                && e.getMessage().contains(String.valueOf(BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT))
-                                && e.getMessage().contains("update the mod"));
-                if (!msg.passed()) return msg;
-            }
-            TestResult r = assertTrue("load() threw ItemIDsNewerFormatException", threw);
-            if (!r.passed()) return r;
+                Map<ItemID, ItemStack> fixture = buildTwoEntryFixture();
+                if (fixture == null)
+                    return fail("could not register the synthetic fixture templates");
 
-            r = assertTrue("itemIDMap is unchanged after the refusal",
-                    mapsEquivalent(beforeMap, ItemIDManager.getItemIDMap()));
-            if (!r.passed()) return r;
-            r = assertEquals("alias map is unchanged after the refusal",
-                    beforeAliases, ItemIDManager.getItemIDAliasMap());
-            if (!r.passed()) return r;
-            r = assertEquals("counter is unchanged after the refusal",
-                    beforeCounter, ItemIDManager.getNextShortCounter_forTesting());
-            if (!r.passed()) return r;
-            r = assertEquals("tracked loaded-format version is unchanged after the refusal",
-                    beforeLoadedVersion, ItemIDManager.getLoadedFormatVersion_forTesting());
-            if (!r.passed()) return r;
-            r = assertFalse("no one-shot re-save was flagged by the refused load",
-                    ItemIDManager.consumeLastLoadRequiresResave());
-            if (!r.passed()) return r;
-            return pass("newer-format files are refused before any static state is touched");
-        } catch (Throwable t) {
-            return fail("newer-format refusal test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
-        } finally {
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            drainLoadSignals();
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
+                CompoundTag tag = new CompoundTag();
+                if (!new ItemIDManager().save(tag))
+                    return fail("could not serialize the fixture");
+                // Fake a file written by a newer BankSystem build.
+                tag.putInt(BankSystemSaveFormat.KEY_FORMAT_VERSION,
+                        BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT + 1);
+
+                // Snapshot the exact pre-load state (the fixture) for the zero-mutation compare.
+                Map<ItemID, ItemStack> beforeMap = new HashMap<>(ItemIDManager.getItemIDMap());
+                Map<ItemID, ItemID> beforeAliases = new HashMap<>(ItemIDManager.getItemIDAliasMap());
+                int beforeCounter = ItemIDManager.getNextShortCounter_forTesting();
+                int beforeLoadedVersion = ItemIDManager.getLoadedFormatVersion_forTesting();
+                drainLoadSignals();
+
+                boolean threw = false;
+                try {
+                    new ItemIDManager().load(tag);
+                } catch (ItemIDsNewerFormatException e) {
+                    threw = true;
+                    TestResult msg = assertTrue("refusal message names the file version, the supported "
+                                    + "version and the update instruction",
+                            e.getMessage().contains(String.valueOf(BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT + 1))
+                                    && e.getMessage().contains(String.valueOf(BankSystemSaveFormat.ITEM_IDS_FORMAT_CURRENT))
+                                    && e.getMessage().contains("update the mod"));
+                    if (!msg.passed()) return msg;
+                }
+                TestResult r = assertTrue("load() threw ItemIDsNewerFormatException", threw);
+                if (!r.passed()) return r;
+
+                r = assertTrue("itemIDMap is unchanged after the refusal",
+                        mapsEquivalent(beforeMap, ItemIDManager.getItemIDMap()));
+                if (!r.passed()) return r;
+                r = assertEquals("alias map is unchanged after the refusal",
+                        beforeAliases, ItemIDManager.getItemIDAliasMap());
+                if (!r.passed()) return r;
+                r = assertEquals("counter is unchanged after the refusal",
+                        beforeCounter, ItemIDManager.getNextShortCounter_forTesting());
+                if (!r.passed()) return r;
+                r = assertEquals("tracked loaded-format version is unchanged after the refusal",
+                        beforeLoadedVersion, ItemIDManager.getLoadedFormatVersion_forTesting());
+                if (!r.passed()) return r;
+                r = assertFalse("no one-shot re-save was flagged by the refused load",
+                        ItemIDManager.consumeLastLoadRequiresResave());
+                if (!r.passed()) return r;
+                return pass("newer-format files are refused before any static state is touched");
+            } catch (Throwable t) {
+                return fail("newer-format refusal test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                drainLoadSignals();
+            }
         }
     }
 
@@ -796,101 +802,103 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         int savedCounter = ItemIDManager.getNextShortCounter_forTesting();
         Map<ItemID, ItemID> savedQuarantine = ItemIDManager.getQuarantinedAliases_forTesting();
         java.util.Set<ItemID> savedPersisted = ItemIDManager.getPersistedShorts_forTesting();
-        try {
-            Object[] state = buildSyntheticCorruptedState(access);
-            if (state == null)
-                return fail("could not build the synthetic corrupted state");
-            @SuppressWarnings("unchecked")
-            Map<ItemID, ItemStack> corruptedMap = (Map<ItemID, ItemStack>) state[0];
-            @SuppressWarnings("unchecked")
-            Map<ItemID, ItemID> fingerprintAliases = (Map<ItemID, ItemID>) state[1];
-            ItemID fingerprintFrom = fingerprintAliases.keySet().iterator().next();
-            ItemID fingerprintTo = fingerprintAliases.get(fingerprintFrom);
-
-            // ==== Serialize the corrupted state through the REAL persistence keys ====
-            // Install the corrupted map as live state and save() it (writes itemIDs,
-            // formatVersion, an empty itemIDAliases list and nextShortCounter)...
-            ItemIDManager.clearQuarantinedAliases_forTesting();
-            ItemIDManager.replaceState_forTesting(corruptedMap, Collections.emptyMap(),
-                    corruptedMap.size() + 500);
-            CompoundTag tag = new CompoundTag();
-            if (!new ItemIDManager().save(tag))
-                return fail("could not serialize the corrupted fixture");
-            // ...then append the fingerprint alias into the real itemIDAliases list the way
-            // the buggy build persisted it. (It cannot be installed via the live table —
-            // the putAlias invariant would reject it, which is exactly the point.)
-            net.minecraft.nbt.ListTag aliasList =
-                    NbtCompat.getList(tag, "itemIDAliases", net.minecraft.nbt.Tag.TAG_COMPOUND);
-            CompoundTag aliasTag = new CompoundTag();
-            aliasTag.putShort("from", fingerprintFrom.getShort());
-            aliasTag.putShort("to", fingerprintTo.getShort());
-            aliasList.add(aliasTag);
-            tag.put("itemIDAliases", aliasList);
-
-            // ==== (a) load() must abort with ItemIDRepairRequiredException ====
-            ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
-            drainLoadSignals();
-            boolean threw = false;
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
             try {
-                new ItemIDManager().load(tag);
-            } catch (net.kroia.banksystem.util.ItemIDRepairRequiredException e) {
-                threw = true;
-                TestResult msg = assertTrue("abort report names CONFIRM_ITEMID_REPAIR and the remap",
-                        e.getMessage().contains("CONFIRM_ITEMID_REPAIR")
-                                && e.getMessage().contains("Proposed repair"));
-                if (!msg.passed()) return msg;
+                Object[] state = buildSyntheticCorruptedState(access);
+                if (state == null)
+                    return fail("could not build the synthetic corrupted state");
+                @SuppressWarnings("unchecked")
+                Map<ItemID, ItemStack> corruptedMap = (Map<ItemID, ItemStack>) state[0];
+                @SuppressWarnings("unchecked")
+                Map<ItemID, ItemID> fingerprintAliases = (Map<ItemID, ItemID>) state[1];
+                ItemID fingerprintFrom = fingerprintAliases.keySet().iterator().next();
+                ItemID fingerprintTo = fingerprintAliases.get(fingerprintFrom);
+
+                // ==== Serialize the corrupted state through the REAL persistence keys ====
+                // Install the corrupted map as live state and save() it (writes itemIDs,
+                // formatVersion, an empty itemIDAliases list and nextShortCounter)...
+                ItemIDManager.clearQuarantinedAliases_forTesting();
+                ItemIDManager.replaceState_forTesting(corruptedMap, Collections.emptyMap(),
+                        corruptedMap.size() + 500);
+                CompoundTag tag = new CompoundTag();
+                if (!new ItemIDManager().save(tag))
+                    return fail("could not serialize the corrupted fixture");
+                // ...then append the fingerprint alias into the real itemIDAliases list the way
+                // the buggy build persisted it. (It cannot be installed via the live table —
+                // the putAlias invariant would reject it, which is exactly the point.)
+                net.minecraft.nbt.ListTag aliasList =
+                        NbtCompat.getList(tag, "itemIDAliases", net.minecraft.nbt.Tag.TAG_COMPOUND);
+                CompoundTag aliasTag = new CompoundTag();
+                aliasTag.putShort("from", fingerprintFrom.getShort());
+                aliasTag.putShort("to", fingerprintTo.getShort());
+                aliasList.add(aliasTag);
+                tag.put("itemIDAliases", aliasList);
+
+                // ==== (a) load() must abort with ItemIDRepairRequiredException ====
+                ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
+                drainLoadSignals();
+                boolean threw = false;
+                try {
+                    new ItemIDManager().load(tag);
+                } catch (net.kroia.banksystem.util.ItemIDRepairRequiredException e) {
+                    threw = true;
+                    TestResult msg = assertTrue("abort report names CONFIRM_ITEMID_REPAIR and the remap",
+                            e.getMessage().contains("CONFIRM_ITEMID_REPAIR")
+                                    && e.getMessage().contains("Proposed repair"));
+                    if (!msg.passed()) return msg;
+                }
+                TestResult r = assertTrue("load() of the corrupted NBT threw ItemIDRepairRequiredException",
+                        threw);
+                if (!r.passed()) return r;
+                r = assertFalse("no repair was applied on the unconfirmed path",
+                        ItemIDManager.consumeRepairWasApplied());
+                if (!r.passed()) return r;
+
+                // ==== (b) the raw fingerprint evidence is quarantined... ====
+                Map<ItemID, ItemID> quarantine = ItemIDManager.getQuarantinedAliases_forTesting();
+                r = assertTrue("the rejected fingerprint alias is quarantined",
+                        fingerprintTo.equals(quarantine.get(fingerprintFrom)));
+                if (!r.passed()) return r;
+
+                // ==== ...and survives a save()+load() cycle (the re-save shape) ====
+                CompoundTag resaved = new CompoundTag();
+                if (!new ItemIDManager().save(resaved))
+                    return fail("could not re-save the post-abort state");
+                r = assertTrue("the re-saved tag carries the quarantined evidence key",
+                        resaved.contains(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES));
+                if (!r.passed()) return r;
+
+                // Simulate a fresh process: quarantine cleared, then load the re-saved tag
+                // (whose itemIDAliases no longer contains the fingerprint) — detection must
+                // still fire from the quarantined evidence.
+                ItemIDManager.clearQuarantinedAliases_forTesting();
+                ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
+                drainLoadSignals();
+                boolean threwAgain = false;
+                try {
+                    new ItemIDManager().load(resaved);
+                } catch (net.kroia.banksystem.util.ItemIDRepairRequiredException e) {
+                    threwAgain = true;
+                }
+                r = assertTrue("a save()+load() cycle still detects via the quarantined evidence",
+                        threwAgain);
+                if (!r.passed()) return r;
+                return pass("corrupted NBT aborts the load unconfirmed, and the fingerprint evidence "
+                        + "survives re-save cycles via the quarantine");
+            } catch (Throwable t) {
+                return fail("guard integration test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                // Restore EVERYTHING: live maps/counter, quarantine, one-shot flags, settings.
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                // Quarantine restore: bit-exact (normally empty on a healthy world). Critical —
+                // leaked synthetic evidence would abort the next real startup of this world.
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                drainLoadSignals();
+                if (instances != null && instances.SERVER_SETTINGS != null && savedConfirmFlag != null)
+                    instances.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REPAIR.set(savedConfirmFlag);
             }
-            TestResult r = assertTrue("load() of the corrupted NBT threw ItemIDRepairRequiredException",
-                    threw);
-            if (!r.passed()) return r;
-            r = assertFalse("no repair was applied on the unconfirmed path",
-                    ItemIDManager.consumeRepairWasApplied());
-            if (!r.passed()) return r;
-
-            // ==== (b) the raw fingerprint evidence is quarantined... ====
-            Map<ItemID, ItemID> quarantine = ItemIDManager.getQuarantinedAliases_forTesting();
-            r = assertTrue("the rejected fingerprint alias is quarantined",
-                    fingerprintTo.equals(quarantine.get(fingerprintFrom)));
-            if (!r.passed()) return r;
-
-            // ==== ...and survives a save()+load() cycle (the re-save shape) ====
-            CompoundTag resaved = new CompoundTag();
-            if (!new ItemIDManager().save(resaved))
-                return fail("could not re-save the post-abort state");
-            r = assertTrue("the re-saved tag carries the quarantined evidence key",
-                    resaved.contains(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES));
-            if (!r.passed()) return r;
-
-            // Simulate a fresh process: quarantine cleared, then load the re-saved tag
-            // (whose itemIDAliases no longer contains the fingerprint) — detection must
-            // still fire from the quarantined evidence.
-            ItemIDManager.clearQuarantinedAliases_forTesting();
-            ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
-            drainLoadSignals();
-            boolean threwAgain = false;
-            try {
-                new ItemIDManager().load(resaved);
-            } catch (net.kroia.banksystem.util.ItemIDRepairRequiredException e) {
-                threwAgain = true;
-            }
-            r = assertTrue("a save()+load() cycle still detects via the quarantined evidence",
-                    threwAgain);
-            if (!r.passed()) return r;
-            return pass("corrupted NBT aborts the load unconfirmed, and the fingerprint evidence "
-                    + "survives re-save cycles via the quarantine");
-        } catch (Throwable t) {
-            return fail("guard integration test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            // Restore EVERYTHING: live maps/counter, quarantine, one-shot flags, settings.
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            // Quarantine restore: bit-exact (normally empty on a healthy world). Critical —
-            // leaked synthetic evidence would abort the next real startup of this world.
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            drainLoadSignals();
-            if (instances != null && instances.SERVER_SETTINGS != null && savedConfirmFlag != null)
-                instances.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REPAIR.set(savedConfirmFlag);
         }
     }
 
@@ -1042,55 +1050,57 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         int savedCounter = ItemIDManager.getNextShortCounter_forTesting();
         Map<ItemID, ItemID> savedQuarantine = ItemIDManager.getQuarantinedAliases_forTesting();
         java.util.Set<ItemID> savedPersisted = ItemIDManager.getPersistedShorts_forTesting();
-        try {
-            // World A (corrupted): evidence sits in the in-memory quarantine store.
-            ItemIDManager.restoreQuarantinedAliases_forTesting(
-                    Map.of(new ItemID((short) 1), new ItemID((short) 6)));
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                // World A (corrupted): evidence sits in the in-memory quarantine store.
+                ItemIDManager.restoreQuarantinedAliases_forTesting(
+                        Map.of(new ItemID((short) 1), new ItemID((short) 6)));
 
-            // Player leaves world A: clear() must back the evidence up and empty the store.
-            ItemIDManager.clear();
-            TestResult r = assertTrue("quarantine store is empty after clear()",
-                    ItemIDManager.getQuarantinedAliases_forTesting().isEmpty());
-            if (!r.passed()) return r;
+                // Player leaves world A: clear() must back the evidence up and empty the store.
+                ItemIDManager.clear();
+                TestResult r = assertTrue("quarantine store is empty after clear()",
+                        ItemIDManager.getQuarantinedAliases_forTesting().isEmpty());
+                if (!r.passed()) return r;
 
-            // World A's leave-then-save fallback (live map empty → backups): the evidence
-            // must still be persisted for the world it belongs to.
-            CompoundTag worldASave = new CompoundTag();
-            if (!new ItemIDManager().save(worldASave))
-                return fail("world A fallback save failed");
-            r = assertTrue("world A's fallback save still carries its quarantined evidence",
-                    worldASave.contains(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES));
-            if (!r.passed()) return r;
+                // World A's leave-then-save fallback (live map empty → backups): the evidence
+                // must still be persisted for the world it belongs to.
+                CompoundTag worldASave = new CompoundTag();
+                if (!new ItemIDManager().save(worldASave))
+                    return fail("world A fallback save failed");
+                r = assertTrue("world A's fallback save still carries its quarantined evidence",
+                        worldASave.contains(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES));
+                if (!r.passed()) return r;
 
-            // Fresh world B: no ItemIDs.nbt exists, so load() never runs; the data handler
-            // releases the registration latch via markRegistryReady() (the fresh-world
-            // release in load_itemIDs — Task #16), then default registration populates a
-            // non-empty live map and the first save fires. The release below is the exact
-            // production release, not a test backdoor.
-            ItemIDManager.markRegistryReady();
-            Map<ItemID, ItemStack> fixture = buildTwoEntryFixture();
-            if (fixture == null)
-                return fail("could not register the fresh-world fixture templates");
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
-            CompoundTag worldBSave = new CompoundTag();
-            if (!new ItemIDManager().save(worldBSave))
-                return fail("world B save failed");
-            r = assertFalse("fresh world B's first save has NO quarantinedAliases key",
-                    worldBSave.contains(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES));
-            if (!r.passed()) return r;
-            return pass("quarantined evidence never leaks from a left world into a fresh world");
-        } catch (Throwable t) {
-            return fail("quarantine isolation test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            // clear() above armed the LIVE latch; the in-test markRegistryReady() normally
-            // releases it, but an early assert-return in between must not leave the live
-            // master latched (every registration refused until restart).
-            ItemIDManager.markRegistryReady();
-            drainLoadSignals();
+                // Fresh world B: no ItemIDs.nbt exists, so load() never runs; the data handler
+                // releases the registration latch via markRegistryReady() (the fresh-world
+                // release in load_itemIDs — Task #16), then default registration populates a
+                // non-empty live map and the first save fires. The release below is the exact
+                // production release, not a test backdoor.
+                ItemIDManager.markRegistryReady();
+                Map<ItemID, ItemStack> fixture = buildTwoEntryFixture();
+                if (fixture == null)
+                    return fail("could not register the fresh-world fixture templates");
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
+                CompoundTag worldBSave = new CompoundTag();
+                if (!new ItemIDManager().save(worldBSave))
+                    return fail("world B save failed");
+                r = assertFalse("fresh world B's first save has NO quarantinedAliases key",
+                        worldBSave.contains(BankSystemSaveFormat.KEY_QUARANTINED_ALIASES));
+                if (!r.passed()) return r;
+                return pass("quarantined evidence never leaks from a left world into a fresh world");
+            } catch (Throwable t) {
+                return fail("quarantine isolation test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                // clear() above armed the LIVE latch; the in-test markRegistryReady() normally
+                // releases it, but an early assert-return in between must not leave the live
+                // master latched (every registration refused until restart).
+                ItemIDManager.markRegistryReady();
+                drainLoadSignals();
+            }
         }
     }
 
@@ -1193,58 +1203,60 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
         Map<ItemID, ItemStack> savedItemMap = new HashMap<>(ItemIDManager.getItemIDMap());
         Map<ItemID, ItemID> savedAliasMap = new HashMap<>(ItemIDManager.getItemIDAliasMap());
         int savedCounter = ItemIDManager.getNextShortCounter_forTesting();
-        try {
-            Map<ItemID, ItemStack> fixture = buildTwoEntryFixture(); // shorts 7 and 9
-            if (fixture == null)
-                return fail("could not register the synthetic fixture templates");
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                Map<ItemID, ItemStack> fixture = buildTwoEntryFixture(); // shorts 7 and 9
+                if (fixture == null)
+                    return fail("could not register the synthetic fixture templates");
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
 
-            // Build the digest and round-trip it through the real Meta_data.nbt key shape.
-            ListTag digest = ItemIDManager.buildShortNameDigest();
-            TestResult r = assertEquals("digest has one entry per registry mapping",
-                    fixture.size(), digest.size());
-            if (!r.passed()) return r;
-            CompoundTag metaShaped = new CompoundTag();
-            metaShaped.put(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, digest);
-            ListTag reRead = NbtCompat.getList(metaShaped, BankSystemSaveFormat.KEY_ITEM_ID_DIGEST,
-                    net.minecraft.nbt.Tag.TAG_COMPOUND);
+                // Build the digest and round-trip it through the real Meta_data.nbt key shape.
+                ListTag digest = ItemIDManager.buildShortNameDigest();
+                TestResult r = assertEquals("digest has one entry per registry mapping",
+                        fixture.size(), digest.size());
+                if (!r.passed()) return r;
+                CompoundTag metaShaped = new CompoundTag();
+                metaShaped.put(BankSystemSaveFormat.KEY_ITEM_ID_DIGEST, digest);
+                ListTag reRead = NbtCompat.getList(metaShaped, BankSystemSaveFormat.KEY_ITEM_ID_DIGEST,
+                        net.minecraft.nbt.Tag.TAG_COMPOUND);
 
-            // Healthy round-trip: registry unchanged → silent.
-            r = assertTrue("healthy round-trip yields no mismatches",
-                    ItemIDManager.diffShortNameDigest(reRead).isEmpty());
-            if (!r.passed()) return r;
-            r = assertTrue("null digest (older save) is silent",
-                    ItemIDManager.diffShortNameDigest(null).isEmpty());
-            if (!r.passed()) return r;
+                // Healthy round-trip: registry unchanged → silent.
+                r = assertTrue("healthy round-trip yields no mismatches",
+                        ItemIDManager.diffShortNameDigest(reRead).isEmpty());
+                if (!r.passed()) return r;
+                r = assertTrue("null digest (older save) is silent",
+                        ItemIDManager.diffShortNameDigest(null).isEmpty());
+                if (!r.passed()) return r;
 
-            // Mutate: short 7 now resolves to a DIFFERENT item (stone instead of paper).
-            Map<ItemID, ItemStack> mutated = new ConcurrentHashMap<>(fixture);
-            mutated.put(new ItemID((short) 7), new ItemStack(Items.STONE));
-            ItemIDManager.replaceState_forTesting(mutated, Collections.emptyMap(), 100);
-            List<String> mismatches = ItemIDManager.diffShortNameDigest(reRead);
-            r = assertEquals("exactly the renumbered short is reported", 1, mismatches.size());
-            if (!r.passed()) return r;
-            r = assertTrue("the report names the short, the previous and the current item",
-                    mismatches.getFirst().contains("#7")
-                            && mismatches.getFirst().contains("minecraft:paper")
-                            && mismatches.getFirst().contains("minecraft:stone"));
-            if (!r.passed()) return r;
+                // Mutate: short 7 now resolves to a DIFFERENT item (stone instead of paper).
+                Map<ItemID, ItemStack> mutated = new ConcurrentHashMap<>(fixture);
+                mutated.put(new ItemID((short) 7), new ItemStack(Items.STONE));
+                ItemIDManager.replaceState_forTesting(mutated, Collections.emptyMap(), 100);
+                List<String> mismatches = ItemIDManager.diffShortNameDigest(reRead);
+                r = assertEquals("exactly the renumbered short is reported", 1, mismatches.size());
+                if (!r.passed()) return r;
+                r = assertTrue("the report names the short, the previous and the current item",
+                        mismatches.getFirst().contains("#7")
+                                && mismatches.getFirst().contains("minecraft:paper")
+                                && mismatches.getFirst().contains("minecraft:stone"));
+                if (!r.passed()) return r;
 
-            // Dropped short: entry 9 removed entirely → not reported (gone, not rebound).
-            Map<ItemID, ItemStack> dropped = new ConcurrentHashMap<>(fixture);
-            dropped.entrySet().removeIf(e -> e.getKey().getShort() == 9);
-            ItemIDManager.replaceState_forTesting(dropped, Collections.emptyMap(), 100);
-            r = assertTrue("a dropped (unresolvable) short is not reported as renumbered",
-                    ItemIDManager.diffShortNameDigest(reRead).isEmpty());
-            if (!r.passed()) return r;
+                // Dropped short: entry 9 removed entirely → not reported (gone, not rebound).
+                Map<ItemID, ItemStack> dropped = new ConcurrentHashMap<>(fixture);
+                dropped.entrySet().removeIf(e -> e.getKey().getShort() == 9);
+                ItemIDManager.replaceState_forTesting(dropped, Collections.emptyMap(), 100);
+                r = assertTrue("a dropped (unresolvable) short is not reported as renumbered",
+                        ItemIDManager.diffShortNameDigest(reRead).isEmpty());
+                if (!r.passed()) return r;
 
-            return pass("digest tripwire reports renumbered shorts, stays silent on healthy "
-                    + "round-trips, absent digests and dropped shorts");
-        } catch (Throwable t) {
-            return fail("digest tripwire test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                return pass("digest tripwire reports renumbered shorts, stays silent on healthy "
+                        + "round-trips, absent digests and dropped shorts");
+            } catch (Throwable t) {
+                return fail("digest tripwire test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+            }
         }
     }
 }
