@@ -177,7 +177,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         }
         payButton.setEnabled(false);
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
-            BACKEND_INSTANCES.LOGGER.info("[PayDividendScreen] pay clicked: company="
+            BACKEND_INSTANCES.LOGGER.debug("[PayDividendScreen] pay clicked: company="
                     + companyId + " textInput='" + amountBox.getText() + "' parsedRaw=" + amount);
         }
         // Bug batch 3 #5 (v2.1.0) — paying dividends to the company's own account makes

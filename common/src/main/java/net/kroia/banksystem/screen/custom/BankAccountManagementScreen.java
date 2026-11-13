@@ -992,7 +992,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     getBankManager().deleteBankAccountAsync(accountNumber).thenAccept((success) -> {
                         if(success)
                         {
-                            info("ServerBank account deleted successfully.");
+                            debug("ServerBank account deleted successfully.");
                             closeScreen();
                         }
                         else

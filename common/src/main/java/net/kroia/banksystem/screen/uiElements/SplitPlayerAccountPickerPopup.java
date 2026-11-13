@@ -147,7 +147,7 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
             }
         }
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
-            BACKEND_INSTANCES.LOGGER.info("[SplitPlayerAccountPickerPopup] sync seed complete: "
+            BACKEND_INSTANCES.LOGGER.debug("[SplitPlayerAccountPickerPopup] sync seed complete: "
                     + knownPlayers.size() + " player(s) — caller=" + caller);
         }
         rebuildPlayerList();
@@ -167,7 +167,7 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
                     if (data == null || data.userMapData() == null
                             || data.userMapData().userMap() == null) {
                         if (BACKEND_INSTANCES.LOGGER != null) {
-                            BACKEND_INSTANCES.LOGGER.info(
+                            BACKEND_INSTANCES.LOGGER.debug(
                                     "[SplitPlayerAccountPickerPopup] async merge: null userMap");
                         }
                         return;
@@ -184,7 +184,7 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
                         }
                     }
                     if (BACKEND_INSTANCES.LOGGER != null) {
-                        BACKEND_INSTANCES.LOGGER.info(
+                        BACKEND_INSTANCES.LOGGER.debug(
                                 "[SplitPlayerAccountPickerPopup] async merge: scanned="
                                         + scanned + " total=" + knownPlayers.size()
                                         + " changed=" + changed);
@@ -218,7 +218,7 @@ public class SplitPlayerAccountPickerPopup extends BankSystemGuiScreen {
             }
         }
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
-            BACKEND_INSTANCES.LOGGER.info(
+            BACKEND_INSTANCES.LOGGER.debug(
                     "[SplitPlayerAccountPickerPopup] rebuildPlayerList: rendering "
                             + knownPlayers.size() + " player row(s)");
         }

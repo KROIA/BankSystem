@@ -2628,7 +2628,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
         Collection<ExternalCurrencyProvider> providers = BankSystemMod.getAPI().getCurrencyProviders();
         if (BACKEND_INSTANCES.LOGGER != null) {
-            BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] addDefaultBankSlots on account "
+            BACKEND_INSTANCES.LOGGER.debug("[ServerBankManager] addDefaultBankSlots on account "
                     + account.getAccountNumber() + ": " + providers.size() + " currency provider(s) registered");
         }
         for (ExternalCurrencyProvider provider : providers)
@@ -2665,7 +2665,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             }
             boolean seeded = seedDefaultSlot(account, bankManager, itemID, true);
             if (seeded && BACKEND_INSTANCES.LOGGER != null)
-                BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] seeded '" + itemIdStr
+                BACKEND_INSTANCES.LOGGER.debug("[ServerBankManager] seeded '" + itemIdStr
                         + "' slot on account " + account.getAccountNumber() + " (provider '" + providerId
                         + "', itemID short=" + itemID.getShort() + ")");
         }
