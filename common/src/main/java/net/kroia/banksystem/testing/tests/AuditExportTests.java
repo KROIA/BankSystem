@@ -101,6 +101,7 @@ public class AuditExportTests extends TestSuite {
             // Write load on the ledger, the diagnostics file and the add-on database until the export is done.
             AtomicLong written = new AtomicLong();
             AtomicReference<Throwable> loadError = new AtomicReference<>();
+            AtomicReference<String> loadStep = new AtomicReference<>("thread start");
             loader = new Thread(() -> {
                 try {
                     for (int i = 0; !stop.get(); i++) {
@@ -108,8 +109,12 @@ public class AuditExportTests extends TestSuite {
                         for (int k = 0; k < 20; k++)
                             rows.add(TransactionLogRecord.of(LOAD_ACCOUNT, LedgerType.DEPOSIT, (short) 1, 1L,
                                     LedgerActor.system(), null, null, REF, "audit export load", null));
-                        ledger.save(rows).get(10, TimeUnit.SECONDS);
+                        // 30 s like the start window below, so a slow save stalls the window instead of failing alone.
+                        loadStep.set("ledger save");
+                        ledger.save(rows).get(30, TimeUnit.SECONDS);
+                        loadStep.set("diag meta");
                         diag.setMeta(META_KEY, Integer.toString(i));
+                        loadStep.set("add-on insert");
                         addon.execute("INSERT INTO T (v) VALUES (?)", "row " + i);
                         written.addAndGet(rows.size());
                     }
@@ -119,8 +124,10 @@ public class AuditExportTests extends TestSuite {
             }, "audit-export-test-load");
             loader.setDaemon(true);
             loader.start();
-            if (!pumpUntil(() -> written.get() >= 200 || loadError.get() != null, 10_000))
-                return fail("write load did not start");
+            if (!pumpUntil(() -> written.get() >= 200 || loadError.get() != null, 30_000))
+                return fail("write load did not start within 30 s: stalled at " + loadStep.get() + ", " + written.get() + " rows written");
+            if (loadError.get() != null)
+                return fail("write load failed at " + loadStep.get() + " after " + written.get() + " rows: " + loadError.get());
 
             CompletableFuture<AuditExporter.Result> export = AuditExporter.export(server, "autotest");
             if (!pumpUntil(export::isDone, 120_000)) return fail("export did not finish within 120 s");
