@@ -44,7 +44,7 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
     }
 
     public BankSystemDisplayBlock() {
-        super(RegistryCompat.blockProperties(BlockBehaviour.Properties.of().strength(2.0f).noOcclusion(), BankSystemMod.id(NAME)));
+        super(RegistryCompat.blockProperties(BlockBehaviour.Properties.of().strength(0.5f).noOcclusion(), BankSystemMod.id(NAME)));
     }
 
     @Override

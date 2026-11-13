@@ -48,6 +48,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -94,6 +96,7 @@ public class PortCheckTests extends TestSuite {
         addTest("registry_entries_present", this::registryEntriesPresent);
         addTest("lang_name_for_every_block_and_item", this::langNames);
         addTest("block_items_have_a_loot_table", this::blockItemsHaveLootTable);
+        addTest("blocks_break_with_their_tool", this::blocksBreakWithTheirTool);
         addTest("recipes_loaded", this::recipesLoaded);
         addTest("block_entities_keep_data_on_save_load", this::blockEntityRoundTrip);
         addTest("break_terminal_drops_once", () -> breakDrops(BankSystemBlocks.BANK_TERMINAL_BLOCK.get(),
@@ -269,6 +272,27 @@ public class PortCheckTests extends TestSuite {
         }
         return missing.isEmpty() ? pass("every banksystem block with an item has a loot table")
                 : fail("no loot table (block drops nothing when broken): " + missing);
+    }
+
+    /** BS-248: a block that needs the right tool to drop is in a mineable tag (else no tool drops it);
+     *  the display block breaks fast by hand. */
+    private TestResult blocksBreakWithTheirTool() {
+        if (getServer() == null) return skip("no server");
+        List<String> noTool = new ArrayList<>();
+        for (Block block : BuiltInRegistries.BLOCK) {
+            var key = BuiltInRegistries.BLOCK.getKey(block);
+            BlockState s = block.defaultBlockState();
+            if (BankSystemMod.MOD_ID.equals(key.getNamespace()) && s.requiresCorrectToolForDrops()
+                    && !s.is(BlockTags.MINEABLE_WITH_PICKAXE) && !s.is(BlockTags.MINEABLE_WITH_AXE)
+                    && !s.is(BlockTags.MINEABLE_WITH_SHOVEL) && !s.is(BlockTags.MINEABLE_WITH_HOE))
+                noTool.add(key.toString());
+        }
+        if (!noTool.isEmpty()) return fail("needs a tool to drop but is in no mineable tag: " + noTool);
+        BlockState display = BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get().defaultBlockState();
+        if (display.requiresCorrectToolForDrops()) return fail("display block needs a tool to drop");
+        float hardness = display.getDestroySpeed(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        return hardness <= 1.0f ? pass("tool blocks are mineable; display hardness " + hardness)
+                : fail("display block hardness " + hardness + " > 1.0 (slow by hand)");
     }
 
     /** Every recipe JSON BankSystem ships under data/banksystem/recipe/ is in the server's RecipeManager. */
