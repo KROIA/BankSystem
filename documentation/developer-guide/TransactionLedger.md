@@ -51,7 +51,7 @@ Every change of a bank's total balance (free + locked) writes a row where it hap
 - Binding a slot to an external currency account, or unbinding it, writes EXTERNAL_BIND / EXTERNAL_UNBIND with the change it caused.
 - Lock and unlock only move value between free and locked and write nothing. `transferFromLocked*` writes its TRANSFER pair like `transfer`.
 
-So for every account and item: closing total − opening total = signed sum of the rows in between.
+So for every account and item: closing total − opening total = signed sum of the rows in between. REFUND_LOST rows move nothing and are left out of this sum.
 
 A mod that writes its own rows for its bank calls (for example trade settlement logged with `logTrade`) makes those calls inside `callerLogs`, so they are not logged twice:
 
@@ -105,6 +105,7 @@ Codes are stored in `type_code` and are **append-only**: a code is never renumbe
 | 29 | RAW_CHANGE | Change of a slot's total balance that no other row covers: raw bank calls of other mods or slave requests, a slot created with a start balance, a slot removed with a balance. Signed; the note names the call (`deposit`, `setBalance`, `bank created`, `bank removed`, ...) |
 | 30 | EXTERNAL_BIND | A slot was bound to an external currency account; signed change of the slot's total (the external balance joining), note `bound to <provider>:<account>` |
 | 31 | EXTERNAL_UNBIND | A slot was unbound; signed change of the slot's total, note says whether the funds were kept on BankSystem or left on the external account |
+| 32 | REFUND_LOST | Marker, no balance change: banknotes withdrawn for a player (WITHDRAW row, same `ref`) were not handed out, and their refund could not be booked back (the account or its money bank is gone, or the deposit was refused), so the value is lost. Account = the account the refund was meant for (it may no longer exist), item = money, amount = the undelivered raw money, `ref` = the slave's DROP transfer id (same as the WITHDRAW row), note = the reason, actor = the player, `balance_after` null when the account or money bank is gone |
 
 Amounts are unsigned, except for TRANSFER, RAW_CHANGE, EXTERNAL_BIND and EXTERNAL_UNBIND, where the sign gives the direction.
 
