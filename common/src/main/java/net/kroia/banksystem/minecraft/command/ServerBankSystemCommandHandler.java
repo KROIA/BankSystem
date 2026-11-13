@@ -768,7 +768,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     public static final String NO_ADMIN_MESSAGE = "This command can only be used by BankSystem admins!";
     public static void sendNoAdminMessage(UUID executor)
     {
-        sendMessage(executor, NO_ADMIN_MESSAGE);
+        sendMessage(executor, "§c" + NO_ADMIN_MESSAGE); // SM-312: refusals are red (the packet carries plain text)
     }
     /** Test hook (dev suites only, null otherwise): sees every executor message; the packet itself cannot be read back. */
     public static @Nullable java.util.function.BiConsumer<UUID, String> messageListener_forTesting = null;

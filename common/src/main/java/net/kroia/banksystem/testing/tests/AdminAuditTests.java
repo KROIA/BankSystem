@@ -133,7 +133,12 @@ public class AdminAuditTests extends TestSuite {
     /** BS-209: collects what a command sends to its source (success and failure lines). */
     private static final class Capture implements CommandSource {
         final List<String> lines = new CopyOnWriteArrayList<>();
-        @Override public void sendSystemMessage(Component c) { lines.add(c.getString()); }
+        @Override public void sendSystemMessage(Component c) { lines.add(c.getString()); addKeys(c); }
+        /** SM-312: translatable lines also record their key (a dedicated server may not have the mod's lang text). */
+        private void addKeys(Component c) {
+            if (c.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t) lines.add(t.getKey());
+            c.getSiblings().forEach(this::addKeys);
+        }
         @Override public boolean acceptsSuccess() { return true; }
         @Override public boolean acceptsFailure() { return true; }
         @Override public boolean shouldInformAdmins() { return false; }
@@ -195,23 +200,28 @@ public class AdminAuditTests extends TestSuite {
         return AdminFlagTestRequest.INSTANCE.sendRequestToMaster(new AdminFlagTestRequest.Input(player, admin));
     }
 
-    /** The gate asks the master: flagged non-op runs (trusted cell), unflagged non-op gets the admin-only message. */
+    /**
+     * The gate asks the master: flagged non-op runs (trusted cell); on an untrusted slave the player gets only the
+     * untrusted line (SM-312), not the admin-only one.
+     */
     private TestResult slaveGate(ServerPlayer player, boolean trusted) {
         Capture out = new Capture();
         CompletableFuture<Boolean> ran = BankSystemCommandsRegistration.runAsAdmin(nonOp(player, out), () -> {});
         if (!pumpUntil(ran::isDone, WAIT_MS)) return fail("master gave no answer to the admin check");
         if (ran.join() != trusted) return fail("action ran=" + ran.join() + ", expected " + trusted + "; messages " + out.lines);
-        if (!trusted && !out.has(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE))
-            return fail("unflagged non-op got no admin-only message: " + out.lines);
+        if (!trusted && !out.has(BankSystemCommandsRegistration.UNTRUSTED_SLAVE_KEY))
+            return fail("untrusted slave: no untrusted message: " + out.lines);
+        if (!trusted && out.has(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE))
+            return fail("untrusted slave: admin-only line follows the untrusted one: " + out.lines);
         return pass(trusted ? "trusted slave: flag set on the master lets a non-op run"
-                : "unflagged non-op refused with the admin-only message");
+                : "untrusted slave refused with the untrusted message only");
     }
 
-    /** {@code /banksystem symbols list} on a slave: flagged player is told it is master-only, unflagged gets the admin-only message. */
+    /** {@code /banksystem symbols list} on a slave: flagged player is told it is master-only, untrusted slave gets the untrusted message. */
     private TestResult slaveSymbolsList(ServerPlayer player, boolean trusted) {
         Capture out = new Capture();
         getServer().getCommands().performPrefixedCommand(nonOp(player, out), "banksystem symbols list");
-        String expected = trusted ? "[symbols] Must run on the master server." : ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE;
+        String expected = trusted ? "[symbols] Must run on the master server." : BankSystemCommandsRegistration.UNTRUSTED_SLAVE_KEY;
         if (!pumpUntil(() -> out.has(expected), WAIT_MS)) return fail("expected '" + expected + "', got " + out.lines);
         if (out.has("Symbols (revision")) return fail("the slave listed symbols: " + out.lines);
         return pass("slave replied: " + expected);

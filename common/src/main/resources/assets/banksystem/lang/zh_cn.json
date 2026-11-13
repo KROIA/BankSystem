@@ -748,6 +748,7 @@
   "message.banksystem.audit_report_written": "审计报告已写入 {path}",
   "message.banksystem.audit_report_on_master": "（位于主服务器所在的机器上）",
   "message.banksystem.not_connected_to_master": "[banksystem] 这是一个从服务器，且未连接到 BankSystem 主服务器！",
+  "message.banksystem.command_slave_untrusted": "该服务器未获得主服务器信任，因此此处已禁用 BankSystem 管理员命令。请联系管理员在主服务器上执行 /banksystem trust <slaveID>。",
   "message.banksystem.audit_report_failed": "审计报告生成失败",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED": "标记货币供应增长",
   "gui.banksystem.mod_settings_screen.setting.Audit.MONEY_SUPPLY_FLAG_ENABLED.tooltip": "当所有账户的总货币在一小时内\n增长过快时进行标记。",

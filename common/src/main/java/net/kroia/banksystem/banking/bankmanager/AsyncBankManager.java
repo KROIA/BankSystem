@@ -1169,14 +1169,16 @@ public class AsyncBankManager implements IAsyncBankManager {
     public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID) {
         if(!MultiServerUtils.canInteractWithBankSystem())
             return CompletableFuture.completedFuture(null);
-        return createPersonalBankAccountGetAccountNrAsync(userUUID).thenApply(account -> createBankAccount(account));
+        // SM-312: a refused request (untrusted slave) answers empty -> null. Pass it on as "no account" instead of an
+        // unboxing NPE, which callers reported as "request failed or timed out" after the master's refusal line.
+        return createPersonalBankAccountGetAccountNrAsync(userUUID).thenApply(account -> account == null ? null : createBankAccount(account));
     }
 
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(@NotNull String userName) {
         if(!MultiServerUtils.canInteractWithBankSystem())
             return CompletableFuture.completedFuture(null);
-        return createPersonalBankAccountGetAccountNrAsync(userName).thenApply(account -> createBankAccount(account));
+        return createPersonalBankAccountGetAccountNrAsync(userName).thenApply(account -> account == null ? null : createBankAccount(account));
     }
 
     @Override

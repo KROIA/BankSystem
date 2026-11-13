@@ -57,6 +57,9 @@ public class BankSystemCommandsRegistration {
     {
         return BACKEND_INSTANCES.COMMAND_HANDLER.getSync() != null;
     }
+    private static final String MASTER_ONLY_MESSAGE = "This command can only be used on the master server!";
+    /** SM-312: same wording as StockMarket's message.stockmarket.command_slave_untrusted. */
+    public static final String UNTRUSTED_SLAVE_KEY = "message.banksystem.command_slave_untrusted";
     
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -77,7 +80,7 @@ public class BankSystemCommandsRegistration {
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
-                            handler().banksystem_manage_async(player.getUUID());
+                            runAsAdmin(source, () -> handler().banksystem_manage_async(player.getUUID()));
                             return Command.SINGLE_SUCCESS;
                         })
                 )
@@ -91,7 +94,7 @@ public class BankSystemCommandsRegistration {
                                     if(isMaster())
                                         masterHandler().banksystem_setSlaveServerTrusted(player.getUUID(), slaveID, true);
                                     else
-                                        ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                        source.sendFailure(Component.literal(MASTER_ONLY_MESSAGE));
 
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -107,7 +110,7 @@ public class BankSystemCommandsRegistration {
                                     if(isMaster())
                                         masterHandler().banksystem_setSlaveServerTrusted(player.getUUID(), slaveID, false);
                                     else
-                                        ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                        source.sendFailure(Component.literal(MASTER_ONLY_MESSAGE));
 
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -121,7 +124,7 @@ public class BankSystemCommandsRegistration {
                             if(isMaster())
                                 masterHandler().banksystem_setBankSystemAdminMode(player.getUUID(), true);
                             else
-                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                source.sendFailure(Component.literal(MASTER_ONLY_MESSAGE));
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -132,7 +135,7 @@ public class BankSystemCommandsRegistration {
                                             if(isMaster())
                                                 masterHandler().banksystem_setBankSystemAdminMode_user(player.getUUID(), toPlayer, true);
                                             else
-                                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                                source.sendFailure(Component.literal(MASTER_ONLY_MESSAGE));
 
                                             return Command.SINGLE_SUCCESS;
                                         })
@@ -146,7 +149,7 @@ public class BankSystemCommandsRegistration {
                             if(isMaster())
                                 masterHandler().banksystem_setBankSystemAdminMode(player.getUUID(), false);
                             else
-                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                source.sendFailure(Component.literal(MASTER_ONLY_MESSAGE));
 
                             return Command.SINGLE_SUCCESS;
                         })
@@ -158,7 +161,7 @@ public class BankSystemCommandsRegistration {
                                     if(isMaster())
                                         masterHandler().banksystem_setBankSystemAdminMode_user(player.getUUID(), toPlayer, false);
                                     else
-                                        ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                        source.sendFailure(Component.literal(MASTER_ONLY_MESSAGE));
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -169,14 +172,14 @@ public class BankSystemCommandsRegistration {
                                     ServerPlayer player = context.getSource().getPlayerOrException();
                                     // Get arguments
                                     String itemIDStr = StringArgumentType.getString(context, "itemID");
-                                    ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
-                                    if (itemStack == ItemStack.EMPTY) {
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemIDStr));
-                                        return Command.SINGLE_SUCCESS;
-                                    }
-                                    CompletableFuture<ItemID> itemIDFuture = ItemID.getOrRegisterFromItemStackServerSide(itemStack);
-                                    itemIDFuture.thenAccept(id -> {
-                                        handler().banksystem_allowItem_async(player.getUUID(), id);
+                                    runAsAdmin(context.getSource(), () -> {
+                                        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
+                                        if (itemStack == ItemStack.EMPTY) {
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemIDStr));
+                                            return;
+                                        }
+                                        ItemID.getOrRegisterFromItemStackServerSide(itemStack)
+                                                .thenAccept(id -> handler().banksystem_allowItem_async(player.getUUID(), id));
                                     });
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -186,15 +189,14 @@ public class BankSystemCommandsRegistration {
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
 
-                            // Get arguments
-                            ItemStack itemStack = player.getMainHandItem();
-                            if (itemStack.isEmpty()) {
-                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
-                                return Command.SINGLE_SUCCESS;
-                            }
-                            CompletableFuture<ItemID> itemIDFuture = ItemID.getOrRegisterFromItemStackServerSide(itemStack);
-                            itemIDFuture.thenAccept(id -> {
-                                handler().banksystem_allowItem_async(player.getUUID(), id);
+                            ItemStack itemStack = player.getMainHandItem().copy();
+                            runAsAdmin(context.getSource(), () -> {
+                                if (itemStack.isEmpty()) {
+                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
+                                    return;
+                                }
+                                ItemID.getOrRegisterFromItemStackServerSide(itemStack)
+                                        .thenAccept(id -> handler().banksystem_allowItem_async(player.getUUID(), id));
                             });
                             return Command.SINGLE_SUCCESS;
                         })
@@ -239,16 +241,15 @@ public class BankSystemCommandsRegistration {
 
                                     // Get arguments
                                     String itemIDStr = StringArgumentType.getString(context, "itemID");
-                                    ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
-                                    if (itemStack == ItemStack.EMPTY) {
-                                        ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemIDStr));
-                                        return Command.SINGLE_SUCCESS;
-                                    }
-                                    CompletableFuture<ItemID> itemIDFuture = ItemID.getOrRegisterFromItemStackServerSide(itemStack);
-                                    itemIDFuture.thenAccept(id -> {
-                                        handler().banksystem_disallowItem_async(player.getUUID(), id);
+                                    runAsAdmin(context.getSource(), () -> {
+                                        ItemStack itemStack = ItemUtilities.createItemStackFromId(itemIDStr);
+                                        if (itemStack == ItemStack.EMPTY) {
+                                            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getInvalidItemIDMessage(itemIDStr));
+                                            return;
+                                        }
+                                        ItemID.getOrRegisterFromItemStackServerSide(itemStack)
+                                                .thenAccept(id -> handler().banksystem_disallowItem_async(player.getUUID(), id));
                                     });
-
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -257,15 +258,14 @@ public class BankSystemCommandsRegistration {
                         .executes(context -> {
                             ServerPlayer player = context.getSource().getPlayerOrException();
 
-                            // Get arguments
-                            ItemStack itemStack = player.getMainHandItem();
-                            if (itemStack.isEmpty()) {
-                                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
-                                return Command.SINGLE_SUCCESS;
-                            }
-                            CompletableFuture<ItemID> itemIDFuture = ItemID.getOrRegisterFromItemStackServerSide(itemStack);
-                            itemIDFuture.thenAccept(id -> {
-                                handler().banksystem_disallowItem_async(player.getUUID(), id);
+                            ItemStack itemStack = player.getMainHandItem().copy();
+                            runAsAdmin(context.getSource(), () -> {
+                                if (itemStack.isEmpty()) {
+                                    ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoItemInHandMessage());
+                                    return;
+                                }
+                                ItemID.getOrRegisterFromItemStackServerSide(itemStack)
+                                        .thenAccept(id -> handler().banksystem_disallowItem_async(player.getUUID(), id));
                             });
                             return Command.SINGLE_SUCCESS;
                         })
@@ -421,7 +421,7 @@ public class BankSystemCommandsRegistration {
 
                                             // Get arguments
                                             float amount = FloatArgumentType.getFloat(context, "amount");
-                                            handler().money_add_async(player.getUUID(), amount);
+                                            runAsAdmin(context.getSource(), () -> handler().money_add_async(player.getUUID(), amount));
                                             return Command.SINGLE_SUCCESS;
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -433,7 +433,7 @@ public class BankSystemCommandsRegistration {
                                                             // Get arguments
                                                             String username = StringArgumentType.getString(context, "username");
                                                             float amount = FloatArgumentType.getFloat(context, "amount");
-                                                            handler().money_add_user_async(player.getUUID(), username, amount);
+                                                            runAsAdmin(context.getSource(), () -> handler().money_add_user_async(player.getUUID(), username, amount));
                                                             return Command.SINGLE_SUCCESS;
                                                         })
                                                 )
@@ -446,7 +446,7 @@ public class BankSystemCommandsRegistration {
 
                                             // Get arguments
                                             float amount = FloatArgumentType.getFloat(context, "amount");
-                                            handler().money_set_async(player.getUUID(), amount);
+                                            runAsAdmin(context.getSource(), () -> handler().money_set_async(player.getUUID(), amount));
                                             return Command.SINGLE_SUCCESS;
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -458,7 +458,7 @@ public class BankSystemCommandsRegistration {
                                                             String username = StringArgumentType.getString(context, "username");
                                                             float amount = FloatArgumentType.getFloat(context, "amount");
 
-                                                            handler().money_set_user_async(player.getUUID(), username, amount);
+                                                            runAsAdmin(context.getSource(), () -> handler().money_set_user_async(player.getUUID(), username, amount));
                                                             return Command.SINGLE_SUCCESS;
                                                         })
                                                 )
@@ -473,7 +473,7 @@ public class BankSystemCommandsRegistration {
                                             float amount = FloatArgumentType.getFloat(context, "amount");
 
                                             // Execute the command on the server_sender
-                                            handler().money_remove_async(player.getUUID(), amount);
+                                            runAsAdmin(context.getSource(), () -> handler().money_remove_async(player.getUUID(), amount));
                                             return Command.SINGLE_SUCCESS;
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -487,7 +487,7 @@ public class BankSystemCommandsRegistration {
                                                             float amount = FloatArgumentType.getFloat(context, "amount");
 
                                                             // Execute the command on the server_sender
-                                                            handler().money_remove_user_async(player.getUUID(), username, amount);
+                                                            runAsAdmin(context.getSource(), () -> handler().money_remove_user_async(player.getUUID(), username, amount));
                                                             return Command.SINGLE_SUCCESS;
                                                         })
                                                 )
@@ -543,7 +543,7 @@ public class BankSystemCommandsRegistration {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    handler().bank_manage_async(player.getUUID());
+                                    ifTrusted(source, () -> handler().bank_manage_async(player.getUUID()));
                                     return Command.SINGLE_SUCCESS;
                                 })
                                 .then(Commands.argument("accountname", StringArgumentType.string())
@@ -551,7 +551,7 @@ public class BankSystemCommandsRegistration {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
                                             String accountName = StringArgumentType.getString(context, "accountname");
-                                            handler().bank_manage_account_async(player.getUUID(), accountName);
+                                            ifTrusted(source, () -> handler().bank_manage_account_async(player.getUUID(), accountName));
                                             return Command.SINGLE_SUCCESS;
                                         })
                                 )
@@ -572,10 +572,11 @@ public class BankSystemCommandsRegistration {
                                                 .executes(context -> {
                                                     UUID playerUUID = context.getSource().getPlayerOrException().getUUID();
                                                     String username = StringArgumentType.getString(context, "username");
-                                                    CompletableFuture<Integer> personalBankAccountNr = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountNrAsync(username);
-                                                    personalBankAccountNr.thenAccept(bankAccountNr -> {
-                                                        handler().bank_manage_account_async(playerUUID, bankAccountNr);
-                                                    }).exceptionally(ex -> { AsyncBankSystemCommandHandler.reportFailure(playerUUID, ex); return null; });
+                                                    ifTrusted(context.getSource(), () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountNrAsync(username)
+                                                            .thenAccept(bankAccountNr -> {
+                                                                if (bankAccountNr != null) // null = unreadable reply, not a timeout
+                                                                    handler().bank_manage_account_async(playerUUID, bankAccountNr);
+                                                            }).exceptionally(ex -> { AsyncBankSystemCommandHandler.reportFailure(playerUUID, ex); return null; }));
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
@@ -643,7 +644,7 @@ public class BankSystemCommandsRegistration {
                             .executes(ctx -> {
                                 ServerPlayer player = ctx.getSource().getPlayerOrException();
                                 String companyName = StringArgumentType.getString(ctx, "companyName");
-                                CompanyCommandLogic.manage(player, companyName);
+                                ifTrusted(ctx.getSource(), () -> CompanyCommandLogic.manage(player, companyName));
                                 return Command.SINGLE_SUCCESS;
                             })
                         )
@@ -869,15 +870,55 @@ public class BankSystemCommandsRegistration {
     }
 
     /**
-     * BS-196: the single BankSystem-admin gate of the flag-gated commands ({@code symbols}, {@code restorebinding}, {@code shares};
-     * see {@link BankSystemPermissions#FLAG_GATED_NODES}).
+     * SM-312: the trust gate of the admin and manage commands, same behaviour as StockMarket. The master refuses
+     * those requests from a slave it does not trust anyway; asking first gives the player one red line
+     * ({@link #UNTRUSTED_SLAVE_KEY}) instead of the master's broadcast plus a misleading follow-up line.
+     * <ul>
+     *   <li>Master and non-player sources: {@code true} at once.</li>
+     *   <li>Slave without a master connection: the "not connected" message, {@code false}.</li>
+     *   <li>Slave: asks the master ({@code isSlaveServerTrustedAsync("")}). Untrusted (or an empty answer): the red
+     *       untrusted line, {@code false}; no answer: the "request failed or timed out" message, {@code false}.</li>
+     * </ul>
+     *
+     * @return future resolving to {@code true} if the command may go on; completes on the server main thread
+     */
+    public static CompletableFuture<Boolean> checkTrusted(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null || !BACKEND_INSTANCES.isSlaveServer)
+            return CompletableFuture.completedFuture(true);
+        UUID uuid = player.getUUID();
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem(uuid))
+            return CompletableFuture.completedFuture(false);
+        MinecraftServer server = source.getServer();
+        CompletableFuture<Boolean> ok = new CompletableFuture<>();
+        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isSlaveServerTrustedAsync("")
+                .whenComplete((trusted, failure) -> server.execute(() -> {
+                    if (failure != null)
+                        AsyncBankSystemCommandHandler.reportFailure(uuid, failure); // logs + tells the player
+                    else if (!Boolean.TRUE.equals(trusted) && !player.hasDisconnected())
+                        source.sendFailure(Component.translatable(UNTRUSTED_SLAVE_KEY));
+                    ok.complete(failure == null && Boolean.TRUE.equals(trusted) && !player.hasDisconnected());
+                }));
+        return ok;
+    }
+
+    /** {@link #checkTrusted} for commands without an admin check: runs {@code action} on the main thread if trusted. */
+    private static void ifTrusted(CommandSourceStack source, Runnable action) {
+        checkTrusted(source).thenAccept(ok -> { if (ok) action.run(); });
+    }
+
+    /**
+     * BS-196: the single BankSystem-admin gate of the admin commands (flag-gated {@code symbols}, {@code restorebinding};
+     * SM-312: also {@code /banksystem manage|allowItem|disallowItem|freeze|audit|history|alerts|auditreport} and
+     * {@code /money add|set|remove}).
      * <ul>
      *   <li>Non-player sources (console, command blocks) already passed the op-level {@code requires} check and run
      *       {@code action} right away.</li>
-     *   <li>A player runs {@code action} only with the BankSystem admin flag ({@code /banksystem op}), server op or not.
-     *       The flag lives on the master, so a slave asks it ({@code isBanksystemAdminAsync}); a slave without a master
-     *       connection fails fast with the "not connected" message. Without the flag the player gets the admin-only
-     *       message; if the master gives no answer, the "request failed or timed out" message.</li>
+     *   <li>A player first passes {@link #checkTrusted} (untrusted slave: one red untrusted line). Then they run
+     *       {@code action} only with the BankSystem admin flag ({@code /banksystem op}), server op or not.
+     *       The flag lives on the master, so a slave asks it ({@code isBanksystemAdminAsync}). Without the flag the
+     *       player gets the red admin-only line; if the master gives no answer, the "request failed or timed out"
+     *       message.</li>
      * </ul>
      *
      * @param action the command's work; always runs on the server main thread
@@ -889,9 +930,14 @@ public class BankSystemCommandsRegistration {
             action.run();
             return CompletableFuture.completedFuture(true);
         }
+        // On the master checkTrusted is already complete, so everything below runs inline.
+        return checkTrusted(source).thenCompose(trusted -> trusted
+                ? adminCheck(source, player, action)
+                : CompletableFuture.completedFuture(false));
+    }
+
+    private static CompletableFuture<Boolean> adminCheck(CommandSourceStack source, ServerPlayer player, Runnable action) {
         UUID uuid = player.getUUID();
-        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem(uuid))
-            return CompletableFuture.completedFuture(false);
         MinecraftServer server = source.getServer();
         CompletableFuture<Boolean> ran = new CompletableFuture<>();
         // On the master the future is already complete and server.execute runs inline on the main thread.
@@ -927,7 +973,7 @@ public class BankSystemCommandsRegistration {
     private static int freezeCommand(CommandSourceStack source, int accountNumber, int mode) {
         ServerPlayer player = source.getPlayer();
         if (player != null) {
-            handler().banksystem_freeze_async(player.getUUID(), accountNumber, mode);
+            runAsAdmin(source, () -> handler().banksystem_freeze_async(player.getUUID(), accountNumber, mode));
             return Command.SINGLE_SUCCESS;
         }
         net.kroia.banksystem.api.bankmanager.ISyncServerBankManager bankManager =
@@ -990,22 +1036,22 @@ public class BankSystemCommandsRegistration {
             return 0;
         }
         var bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
-        bankManager.isBanksystemAdminAsync(player.getUUID()).thenCompose(isAdmin -> {
-            if (!Boolean.TRUE.equals(isAdmin)) return java.util.concurrent.CompletableFuture.completedFuture(-1);
+        // SM-312: runAsAdmin refuses an untrusted slave / non-admin with one red line; the screen request is checked again on the master.
+        runAsAdmin(source, () -> {
+            CompletableFuture<Integer> nrFuture;
             try {
-                return java.util.concurrent.CompletableFuture.completedFuture(Integer.parseInt(target));
+                nrFuture = CompletableFuture.completedFuture(Integer.parseInt(target));
             } catch (NumberFormatException e) {
-                return bankManager.getPersonalBankAccountNrAsync(target);
+                nrFuture = bankManager.getPersonalBankAccountNrAsync(target);
             }
-        }).thenAccept(nr -> player.level().getServer().execute(() -> {
-            if (nr == null || nr == -1) {
-                player.sendSystemMessage(Component.literal(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE));
-            } else if (nr <= 0) {
-                player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditTargetNotFoundMessage(target)));
-            } else {
-                open.accept(player, nr);
-            }
-        })).exceptionally(ex -> { AsyncBankSystemCommandHandler.reportFailure(player.getUUID(), ex); return null; });
+            nrFuture.thenAccept(nr -> player.level().getServer().execute(() -> {
+                if (nr == null || nr <= 0) {
+                    player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditTargetNotFoundMessage(target)));
+                } else {
+                    open.accept(player, nr);
+                }
+            })).exceptionally(ex -> { AsyncBankSystemCommandHandler.reportFailure(player.getUUID(), ex); return null; });
+        });
         return Command.SINGLE_SUCCESS;
     }
 
@@ -1027,12 +1073,12 @@ public class BankSystemCommandsRegistration {
             return Command.SINGLE_SUCCESS;
         }
         boolean onMaster = BACKEND_INSTANCES.isSlaveServer;
-        handler().banksystem_auditreport_async(player.getUUID(), hours).thenAccept(path -> player.level().getServer().execute(() -> {
+        runAsAdmin(source, () -> handler().banksystem_auditreport_async(player.getUUID(), hours).thenAccept(path -> player.level().getServer().execute(() -> {
             if (!path.isEmpty())
                 player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditReportWrittenMessage(path, onMaster)));
             else
                 player.sendSystemMessage(Component.literal(BankSystemTextMessages.getAuditReportFailedMessage()));
-        }));
+        })));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -1042,7 +1088,7 @@ public class BankSystemCommandsRegistration {
             source.sendFailure(Component.literal("[BankSystem] alerts needs a player"));
             return 0;
         }
-        handler().banksystem_alerts_async(player.getUUID(), enabled);
+        runAsAdmin(source, () -> handler().banksystem_alerts_async(player.getUUID(), enabled));
         return Command.SINGLE_SUCCESS;
     }
 

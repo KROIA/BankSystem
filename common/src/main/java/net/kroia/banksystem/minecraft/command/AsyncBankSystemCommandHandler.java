@@ -23,8 +23,10 @@ import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.MinecraftServer;
@@ -448,7 +450,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             }
             else
             {
-                ServerPlayerUtilities.printToClientConsole(player,"This command is only for BankSystem admins!");
+                if (player != null) // SM-312: one red line, like every command refusal
+                    player.sendSystemMessage(Component.literal(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE).withStyle(ChatFormatting.RED));
                 future.complete(false);
             }
         });
@@ -797,10 +800,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
                 return;
             }
             boolean success = accountNr != null && accountNr > 0;
-            String text = "Async command execution result for command "+FunctionType.Bank_create.name()+" from player: "+Request.tryGetPlayerName(executor)+" Result: "+(success?"Success":"Failure");
-            info(text);
-            if(!success)
-                ServerPlayerUtilities.printToClientConsole(executor, text);
+            // SM-312: log only. The master already told the player why it refused or failed; no second chat line.
+            info("Async command execution result for command "+FunctionType.Bank_create.name()+" from player: "+Request.tryGetPlayerName(executor)+" Result: "+(success?"Success":"Failure"));
         });
         return accountNrFuture.thenApply(accountNr -> AsyncBankAccount.createSlaveServerBank(accountNr));
     }
@@ -832,13 +833,8 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
             }
             String playerName = Request.tryGetPlayerName(executor);
             boolean success = Boolean.TRUE.equals(result.decodeResult());
-            String text = "Async command execution result for command "+result.function.name()+" from player: "+playerName+" Result: "+(success?"Success":"Failure");
-            info(text);
-
-            if(!success)
-            {
-                ServerPlayerUtilities.printToClientConsole(executor, text);
-            }
+            // SM-312: log only. The master already told the player why it refused or failed; no second chat line.
+            info("Async command execution result for command "+result.function.name()+" from player: "+playerName+" Result: "+(success?"Success":"Failure"));
         });
     }
 
