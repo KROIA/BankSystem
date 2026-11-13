@@ -490,7 +490,7 @@
   "gui.banksystem.stamper_bind.title": "Aktien-Prägestation binden",
   "gui.banksystem.stamper_bind.empty": "Keine Unternehmen, an die du binden kannst",
   "gui.banksystem.stamper_bind.no_companies": "Du hast keine Unternehmen mit MANAGE-Berechtigung",
-  "gui.banksystem.stamper_bind.master_only": "Binden ist nur auf dem Master möglich (dies ist ein Slave-Server)",
+  "gui.banksystem.share_stamper.untrusted_slave": "Der Bank-Master vertraut diesem Server nicht, daher kann die Aktien-Prägestation hier nicht benutzt werden. Bitte einen Bank-Admin, diesem Server zu vertrauen.",
   "gui.banksystem.share_stamper.in_use": "Die Aktien-Prägestation wird bereits von einem anderen Spieler verwendet",
   "gui.banksystem.share_stamper.unbind_button": "Trennen",
   "gui.banksystem.share_stamper.unbind_confirm_title": "Aktien-Prägestation trennen?",

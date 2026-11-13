@@ -55,15 +55,16 @@ public class SetStamperBindingRequest extends BankSystemNetworkPacket {
         if (!(be instanceof ShareStamperBlockEntity stamper)) return;
         net.kroia.banksystem.banking.company.CompanyManager cm =
                 net.kroia.banksystem.banking.company.CompanyManager.get();
-        if (cm == null) return;
+        boolean slave = ShareStamperBlockEntity.isSlaveSide(); // BS-262: company data on the master
+        if (cm == null && !slave) return;
 
         // Unbind path — companyId == 0 means clear binding. MANAGE-gated on the
         // currently-bound company. unbind() drops every slot on top of the block; the block stays.
         if (companyId == 0) {
             int cur = stamper.getBoundCompanyId();
             if (cur < 0) return; // nothing to do
-            net.kroia.banksystem.banking.company.Company boundCompany = cm.getById(cur);
-            boolean allowedUnbind = boundCompany != null && stamper.hasManagePermission(player.getUUID());
+            // slave: the viewer's cached STAMPER_GATE answer (the unbind button sits in the open stamper menu)
+            boolean allowedUnbind = (slave || cm.getById(cur) != null) && stamper.hasManagePermission(player.getUUID());
             if (!allowedUnbind) return;
             stamper.unbind();
             net.minecraft.world.level.block.state.BlockState st0 = player.level().getBlockState(pos);
@@ -72,6 +73,10 @@ public class SetStamperBindingRequest extends BankSystemNetworkPacket {
         }
 
         if (stamper.getBoundCompanyId() >= 0) return; // already bound; use unbind path first
+        if (slave) { // BS-262: STAMPER_GATE on the master, then bind + open the menu (keeps the viewer lock)
+            stamper.bindAfterGate(player, companyId, true);
+            return;
+        }
         net.kroia.banksystem.banking.company.Company company = cm.getById(companyId);
         if (company == null) return;
         // MANAGE gate: founder OR MANAGE on bound bank account OR banksystem admin.

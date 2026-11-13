@@ -490,7 +490,7 @@
   "gui.banksystem.stamper_bind.empty": "No companies you can bind to",
   "gui.banksystem.company_selection.empty": "No companies available",
   "gui.banksystem.stamper_bind.no_companies": "You have no companies with MANAGE permission",
-  "gui.banksystem.stamper_bind.master_only": "Binding is master-only (this is a slave server)",
+  "gui.banksystem.share_stamper.untrusted_slave": "This server is not trusted by the bank master, so the Share Stamper can't be used here. Ask a bank admin to trust this server.",
   "gui.banksystem.share_stamper.in_use": "Share Stamper is already in use by another player",
   "gui.banksystem.share_stamper.unbind_button": "Unbind",
   "gui.banksystem.share_stamper.unbind_confirm_title": "Unbind Share Stamper?",

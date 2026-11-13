@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.payout.IPayoutManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.data.table.record.PayoutHistoryRecord;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
@@ -71,6 +72,12 @@ public final class AsyncCompanyManager {
     public static final int CODE_SHARES_UNDER_REVIEW = 18;
     /** BS-251 (v2.2.0) — founder transfer target is not a worker (user of the company bank account). */
     public static final int CODE_NOT_A_WORKER = 19;
+    /** BS-262 (v2.2.0) — STAMPER_APPLY: the company is at its max supply. */
+    public static final int CODE_CAP_REACHED = 20;
+    /** BS-262 (v2.2.0) — STAMPER_GATE: the caller may manage the company, but the asking slave is not trusted. */
+    public static final int CODE_UNTRUSTED_SLAVE = 21;
+    /** BS-262 — slave side only: a STAMPER_APPLY that never reached the master (nothing applied). */
+    public static final int STAMPER_NOT_SENT = -1;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -140,7 +147,11 @@ public final class AsyncCompanyManager {
         REPORT_SHARE_CREATED,
         // BS-235 (v2.2.0) — /company shares acknowledge from a slave. Company admins (gateManage)
         // only; server command path, never callable by a client or an untrusted slave.
-        ACKNOWLEDGE_SHARE_EXCESS
+        ACKNOWLEDGE_SHARE_EXCESS,
+        // BS-262 (v2.2.0) — slave Share Stamper: MANAGE check (read-only, also for untrusted slaves;
+        // the admin flag never counts from one) and one stamp/redeem on the master (trusted slaves only).
+        STAMPER_GATE,
+        STAMPER_APPLY
     }
 
     /** Task #1 (v2.1.0) — SM bridge result codes for OPEN_SHARE_MARKET output. */
@@ -706,6 +717,20 @@ public final class AsyncCompanyManager {
 
     // Task #54 (v2.1.0) — bulk visuals+info list.
     /** BS-240: one SHARE_CREATED report from a slave. */
+    /** BS-262: one stamp ({@code redeem} false) or redeem of a slave stamper; idempotent per {@code transferId}. */
+    public record StamperApplyInput(int companyId, boolean redeem, @Nullable UUID actor, String transferId) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, StamperApplyInput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.companyId);
+                    buf.writeBoolean(v.redeem);
+                    buf.writeBoolean(v.actor != null);
+                    if (v.actor != null) buf.writeUUID(v.actor);
+                    buf.writeUtf(v.transferId);
+                },
+                buf -> new StamperApplyInput(buf.readVarInt(), buf.readBoolean(),
+                        buf.readBoolean() ? buf.readUUID() : null, buf.readUtf()));
+    }
+
     public record ShareCreatedInput(String who, int companyId, long count, String how) {
         public static final StreamCodec<RegistryFriendlyByteBuf, ShareCreatedInput> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.STRING_UTF8, ShareCreatedInput::who,
@@ -1187,6 +1212,8 @@ public final class AsyncCompanyManager {
         put(FunctionType.PULL_SYMBOL_BYTES,         new AsyncFunctionDataCodecs(PullSymbolBytesInput.STREAM_CODEC,  EmptyInput.STREAM_CODEC));
         put(FunctionType.REPORT_SHARE_CREATED,      new AsyncFunctionDataCodecs(ShareCreatedInput.STREAM_CODEC,     EmptyInput.STREAM_CODEC));
         put(FunctionType.ACKNOWLEDGE_SHARE_EXCESS,  new AsyncFunctionDataCodecs(DissolveInput.STREAM_CODEC,         ShareAcknowledgeOutput.STREAM_CODEC));
+        put(FunctionType.STAMPER_GATE,              new AsyncFunctionDataCodecs(CloseShareMarketInput.STREAM_CODEC, ByteBufCodecs.VAR_INT.cast()));
+        put(FunctionType.STAMPER_APPLY,             new AsyncFunctionDataCodecs(StamperApplyInput.STREAM_CODEC,     ByteBufCodecs.VAR_INT.cast()));
     }};
 
     // ------------------------------------------------------------------
@@ -1290,11 +1317,14 @@ public final class AsyncCompanyManager {
                     }
                     return handleGetCompanyStats(in, bm, company);
                 }
+                case STAMPER_APPLY -> {
+                    return handleStamperApply(input.decodeParams(), slaveID, cm);
+                }
                 default -> { }
             }
 
             return CompletableFuture.completedFuture(switch (input.function) {
-                case GET_HISTORY, GET_FAILURE_COUNT_24H, GET_COMPANY_STATS ->
+                case GET_HISTORY, GET_FAILURE_COUNT_24H, GET_COMPANY_STATS, STAMPER_APPLY ->
                         throw new IllegalStateException("handled asynchronously above");
                 case CREATE_COMPANY     -> handleCreate(input.decodeParams(), bm, cm);
                 case TRANSFER_FOUNDER   -> handleTransfer(input.decodeParams(), bm, cm);
@@ -1361,6 +1391,14 @@ public final class AsyncCompanyManager {
                     yield OutputData.of(FunctionType.ACKNOWLEDGE_SHARE_EXCESS,
                             acknowledgeShareExcess(in.companyName(), in.callerUUID(), bm, cm));
                 }
+                case STAMPER_GATE -> {
+                    // BS-262: the admin flag never counts from an untrusted slave (forgeable caller); a manager
+                    // asking through one learns that this slave can't stamp (STAMPER_APPLY is trusted-only).
+                    CloseShareMarketInput in = input.decodeParams();
+                    boolean untrusted = isFromUntrustedSlave(slaveID);
+                    int gate = gateManage(in.companyId(), in.callerUUID(), bm, cm, !untrusted);
+                    yield OutputData.of(FunctionType.STAMPER_GATE, gate == CODE_OK && untrusted ? CODE_UNTRUSTED_SLAVE : gate);
+                }
             });
         }
 
@@ -1402,7 +1440,9 @@ public final class AsyncCompanyManager {
                      LIST_PLAYER_ACCOUNTS_WITH_FILTER, LIST_ACCOUNT_ITEM_BALANCES,
                      LIST_DIVIDEND_HISTORY, GET_COMPANY_STATS,
                      // Task #54 (v2.1.0) — read-only symbol store queries.
-                     GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES -> true;
+                     GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES,
+                     // BS-262 — read-only; the handler ignores the admin flag for an untrusted slave.
+                     STAMPER_GATE -> true;
                 default -> false;
             };
         }
@@ -1642,6 +1682,7 @@ public final class AsyncCompanyManager {
             case PULL_SYMBOL_BYTES   -> OutputData.of(function, new EmptyInput());
             case REPORT_SHARE_CREATED -> OutputData.of(function, new EmptyInput());
             case ACKNOWLEDGE_SHARE_EXCESS -> OutputData.of(function, new ShareAcknowledgeOutput(CODE_INTERNAL, "", 0L));
+            case STAMPER_GATE, STAMPER_APPLY -> OutputData.of(function, Integer.valueOf(CODE_INTERNAL));
         };
     }
 
@@ -1856,6 +1897,64 @@ public final class AsyncCompanyManager {
         return OutputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperOutput(CODE_OK));
     }
 
+    /**
+     * BS-262 — master side of STAMPER_APPLY: one stamp/redeem for a trusted slave's stamper plus its
+     * SHARE_STAMP / SHARE_REDEEM ledger row (ref = transfer id, origin = the slave). A repeated transfer id gets
+     * the first reply (TransferStatusRequest RESULTS, keyed by slave + id); nothing is applied twice.
+     */
+    private static CompletableFuture<OutputData> handleStamperApply(StamperApplyInput in, String slaveID, CompanyManager cm) {
+        final String tid = slaveID == null || slaveID.isEmpty() ? null : in.transferId();
+        CompletableFuture<OutputData> out = runOnServerThreadSync(() -> net.kroia.banksystem.banking.ledger.TransactionLedger.withOrigin(slaveID, () -> {
+            CompletableFuture<OutputData> seen = TransferStatusRequest.replay(slaveID, tid);
+            if (seen != null) return seen;
+            Company company = cm.getById(in.companyId());
+            int code = CODE_NOT_FOUND;
+            if (company != null) {
+                TransferStatusRequest.applying(slaveID, tid);
+                boolean ok = in.redeem() ? cm.redeemShare(in.companyId()) : cm.stampShare(in.companyId());
+                code = ok ? CODE_OK : CODE_CAP_REACHED; // stampShare refuses only at max supply; redeemShare never for an existing company
+                if (ok) net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity.logStampRow(company, in.actor(),
+                        in.redeem() ? net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM : net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP, tid);
+            }
+            OutputData reply = OutputData.of(FunctionType.STAMPER_APPLY, Integer.valueOf(code));
+            TransferStatusRequest.remember(slaveID, tid, code == CODE_OK, Map.of(), reply);
+            return CompletableFuture.completedFuture(reply);
+        }));
+        // null: the apply threw; its in-progress marker stays, so the slave's status check answers UNKNOWN
+        return out != null ? out : CompletableFuture.failedFuture(new IllegalStateException("stamper apply " + tid + " did not complete"));
+    }
+
+    /** BS-262 — slave: may {@code caller} manage {@code companyId}? A CODE_* (CODE_UNTRUSTED_SLAVE included); null = no answer. */
+    public static CompletableFuture<Integer> stamperGateAsync(int companyId, UUID caller) {
+        InputData input = InputData.of(FunctionType.STAMPER_GATE, new CloseShareMarketInput(companyId, caller));
+        CompletableFuture<Integer> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
+    }
+
+    /**
+     * BS-262 — trusted slave: one stamp/redeem on the master. {@code send} false only asks the outcome of an
+     * earlier send with this {@code transferId} (a request still pending after a reload). Completes with CODE_OK
+     * (applied), another CODE_* (refused by the master) or {@link #STAMPER_NOT_SENT}; fails when the outcome stays unknown.
+     */
+    public static CompletableFuture<Integer> stamperApplyAsync(int companyId, boolean redeem, @Nullable UUID actor,
+                                                               String transferId, long sentMs, boolean send) {
+        CompletableFuture<Integer> sent;
+        if (!send) {
+            sent = CompletableFuture.failedFuture(new net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException(
+                    "stamper request " + transferId + " pending after a reload"));
+        } else {
+            try {
+                InputData input = InputData.of(FunctionType.STAMPER_APPLY, new StamperApplyInput(companyId, redeem, actor, transferId));
+                sent = Request.instance.sendRequestToMaster(input).thenApply(o -> o == null ? null : (Integer) o.decodeResult());
+            } catch (RuntimeException e) {
+                sent = CompletableFuture.completedFuture(null); // not sent = not applied
+            }
+        }
+        return TransferStatusRequest.resolve(sent, () -> STAMPER_NOT_SENT, remainder -> CODE_OK,
+                () -> TransferStatusRequest.ask(null, transferId, sentMs));
+    }
+
     /** Spec §4.3 (v2.1.0) — slave helper: unbind the Share Stamper at pos from a company (MANAGE-gated). */
     public static CompletableFuture<UnbindStamperOutput> unbindStamperAsync(int companyId, BlockPos pos, UUID caller) {
         InputData input = InputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperInput(companyId, pos, caller));
@@ -1934,11 +2033,16 @@ public final class AsyncCompanyManager {
      * share acknowledge): MANAGE on the company's bank account, a founder, or a BankSystem admin.
      */
     public static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm) {
+        return gateManage(companyId, callerUUID, bm, cm, true);
+    }
+
+    /** Like {@link #gateManage(int, UUID, IServerBankManager, CompanyManager)}; {@code adminCounts} false ignores the admin flag. */
+    public static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm, boolean adminCounts) {
         Company company = cm.getById(companyId);
         if (company == null) return CODE_NOT_FOUND;
         IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
         boolean hasManage = account != null && account.hasPermission(callerUUID, BankPermission.MANAGE);
-        boolean isAdmin = bm.isBanksystemAdmin(callerUUID);
+        boolean isAdmin = adminCounts && bm.isBanksystemAdmin(callerUUID);
         // v2.1.0 Bug2 root cause — visuals/tint save silently rejected for founders
         // lacking explicit MANAGE bit on the linked bank account. Founder rights imply
         // company-level authority; extend the gate to accept founder membership.

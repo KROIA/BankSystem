@@ -490,7 +490,7 @@
   "gui.banksystem.stamper_bind.title": "绑定股票印章机",
   "gui.banksystem.stamper_bind.empty": "没有可绑定的公司",
   "gui.banksystem.stamper_bind.no_companies": "你没有具备管理权限的公司",
-  "gui.banksystem.stamper_bind.master_only": "绑定仅限主服务器（当前为从服务器）",
+  "gui.banksystem.share_stamper.untrusted_slave": "银行主服务器不信任此服务器，因此无法在此使用股票印章机。请联系银行管理员信任此服务器。",
   "gui.banksystem.share_stamper.in_use": "股票印章机正被其他玩家使用",
   "gui.banksystem.share_stamper.unbind_button": "解除绑定",
   "gui.banksystem.share_stamper.unbind_confirm_title": "解除股票印章机的绑定？",

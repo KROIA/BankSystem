@@ -490,7 +490,7 @@
   "gui.banksystem.stamper_bind.title": "Aktie-Prägistation binde",
   "gui.banksystem.stamper_bind.empty": "Keini Firmene, wo du binde chasch",
   "gui.banksystem.stamper_bind.no_companies": "Du häsch keini Firmene mit MANAGE-Berächtigung",
-  "gui.banksystem.stamper_bind.master_only": "S'Binde isch nur uf em Master möglich (das isch en Slave-Server)",
+  "gui.banksystem.share_stamper.untrusted_slave": "De Bank-Master vertrout däm Server nöd, drum chan d'Aktie-Prägistation da nöd bruucht werde. Frög en Bank-Admin, dass er däm Server vertrout.",
   "gui.banksystem.share_stamper.in_use": "D'Aktie-Prägistation wird scho vo eme andere Spieler verwendet",
   "gui.banksystem.share_stamper.unbind_button": "Trenne",
   "gui.banksystem.share_stamper.unbind_confirm_title": "Aktie-Prägistation trenne?",

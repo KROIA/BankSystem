@@ -23,13 +23,15 @@ public class LedgerByRefRequest extends BankSystemGenericRequest<String, List<Le
 
     public static final LedgerByRefRequest INSTANCE = new LedgerByRefRequest();
 
-    public record Row(String ref, int account, LedgerType type, short itemId, long amount) {
+    /** {@code origin}: the slave id of the row's origin server (BS-256), "" for the master. */
+    public record Row(String ref, int account, LedgerType type, short itemId, long amount, String origin) {
         static final StreamCodec<RegistryFriendlyByteBuf, Row> CODEC = StreamCodec.composite(
                 ByteBufCodecs.STRING_UTF8, Row::ref,
                 ByteBufCodecs.VAR_INT, Row::account,
                 ByteBufCodecs.VAR_INT.map(LedgerType::fromCode, LedgerType::code), Row::type,
                 ByteBufCodecs.SHORT, Row::itemId,
                 ByteBufCodecs.VAR_LONG, Row::amount,
+                ByteBufCodecs.STRING_UTF8, Row::origin,
                 Row::new);
     }
 
@@ -50,7 +52,8 @@ public class LedgerByRefRequest extends BankSystemGenericRequest<String, List<Le
             return CompletableFuture.completedFuture(List.of());
         return log.getByRef(ref).thenApply(rows -> {
             List<Row> out = new ArrayList<>();
-            for (var r : rows) out.add(new Row(r.ref(), r.accountNumber(), r.type(), r.itemId(), r.amount()));
+            for (var r : rows) out.add(new Row(r.ref(), r.accountNumber(), r.type(), r.itemId(), r.amount(),
+                    r.originServer() == null ? "" : r.originServer()));
             return out;
         });
     }

@@ -93,6 +93,10 @@ public class ShareStamperBlock extends Block implements EntityBlock {
             }
             return InteractionResult.SUCCESS;
         }
+        if (ShareStamperBlockEntity.isSlaveSide()) { // BS-262: the master decides, the menu opens on its answer
+            if (player instanceof ServerPlayer sPlayer) stamper.openAfterGate(sPlayer);
+            return InteractionResult.SUCCESS;
+        }
         if (!stamper.hasManagePermission(player.getUUID())) {
             String companyName = stamper.getBoundCompanyName();
             net.kroia.modutilities.PlayerCompat.sendMessage(player, Component.translatable(
@@ -112,20 +116,32 @@ public class ShareStamperBlock extends Block implements EntityBlock {
     /**
      * Task #47 (v2.1.0) — Compute the set of companies the caller may bind {@code pos}
      * to (founder OR MANAGE OR banksystem admin) and dispatch the bind-screen open S2C.
-     * Master-only meaningful: on a slave the {@link net.kroia.banksystem.banking.company.CompanyManager}
-     * is null and we fall back to a chat hint.
+     * On a slave (BS-262) the master lists the caller's MANAGE companies by name; the
+     * {@link net.kroia.banksystem.banking.company.SlaveCompanyMirror} maps them to ids.
      */
     private static void openBindScreenFor(ServerPlayer player, BlockPos pos) {
         BlockEntity beRef = player.level().getBlockEntity(pos);
         ShareStamperBlockEntity stamperRef = beRef instanceof ShareStamperBlockEntity ssbe ? ssbe : null;
         net.kroia.banksystem.banking.company.CompanyManager cm =
                 net.kroia.banksystem.banking.company.CompanyManager.get();
+        java.util.UUID uuid = player.getUUID();
         if (cm == null) {
-            player.sendSystemMessage(Component.translatable("gui.banksystem.stamper_bind.master_only"));
-            if (stamperRef != null) stamperRef.releaseViewer(player.getUUID());
+            if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem(uuid)) { // tells the player
+                if (stamperRef != null) stamperRef.releaseViewer(uuid);
+                return;
+            }
+            net.kroia.banksystem.banking.company.AsyncCompanyManager.listCompanyNamesForCallerAsync(uuid,
+                    net.kroia.banksystem.banking.company.AsyncCompanyManager.FILTER_MANAGE).thenAccept(names ->
+                    player.level().getServer().execute(() -> {
+                        List<net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry> entries = new ArrayList<>();
+                        for (var e : net.kroia.banksystem.banking.company.SlaveCompanyMirror.snapshot())
+                            if (names.contains(e.internalName()))
+                                entries.add(new net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry(
+                                        e.companyId(), e.internalName()));
+                        sendBindScreen(player, pos, entries, stamperRef);
+                    }));
             return;
         }
-        java.util.UUID uuid = player.getUUID();
         java.util.Set<net.kroia.banksystem.banking.company.Company> managed =
                 cm.listCompaniesManagedBy(uuid);
         // Union with founder set (founder implies manage but be defensive).
@@ -141,7 +157,13 @@ public class ShareStamperBlock extends Block implements EntityBlock {
             entries.add(new net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry(
                     c.getCompanyId(), c.getName()));
         }
-        if (entries.isEmpty()) {
+        sendBindScreen(player, pos, entries, stamperRef);
+    }
+
+    private static void sendBindScreen(ServerPlayer player, BlockPos pos,
+                                       List<net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry> entries,
+                                       @Nullable ShareStamperBlockEntity stamperRef) {
+        if (entries.isEmpty() || player.hasDisconnected()) {
             player.sendSystemMessage(Component.translatable("gui.banksystem.stamper_bind.no_companies"));
             if (stamperRef != null) stamperRef.releaseViewer(player.getUUID());
             return;

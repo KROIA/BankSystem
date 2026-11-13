@@ -59,6 +59,7 @@ public class CompanyManagerTests extends TestSuite {
     public void registerTests() {
         if (slave) {
             addTest("transfer_founder_forwarded_from_slave", this::testTransferFounderFromSlave); // BS-205
+            addTest("stamper_apply_counted_once_on_master", this::testStamperApplyFromSlave); // BS-262
             return;
         }
         addTest("case_insensitive_name_uniqueness", this::testCaseInsensitiveNameUniqueness);
@@ -388,6 +389,69 @@ public class CompanyManagerTests extends TestSuite {
             return fail((trusted ? "trusted" : "untrusted") + " slave: expected code " + expected + ", got " + out.resultCode());
         return pass((trusted ? "trusted slave reached the master's handler (CODE_NOT_FOUND)"
                 : "untrusted slave refused by the master (CODE_INTERNAL)"));
+    }
+
+    /**
+     * BS-262: the slave Share Stamper's master calls. STAMPER_GATE refuses a non-manager and lets the founder in;
+     * one STAMPER_APPLY raises the master's issued count by 1 and writes one SHARE_STAMP row (ref = the transfer id,
+     * origin = this slave); the same transfer id again is answered from the master's cache, not applied twice; a
+     * redeem brings the count back. Needs a slave the master trusts (STAMPER_APPLY is trusted-only), else skips.
+     * Removes the company, its account and the synthetic founder; the ledger rows stay (the ledger is append-only).
+     */
+    private TestResult testStamperApplyFromSlave() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        if (i == null || !i.isSlaveServer) return skip("not a slave");
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem()) return skip("slave not connected to its master");
+        net.kroia.banksystem.api.bankmanager.IAsyncBankManager mgr = i.SERVER_BANK_MANAGER.getAsync();
+        if (!Boolean.TRUE.equals(await(mgr.isSlaveServerTrustedAsync(""), 10_000)))
+            return skip("master does not trust this slave: STAMPER_APPLY is for trusted slaves only");
+        UUID founder = UUID.fromString("00000000-0000-0000-0000-0000AAAA0266");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0267");
+        String name = "__bs262_" + Long.toString(System.currentTimeMillis(), 36);
+        AsyncCompanyManager.CreateOutput created = await(AsyncCompanyManager.createCompanyAsync(name, 10L, founder, "Bs262Founder"), 30_000);
+        if (created == null || created.resultCode() != AsyncCompanyManager.CODE_OK) return fail("test company not created: " + created);
+        int cid = created.companyId();
+        try {
+            Integer gate = await(AsyncCompanyManager.stamperGateAsync(cid, outsider), 30_000);
+            if (gate == null || gate != AsyncCompanyManager.CODE_NO_PERMISSION) return fail("gate for a non-manager: " + gate);
+            gate = await(AsyncCompanyManager.stamperGateAsync(cid, founder), 30_000);
+            if (gate == null || gate != AsyncCompanyManager.CODE_OK) return fail("gate for the founder: " + gate);
+
+            String tid = net.kroia.banksystem.data.TransferJournal.newTransferId();
+            long sentMs = System.currentTimeMillis();
+            Integer code = await(AsyncCompanyManager.stamperApplyAsync(cid, false, founder, tid, sentMs, true), 30_000);
+            if (code == null || code != AsyncCompanyManager.CODE_OK) return fail("stamp: " + code);
+            code = await(AsyncCompanyManager.stamperApplyAsync(cid, false, founder, tid, sentMs, true), 30_000);
+            if (code == null || code != AsyncCompanyManager.CODE_OK) return fail("repeated stamp: " + code);
+            AsyncCompanyManager.CompanyInfoOutput info = await(AsyncCompanyManager.getCompanyInfoByIdAsync(cid), 30_000);
+            if (info == null || info.totalSharesIssued() != 1L)
+                return fail("issued after a stamp and its repeat: " + (info == null ? null : info.totalSharesIssued()) + ", expected 1");
+
+            List<net.kroia.banksystem.testing.LedgerByRefRequest.Row> rows = List.of();
+            long end = System.currentTimeMillis() + 10_000; // the ledger write is async
+            while (rows.isEmpty() && System.currentTimeMillis() < end) {
+                List<net.kroia.banksystem.testing.LedgerByRefRequest.Row> got =
+                        await(net.kroia.banksystem.testing.LedgerByRefRequest.INSTANCE.sendRequestToMaster(tid), 30_000);
+                if (got != null) rows = got;
+                if (rows.isEmpty()) pump(250);
+            }
+            String me = net.kroia.modutilities.networking.multi_server.MultiServerManager.getSlaveID();
+            if (rows.size() != 1 || rows.get(0).type() != net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP
+                    || rows.get(0).account() != created.bankAccountNr() || !rows.get(0).origin().equals(me))
+                return fail("ledger rows for " + tid + ": " + rows + " (this slave: " + me + ")");
+
+            code = await(AsyncCompanyManager.stamperApplyAsync(cid, true, founder,
+                    net.kroia.banksystem.data.TransferJournal.newTransferId(), System.currentTimeMillis(), true), 30_000);
+            info = await(AsyncCompanyManager.getCompanyInfoByIdAsync(cid), 30_000);
+            if (code == null || code != AsyncCompanyManager.CODE_OK || info == null || info.totalSharesIssued() != 0L)
+                return fail("redeem: " + code + ", issued " + (info == null ? null : info.totalSharesIssued()));
+            return pass("gate refuses a non-manager; one stamp counted once (repeat replayed), SHARE_STAMP row origin "
+                    + me + "; redeem back to 0");
+        } finally {
+            await(AsyncCompanyManager.dissolveCompanyAsync(name, founder), 30_000);
+            await(mgr.deleteBankAccountAsync(created.bankAccountNr()), 30_000);
+            await(mgr.removeUserAsync(founder), 30_000);
+        }
     }
 
     private TestResult testIsFounderOfAccounts() {
