@@ -62,6 +62,7 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
             ExtraCodecUtils.listStreamCodec(ByteBufCodecs.STRING_UTF8), p -> p.volatileComponentIds,
             ExtraCodecUtils.listStreamCodec(ByteBufCodecs.STRING_UTF8), p -> p.depositGatedComponentIds,
             ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ItemID.STREAM_CODEC, HashMap<ItemID, ItemID>::new), p -> p.aliases,
+            ByteBufCodecs.BOOL, p -> p.fullSync,
             SyncItemIDsPacket::new
     );
 
@@ -100,6 +101,13 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
      */
     private final Map<ItemID, ItemID> aliases;
 
+    /**
+     * BS-260: {@code true} when {@link #items} is the sender's WHOLE table (player join,
+     * slave connect). Only then may a receiver drop shorts the packet does not carry; an
+     * incremental "new item" broadcast never removes anything.
+     */
+    private final boolean fullSync;
+
 
     /**
      * Creates a sync packet from live {@link ItemStack} entries — converts each stack
@@ -107,22 +115,31 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
      * {@link #STREAM_CODEC} for why NBT (not the numeric-ID codec) is used on the wire.
      * Automatically attaches the sender's current config-sourced volatile + deposit-gated
      * component lists and ItemID alias table.
+     * <p>
+     * BS-263: a full sync whose table lost entries during serialization (no registry access,
+     * an entry that fails to save) goes out as an incremental update, else receivers would
+     * drop shorts the sender still has.
      */
-    public SyncItemIDsPacket(Map<ItemID, ItemStack> itemStacks)
+    public SyncItemIDsPacket(Map<ItemID, ItemStack> itemStacks, boolean fullSync)
     {
-        this(toItemTagMap(itemStacks),
-                VolatileItemComponents.getConfigComponentIdStrings(),
-                VolatileItemComponents.getGatedConfigComponentIdStrings(),
-                ItemIDManager.getItemIDAliasMap());
+        this.items = toItemTagMap(itemStacks);
+        this.volatileComponentIds = VolatileItemComponents.getConfigComponentIdStrings();
+        this.depositGatedComponentIds = VolatileItemComponents.getGatedConfigComponentIdStrings();
+        this.aliases = ItemIDManager.getItemIDAliasMap();
+        this.fullSync = fullSync && items.size() == itemStacks.size();
+        if (fullSync && !this.fullSync && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            warn("Full item ID sync is missing " + (itemStacks.size() - items.size()) + " of "
+                    + itemStacks.size() + " entries; sending it as an update, receivers drop nothing");
     }
 
     /** Codec constructor. */
-    public SyncItemIDsPacket(Map<ItemID, CompoundTag> items, List<String> volatileComponentIds, List<String> depositGatedComponentIds, Map<ItemID, ItemID> aliases)
+    public SyncItemIDsPacket(Map<ItemID, CompoundTag> items, List<String> volatileComponentIds, List<String> depositGatedComponentIds, Map<ItemID, ItemID> aliases, boolean fullSync)
     {
         this.items = items;
         this.volatileComponentIds = volatileComponentIds;
         this.depositGatedComponentIds = depositGatedComponentIds;
         this.aliases = aliases;
+        this.fullSync = fullSync;
     }
 
     /**
@@ -197,6 +214,12 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
         return aliases;
     }
 
+    /** @return {@code true} if this packet carries the sender's whole table (see {@link #fullSync}). */
+    public boolean isFullSync()
+    {
+        return fullSync;
+    }
+
 
     public void broadcastToClients()
     {
@@ -209,17 +232,17 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
 
     public static void broadcastToSlaves(Map<ItemID, ItemStack> items)
     {
-        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items, false);
         packet.broadcastToSlaves();
     }
     public static void sendToSlave(String slaveID, Map<ItemID, ItemStack> items)
     {
-        SyncItemIDsPacket packet = new SyncItemIDsPacket(items);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(items, false);
         packet.sendToSlave(slaveID);
     }
     public static void sendAllItemsToSlave(String slaveID)
     {
-        sendToSlave(slaveID, ItemIDManager.getItemIDMap());
+        new SyncItemIDsPacket(ItemIDManager.getItemIDMap(), true).sendToSlave(slaveID);
     }
 
 
@@ -253,6 +276,9 @@ public class SyncItemIDsPacket extends BankSystemNetworkPacket
         // master doesn't yet know about) mint fresh slave-local shorts. Idempotent —
         // subsequent incremental sync packets find the latch already released and return.
         ItemIDManager.finalizeSlaveSync();
+        // BS-237: relay to this slave's own players, else a company created at runtime stays
+        // unresolvable on their clients until they rejoin.
+        broadcastToClients();
     }
 
     @Override

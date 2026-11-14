@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.payout.IPayoutManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.data.table.record.PayoutHistoryRecord;
+import net.kroia.banksystem.networking.multi_server.TransferStatusRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
@@ -67,6 +68,16 @@ public final class AsyncCompanyManager {
     public static final int CODE_PER_PLAYER_ACCOUNT_LIMIT = 16;
     /** Task #117 (v2.2.0) — the company bank account is frozen by an admin. */
     public static final int CODE_ACCOUNT_FROZEN = 17;
+    /** BS-235 (v2.2.0) — dividends paused: more shares banked than stamped, waiting for an admin. */
+    public static final int CODE_SHARES_UNDER_REVIEW = 18;
+    /** BS-251 (v2.2.0) — founder transfer target is not a worker (user of the company bank account). */
+    public static final int CODE_NOT_A_WORKER = 19;
+    /** BS-262 (v2.2.0) — STAMPER_APPLY: the company is at its max supply. */
+    public static final int CODE_CAP_REACHED = 20;
+    /** BS-262 (v2.2.0) — STAMPER_GATE: the caller may manage the company, but the asking slave is not trusted. */
+    public static final int CODE_UNTRUSTED_SLAVE = 21;
+    /** BS-262 — slave side only: a STAMPER_APPLY that never reached the master (nothing applied). */
+    public static final int STAMPER_NOT_SENT = -1;
 
     // ------------------------------------------------------------------
     // Function enum
@@ -130,7 +141,17 @@ public final class AsyncCompanyManager {
         // Task #54 (v2.1.0) — slave→master: fetch current share symbol manifest.
         GET_SYMBOL_MANIFEST,
         // Task #54 (v2.1.0) — slave→master: request byte push for specific symbol hashes.
-        PULL_SYMBOL_BYTES
+        PULL_SYMBOL_BYTES,
+        // BS-240 (v2.2.0) — slave→master: shares created by /give or the creative inventory on a slave.
+        // Trusted slaves only (in neither whitelist).
+        REPORT_SHARE_CREATED,
+        // BS-235 (v2.2.0) — /company shares acknowledge from a slave. Company admins (gateManage)
+        // only; server command path, never callable by a client or an untrusted slave.
+        ACKNOWLEDGE_SHARE_EXCESS,
+        // BS-262 (v2.2.0) — slave Share Stamper: MANAGE check (read-only, also for untrusted slaves;
+        // the admin flag never counts from one) and one stamp/redeem on the master (trusted slaves only).
+        STAMPER_GATE,
+        STAMPER_APPLY
     }
 
     /** Task #1 (v2.1.0) — SM bridge result codes for OPEN_SHARE_MARKET output. */
@@ -154,6 +175,8 @@ public final class AsyncCompanyManager {
     public static final byte FILTER_ALL      = 0;
     public static final byte FILTER_FOUNDER  = 1;
     public static final byte FILTER_MANAGE   = 2;
+    /** BS-235: like {@link #FILTER_MANAGE}, but every company for a BankSystem admin (not via an untrusted slave). */
+    public static final byte FILTER_ADMIN    = 3;
 
     // ------------------------------------------------------------------
     // Param records + codecs
@@ -213,6 +236,14 @@ public final class AsyncCompanyManager {
                 ByteBufCodecs.STRING_UTF8, p -> p.companyName,
                 ByteBufCodecs.VAR_INT, p -> p.bankAccountNr,
                 DissolveOutput::new);
+    }
+    /** BS-235: result of {@link FunctionType#ACKNOWLEDGE_SHARE_EXCESS}; input is a {@link DissolveInput}. */
+    public record ShareAcknowledgeOutput(int resultCode, String companyName, long excess) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ShareAcknowledgeOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, p -> p.resultCode,
+                ByteBufCodecs.STRING_UTF8, p -> p.companyName,
+                ByteBufCodecs.VAR_LONG, p -> p.excess,
+                ShareAcknowledgeOutput::new);
     }
 
     public record DescriptionInput(String companyName, UUID callerUUID, String text) implements HasCallerUUID {
@@ -685,6 +716,39 @@ public final class AsyncCompanyManager {
     }
 
     // Task #54 (v2.1.0) — bulk visuals+info list.
+    /** BS-240: one SHARE_CREATED report from a slave. */
+    /**
+     * BS-262: one stamp ({@code redeem} false) or redeem of a slave stamper; idempotent per {@code transferId}.
+     * BS-258: {@code pos} = the stamper block; the short constructor takes {@link net.kroia.banksystem.banking.ledger.TransactionLedger#currentPos()}.
+     */
+    public record StamperApplyInput(int companyId, boolean redeem, @Nullable UUID actor, String transferId,
+                                    @Nullable net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos pos) {
+        public StamperApplyInput(int companyId, boolean redeem, @Nullable UUID actor, String transferId) {
+            this(companyId, redeem, actor, transferId, net.kroia.banksystem.banking.ledger.TransactionLedger.currentPos());
+        }
+        public static final StreamCodec<RegistryFriendlyByteBuf, StamperApplyInput> STREAM_CODEC = StreamCodec.of(
+                (buf, v) -> {
+                    buf.writeVarInt(v.companyId);
+                    buf.writeBoolean(v.redeem);
+                    buf.writeBoolean(v.actor != null);
+                    if (v.actor != null) buf.writeUUID(v.actor);
+                    buf.writeUtf(v.transferId);
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos.STREAM_CODEC.encode(buf, v.pos);
+                },
+                buf -> new StamperApplyInput(buf.readVarInt(), buf.readBoolean(),
+                        buf.readBoolean() ? buf.readUUID() : null, buf.readUtf(),
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos.STREAM_CODEC.decode(buf)));
+    }
+
+    public record ShareCreatedInput(String who, int companyId, long count, String how) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ShareCreatedInput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.STRING_UTF8, ShareCreatedInput::who,
+                ByteBufCodecs.VAR_INT, ShareCreatedInput::companyId,
+                ByteBufCodecs.VAR_LONG, ShareCreatedInput::count,
+                ByteBufCodecs.STRING_UTF8, ShareCreatedInput::how,
+                ShareCreatedInput::new);
+    }
+
     public record EmptyInput() {
         public static final StreamCodec<RegistryFriendlyByteBuf, EmptyInput> STREAM_CODEC = StreamCodec.of(
                 (buf, v) -> {},
@@ -812,6 +876,19 @@ public final class AsyncCompanyManager {
                 ByteBufCodecs.VAR_INT, p -> p.companyId,
                 UUIDUtil.STREAM_CODEC, p -> p.callerUUID,
                 CloseShareMarketInput::new);
+    }
+    /**
+     * MARKET_EXISTS_FOR_COMPANY reply: {@code MARKET_EXISTS_*} code plus the share ItemID the
+     * server resolved for the market ({@link net.kroia.banksystem.util.ItemID#INVALID_ID} when
+     * none). BS-178: clients use exactly this ID for StockMarket, never their own lookup.
+     */
+    public record MarketExistsOutput(int code, net.kroia.banksystem.util.ItemID shareItemId) {
+        public static final MarketExistsOutput UNAVAILABLE =
+                new MarketExistsOutput(MARKET_EXISTS_UNAV, net.kroia.banksystem.util.ItemID.INVALID_ID);
+        public static final StreamCodec<RegistryFriendlyByteBuf, MarketExistsOutput> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, MarketExistsOutput::code,
+                net.kroia.banksystem.util.ItemID.STREAM_CODEC, MarketExistsOutput::shareItemId,
+                MarketExistsOutput::new);
     }
     public record CloseShareMarketOutput(int status) {
         public static final StreamCodec<RegistryFriendlyByteBuf, CloseShareMarketOutput> STREAM_CODEC = StreamCodec.composite(
@@ -1044,14 +1121,6 @@ public final class AsyncCompanyManager {
             return new CompanyStatsPayload(0L, 0L, 0L, 0, 0L, 0L, -1L, List.of(), List.of(),
                     true, sharesIssued, holderCount);
         }
-        /** Task #104: copy for non-admin members: shareholder account number and name removed. */
-        public CompanyStatsPayload withAnonymousShareholders() {
-            List<ShareholderWire> anon = new ArrayList<>(topShareholders.size());
-            for (ShareholderWire s : topShareholders) anon.add(new ShareholderWire(0, "", s.shares(), s.pct()));
-            return new CompanyStatsPayload(totalEarnings, totalSpendings, netCashflow, missedPayoutCount,
-                    missedPayoutAmount, currentBalance, daysToInsolvency, cashflowSeries, anon,
-                    reduced, sharesIssued, holderCount);
-        }
         public static final StreamCodec<RegistryFriendlyByteBuf, CompanyStatsPayload> STREAM_CODEC =
                 StreamCodec.of(
                         (buf, v) -> {
@@ -1137,7 +1206,7 @@ public final class AsyncCompanyManager {
         put(FunctionType.LIST_ALL_COMPANY_VISUALS, new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC, ListAllVisualsOutput.STREAM_CODEC));
         put(FunctionType.OPEN_SHARE_MARKET,         new AsyncFunctionDataCodecs(OpenShareMarketInput.STREAM_CODEC,  OpenShareMarketOutput.STREAM_CODEC));
         put(FunctionType.CLOSE_SHARE_MARKET,        new AsyncFunctionDataCodecs(CloseShareMarketInput.STREAM_CODEC, CloseShareMarketOutput.STREAM_CODEC));
-        put(FunctionType.MARKET_EXISTS_FOR_COMPANY, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   ByteBufCodecs.VAR_INT.cast()));
+        put(FunctionType.MARKET_EXISTS_FOR_COMPANY, new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   MarketExistsOutput.STREAM_CODEC));
         put(FunctionType.SET_MARKET_OPEN,           new AsyncFunctionDataCodecs(SetMarketOpenInput.STREAM_CODEC,     SetMarketOpenOutput.STREAM_CODEC));
         put(FunctionType.IS_MARKET_OPEN,            new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   ByteBufCodecs.VAR_INT.cast()));
         put(FunctionType.UNBIND_STAMPER,            new AsyncFunctionDataCodecs(UnbindStamperInput.STREAM_CODEC,     UnbindStamperOutput.STREAM_CODEC));
@@ -1150,6 +1219,10 @@ public final class AsyncCompanyManager {
         // Task #54 (v2.1.0) — symbol store ARRS.
         put(FunctionType.GET_SYMBOL_MANIFEST,       new AsyncFunctionDataCodecs(EmptyInput.STREAM_CODEC,            SymbolManifestOutput.STREAM_CODEC));
         put(FunctionType.PULL_SYMBOL_BYTES,         new AsyncFunctionDataCodecs(PullSymbolBytesInput.STREAM_CODEC,  EmptyInput.STREAM_CODEC));
+        put(FunctionType.REPORT_SHARE_CREATED,      new AsyncFunctionDataCodecs(ShareCreatedInput.STREAM_CODEC,     EmptyInput.STREAM_CODEC));
+        put(FunctionType.ACKNOWLEDGE_SHARE_EXCESS,  new AsyncFunctionDataCodecs(DissolveInput.STREAM_CODEC,         ShareAcknowledgeOutput.STREAM_CODEC));
+        put(FunctionType.STAMPER_GATE,              new AsyncFunctionDataCodecs(CloseShareMarketInput.STREAM_CODEC, ByteBufCodecs.VAR_INT.cast()));
+        put(FunctionType.STAMPER_APPLY,             new AsyncFunctionDataCodecs(StamperApplyInput.STREAM_CODEC,     ByteBufCodecs.VAR_INT.cast()));
     }};
 
     // ------------------------------------------------------------------
@@ -1241,20 +1314,26 @@ public final class AsyncCompanyManager {
                     Company company = cm.getById(in.companyId());
                     if (company == null)
                         return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS, CompanyStatsPayload.EMPTY));
-                    if (!canReadCompany.test(in.companyId()))
-                        return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS,
-                                CompanyStatsPayload.reducedFor(company.getTotalSharesIssued(), countHolders(in.companyId(), bm))));
-                    return handleGetCompanyStats(in, bm, company).thenApply(out -> {
-                        if (fullRead) return out;
-                        CompanyStatsPayload full = out.decodeResult();
-                        return OutputData.of(FunctionType.GET_COMPANY_STATS, full.withAnonymousShareholders());
-                    });
+                    // BS-246: members, BankSystem admins, shareholders and operators of this server
+                    // see everything, shareholder names included; everyone else gets the reduced view.
+                    if (!canReadCompany.test(in.companyId()) && !isLocalOperator(playerSender, slaveID)) {
+                        Set<Integer> holders = holderAccounts(in.companyId(), bm);
+                        boolean holder = playerSender != null
+                                && bm.getBankAccountNumbers(playerSender).stream().anyMatch(holders::contains);
+                        if (!holder)
+                            return CompletableFuture.completedFuture(OutputData.of(FunctionType.GET_COMPANY_STATS,
+                                    CompanyStatsPayload.reducedFor(company.getTotalSharesIssued(), holders.size())));
+                    }
+                    return handleGetCompanyStats(in, bm, company);
+                }
+                case STAMPER_APPLY -> {
+                    return handleStamperApply(input.decodeParams(), slaveID, cm);
                 }
                 default -> { }
             }
 
             return CompletableFuture.completedFuture(switch (input.function) {
-                case GET_HISTORY, GET_FAILURE_COUNT_24H, GET_COMPANY_STATS ->
+                case GET_HISTORY, GET_FAILURE_COUNT_24H, GET_COMPANY_STATS, STAMPER_APPLY ->
                         throw new IllegalStateException("handled asynchronously above");
                 case CREATE_COMPANY     -> handleCreate(input.decodeParams(), bm, cm);
                 case TRANSFER_FOUNDER   -> handleTransfer(input.decodeParams(), bm, cm);
@@ -1263,7 +1342,11 @@ public final class AsyncCompanyManager {
                 case GET_COMPANY_INFO   -> handleInfo((String) input.decodeParams(), bm, cm);
                 case IS_NAME_TAKEN      -> OutputData.of(FunctionType.IS_NAME_TAKEN,
                                              cm.isNameTaken((String) input.decodeParams()));
-                case LIST_COMPANIES_FOR_CALLER -> handleListForCaller(input.decodeParams(), cm);
+                case LIST_COMPANIES_FOR_CALLER -> {
+                    ListInput in = input.decodeParams();
+                    yield handleListForCaller(in, cm,
+                            bm.isBanksystemAdmin(in.callerUUID) && !isFromUntrustedSlave(slaveID));
+                }
                 case CREATE_PAYOUT      -> handleCreatePayout(input.decodeParams(), bm, cm);
                 case UPDATE_PAYOUT      -> handleUpdatePayout(input.decodeParams(), bm, cm);
                 case PAUSE_PAYOUT       -> handlePausePayout(input.decodeParams(), bm, cm);
@@ -1306,6 +1389,25 @@ public final class AsyncCompanyManager {
                 // Task #54 (v2.1.0) — symbol store (don't need bm/cm).
                 case GET_SYMBOL_MANIFEST -> handleGetSymbolManifest();
                 case PULL_SYMBOL_BYTES   -> handlePullSymbolBytes(input.decodeParams(), slaveID);
+                case REPORT_SHARE_CREATED -> {
+                    ShareCreatedInput in = input.decodeParams();
+                    ShareIntegrity.reportCreated(in.who(), in.companyId(), in.count(),
+                            in.how() + (slaveID == null || slaveID.isEmpty() ? "" : " on server " + slaveID));
+                    yield OutputData.of(FunctionType.REPORT_SHARE_CREATED, new EmptyInput());
+                }
+                case ACKNOWLEDGE_SHARE_EXCESS -> {
+                    DissolveInput in = input.decodeParams();
+                    yield OutputData.of(FunctionType.ACKNOWLEDGE_SHARE_EXCESS,
+                            acknowledgeShareExcess(in.companyName(), in.callerUUID(), bm, cm));
+                }
+                case STAMPER_GATE -> {
+                    // BS-262: the admin flag never counts from an untrusted slave (forgeable caller); a manager
+                    // asking through one learns that this slave can't stamp (STAMPER_APPLY is trusted-only).
+                    CloseShareMarketInput in = input.decodeParams();
+                    boolean untrusted = isFromUntrustedSlave(slaveID);
+                    int gate = gateManage(in.companyId(), in.callerUUID(), bm, cm, !untrusted);
+                    yield OutputData.of(FunctionType.STAMPER_GATE, gate == CODE_OK && untrusted ? CODE_UNTRUSTED_SLAVE : gate);
+                }
             });
         }
 
@@ -1347,7 +1449,9 @@ public final class AsyncCompanyManager {
                      LIST_PLAYER_ACCOUNTS_WITH_FILTER, LIST_ACCOUNT_ITEM_BALANCES,
                      LIST_DIVIDEND_HISTORY, GET_COMPANY_STATS,
                      // Task #54 (v2.1.0) — read-only symbol store queries.
-                     GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES -> true;
+                     GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES,
+                     // BS-262 — read-only; the handler ignores the admin flag for an untrusted slave.
+                     STAMPER_GATE -> true;
                 default -> false;
             };
         }
@@ -1435,6 +1539,7 @@ public final class AsyncCompanyManager {
             case COMPANY_MISSING -> CODE_NOT_FOUND;
             case NOT_A_FOUNDER -> CODE_NOT_FOUNDER;
             case ALREADY_A_FOUNDER -> CODE_ALREADY_FOUNDER;
+            case NOT_A_WORKER -> CODE_NOT_A_WORKER;
         };
         User from = bm.getUserByUUID(in.callerUUID);
         String fromName = from != null ? from.getName() : in.callerUUID.toString();
@@ -1533,10 +1638,11 @@ public final class AsyncCompanyManager {
                         accountNameOf(bm, company.getBankAccountNr())));
     }
 
-    private static OutputData handleListForCaller(ListInput in, CompanyManager cm) {
+    private static OutputData handleListForCaller(ListInput in, CompanyManager cm, boolean trustedAdmin) {
         Set<Company> set = switch (in.filterKind) {
             case FILTER_FOUNDER -> cm.listCompaniesFounderedBy(in.callerUUID);
             case FILTER_MANAGE  -> cm.listCompaniesManagedBy(in.callerUUID);
+            case FILTER_ADMIN   -> cm.listCompaniesAdministeredBy(in.callerUUID, trustedAdmin);
             default             -> cm.listAllCompanies();
         };
         List<String> names = new ArrayList<>(set.size());
@@ -1570,7 +1676,7 @@ public final class AsyncCompanyManager {
             case LIST_ALL_COMPANY_VISUALS -> OutputData.of(function, ListAllVisualsOutput.EMPTY);
             case OPEN_SHARE_MARKET         -> OutputData.of(function, new OpenShareMarketOutput(SM_STATUS_UNAVAILABLE, ""));
             case CLOSE_SHARE_MARKET        -> OutputData.of(function, new CloseShareMarketOutput(SM_STATUS_UNAVAILABLE));
-            case MARKET_EXISTS_FOR_COMPANY -> OutputData.of(function, Integer.valueOf(MARKET_EXISTS_UNAV));
+            case MARKET_EXISTS_FOR_COMPANY -> OutputData.of(function, MarketExistsOutput.UNAVAILABLE);
             case SET_MARKET_OPEN           -> OutputData.of(function, new SetMarketOpenOutput(SM_STATUS_UNAVAILABLE));
             case IS_MARKET_OPEN            -> OutputData.of(function, Integer.valueOf(MARKET_OPEN_UNAV));
             case UNBIND_STAMPER            -> OutputData.of(function, new UnbindStamperOutput(CODE_INTERNAL));
@@ -1583,6 +1689,9 @@ public final class AsyncCompanyManager {
             // Task #54 (v2.1.0)
             case GET_SYMBOL_MANIFEST -> OutputData.of(function, SymbolManifestOutput.EMPTY);
             case PULL_SYMBOL_BYTES   -> OutputData.of(function, new EmptyInput());
+            case REPORT_SHARE_CREATED -> OutputData.of(function, new EmptyInput());
+            case ACKNOWLEDGE_SHARE_EXCESS -> OutputData.of(function, new ShareAcknowledgeOutput(CODE_INTERNAL, "", 0L));
+            case STAMPER_GATE, STAMPER_APPLY -> OutputData.of(function, Integer.valueOf(CODE_INTERNAL));
         };
     }
 
@@ -1689,7 +1798,7 @@ public final class AsyncCompanyManager {
     private static OutputData handleMarketExistsForCompany(GetShareVisualsInput in, CompanyManager cm) {
         net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId());
         if (share == null)
-            return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, Integer.valueOf(MARKET_EXISTS_UNAV));
+            return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, MarketExistsOutput.UNAVAILABLE);
         net.kroia.banksystem.integration.stockmarket.StockMarketBridge.MarketExists e =
                 runOnServerThreadSync(() ->
                         net.kroia.banksystem.integration.stockmarket.StockMarketBridge.marketExistsFor(share));
@@ -1698,7 +1807,7 @@ public final class AsyncCompanyManager {
             case NO  -> MARKET_EXISTS_NO;
             case UNAVAILABLE -> MARKET_EXISTS_UNAV;
         };
-        return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, Integer.valueOf(code));
+        return OutputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, new MarketExistsOutput(code, share));
     }
 
     /**
@@ -1710,8 +1819,9 @@ public final class AsyncCompanyManager {
         if (srv == null || Thread.currentThread() == srv.getRunningThread()) {
             try { return s.get(); } catch (Throwable t) { return null; }
         }
+        var scope = net.kroia.banksystem.banking.ledger.TransactionLedger.scope(); // BS-256 / BS-258: origin + block position
         try {
-            return srv.submit(s::get).get();
+            return srv.submit(() -> scope.run(s)).get();
         } catch (Throwable t) {
             return null;
         }
@@ -1796,6 +1906,65 @@ public final class AsyncCompanyManager {
         return OutputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperOutput(CODE_OK));
     }
 
+    /**
+     * BS-262 — master side of STAMPER_APPLY: one stamp/redeem for a trusted slave's stamper plus its
+     * SHARE_STAMP / SHARE_REDEEM ledger row (ref = transfer id, origin = the slave, position = the stamper, BS-258). A repeated transfer id gets
+     * the first reply (TransferStatusRequest RESULTS, keyed by slave + id); nothing is applied twice.
+     */
+    private static CompletableFuture<OutputData> handleStamperApply(StamperApplyInput in, String slaveID, CompanyManager cm) {
+        final String tid = slaveID == null || slaveID.isEmpty() ? null : in.transferId();
+        CompletableFuture<OutputData> out = runOnServerThreadSync(() -> net.kroia.banksystem.banking.ledger.TransactionLedger.withOrigin(slaveID, () -> {
+            CompletableFuture<OutputData> seen = TransferStatusRequest.replay(slaveID, tid);
+            if (seen != null) return seen;
+            Company company = cm.getById(in.companyId());
+            int code = CODE_NOT_FOUND;
+            if (company != null) {
+                TransferStatusRequest.applying(slaveID, tid);
+                boolean ok = in.redeem() ? cm.redeemShare(in.companyId()) : cm.stampShare(in.companyId());
+                code = ok ? CODE_OK : CODE_CAP_REACHED; // stampShare refuses only at max supply; redeemShare never for an existing company
+                if (ok) net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity.logStampRow(company, in.actor(),
+                        in.redeem() ? net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM : net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP, tid,
+                        in.pos()); // BS-258
+            }
+            OutputData reply = OutputData.of(FunctionType.STAMPER_APPLY, Integer.valueOf(code));
+            TransferStatusRequest.remember(slaveID, tid, code == CODE_OK, Map.of(), reply);
+            return CompletableFuture.completedFuture(reply);
+        }));
+        // null: the apply threw; its in-progress marker stays, so the slave's status check answers UNKNOWN
+        return out != null ? out : CompletableFuture.failedFuture(new IllegalStateException("stamper apply " + tid + " did not complete"));
+    }
+
+    /** BS-262 — slave: may {@code caller} manage {@code companyId}? A CODE_* (CODE_UNTRUSTED_SLAVE included); null = no answer. */
+    public static CompletableFuture<Integer> stamperGateAsync(int companyId, UUID caller) {
+        InputData input = InputData.of(FunctionType.STAMPER_GATE, new CloseShareMarketInput(companyId, caller));
+        CompletableFuture<Integer> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> f.complete(o == null ? null : o.decodeResult()));
+        return f;
+    }
+
+    /**
+     * BS-262 — trusted slave: one stamp/redeem on the master. {@code send} false only asks the outcome of an
+     * earlier send with this {@code transferId} (a request still pending after a reload). Completes with CODE_OK
+     * (applied), another CODE_* (refused by the master) or {@link #STAMPER_NOT_SENT}; fails when the outcome stays unknown.
+     */
+    public static CompletableFuture<Integer> stamperApplyAsync(int companyId, boolean redeem, @Nullable UUID actor,
+                                                               String transferId, long sentMs, boolean send) {
+        CompletableFuture<Integer> sent;
+        if (!send) {
+            sent = CompletableFuture.failedFuture(new net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException(
+                    "stamper request " + transferId + " pending after a reload"));
+        } else {
+            try {
+                InputData input = InputData.of(FunctionType.STAMPER_APPLY, new StamperApplyInput(companyId, redeem, actor, transferId));
+                sent = Request.instance.sendRequestToMaster(input).thenApply(o -> o == null ? null : (Integer) o.decodeResult());
+            } catch (RuntimeException e) {
+                sent = CompletableFuture.completedFuture(null); // not sent = not applied
+            }
+        }
+        return TransferStatusRequest.resolve(sent, () -> STAMPER_NOT_SENT, remainder -> CODE_OK,
+                () -> TransferStatusRequest.ask(null, transferId, sentMs));
+    }
+
     /** Spec §4.3 (v2.1.0) — slave helper: unbind the Share Stamper at pos from a company (MANAGE-gated). */
     public static CompletableFuture<UnbindStamperOutput> unbindStamperAsync(int companyId, BlockPos pos, UUID caller) {
         InputData input = InputData.of(FunctionType.UNBIND_STAMPER, new UnbindStamperInput(companyId, pos, caller));
@@ -1869,12 +2038,21 @@ public final class AsyncCompanyManager {
         return net.kroia.banksystem.client.company.SharePresetRegistry.isValidPresetId(id);
     }
 
-    private static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm) {
+    /**
+     * Company admin check of every MANAGE-gated company action (payouts, dividends, visuals, BS-235
+     * share acknowledge): MANAGE on the company's bank account, a founder, or a BankSystem admin.
+     */
+    public static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm) {
+        return gateManage(companyId, callerUUID, bm, cm, true);
+    }
+
+    /** Like {@link #gateManage(int, UUID, IServerBankManager, CompanyManager)}; {@code adminCounts} false ignores the admin flag. */
+    public static int gateManage(int companyId, UUID callerUUID, IServerBankManager bm, CompanyManager cm, boolean adminCounts) {
         Company company = cm.getById(companyId);
         if (company == null) return CODE_NOT_FOUND;
         IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
         boolean hasManage = account != null && account.hasPermission(callerUUID, BankPermission.MANAGE);
-        boolean isAdmin = bm.isBanksystemAdmin(callerUUID);
+        boolean isAdmin = adminCounts && bm.isBanksystemAdmin(callerUUID);
         // v2.1.0 Bug2 root cause — visuals/tint save silently rejected for founders
         // lacking explicit MANAGE bit on the linked bank account. Founder rights imply
         // company-level authority; extend the gate to accept founder membership.
@@ -1902,9 +2080,17 @@ public final class AsyncCompanyManager {
                 ? PayoutSchedule.Mode.values()[b] : PayoutSchedule.Mode.FIXED_PAYOUT;
     }
 
+    /** BS-241: no new or edited shareholder (dividend) schedules while a share excess is open. */
+    public static boolean dividendUnderReview(int companyId, byte mode, CompanyManager cm) {
+        Company c = cm.getById(companyId);
+        return c != null && c.isShareExcessOpen() && modeFromByte(mode) == PayoutSchedule.Mode.DIVIDEND;
+    }
+
     private static OutputData handleCreatePayout(CreatePayoutInput in, IServerBankManager bm, CompanyManager cm) {
         int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
         if (gate != CODE_OK) return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(gate, 0L));
+        if (dividendUnderReview(in.companyId, in.mode, cm))
+            return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(CODE_SHARES_UNDER_REVIEW, 0L));
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
         if (pm == null) return OutputData.of(FunctionType.CREATE_PAYOUT, new CreatePayoutOutput(CODE_INTERNAL, 0L));
         long nowTick = PayoutExecutor.getLastObservedTick() > 0L
@@ -1920,6 +2106,8 @@ public final class AsyncCompanyManager {
     private static OutputData handleUpdatePayout(UpdatePayoutInput in, IServerBankManager bm, CompanyManager cm) {
         int gate = gateManage(in.companyId, in.callerUUID, bm, cm);
         if (gate != CODE_OK) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(gate));
+        if (dividendUnderReview(in.companyId, in.newMode, cm))
+            return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(CODE_SHARES_UNDER_REVIEW));
         IPayoutManager pm = BACKEND_INSTANCES != null ? BACKEND_INSTANCES.PAYOUT_MANAGER : null;
         if (pm == null) return OutputData.of(FunctionType.UPDATE_PAYOUT, new UpdatePayoutOutput(CODE_INTERNAL));
         long nowTick = PayoutExecutor.getLastObservedTick() > 0L ? PayoutExecutor.getLastObservedTick() : 0L;
@@ -2049,6 +2237,7 @@ public final class AsyncCompanyManager {
                 case TARGET_NO_DEPOSIT_RIGHT -> CODE_TARGET_NO_DEPOSIT;
                 case CURRENCY_ITEM_MISSING -> CODE_CURRENCY_ITEM_MISSING;
                 case ACCOUNT_FROZEN -> CODE_ACCOUNT_FROZEN;
+                case SHARES_UNDER_REVIEW -> CODE_SHARES_UNDER_REVIEW;
                 default -> CODE_INTERNAL;
             };
             return OutputData.of(FunctionType.PAY_MISSED,
@@ -2188,15 +2377,15 @@ public final class AsyncCompanyManager {
 
     /** Number of accounts holding any share ItemID of the company. */
     private static int countHolders(int companyId, IServerBankManager bm) {
-        java.util.Set<Integer> holders = new java.util.HashSet<>();
-        for (java.util.Map.Entry<net.kroia.banksystem.util.ItemID, net.minecraft.world.item.ItemStack> e
-                : net.kroia.banksystem.util.ItemIDManager.getItemIDMap().entrySet()) {
-            Integer cid = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
-                    .getCompanyIdForItemID(e.getKey());
-            if (cid == null || cid != companyId) continue;
-            holders.addAll(bm.listAccountsHolding(e.getKey()));
-        }
-        return holders.size();
+        return holderAccounts(companyId, bm).size();
+    }
+
+    /** Accounts holding (free + locked &gt; 0) any share ItemID of the company. */
+    private static Set<Integer> holderAccounts(int companyId, IServerBankManager bm) {
+        Set<Integer> holders = new java.util.HashSet<>();
+        for (net.kroia.banksystem.util.ItemID id : CompanyStatsQuery.shareItemIds(companyId))
+            holders.addAll(bm.listAccountsHolding(id));
+        return holders;
     }
 
     private static OutputData handleInfoByAccount(GetCompanyInfoByAccountInput in, IServerBankManager bm, CompanyManager cm) {
@@ -2230,6 +2419,40 @@ public final class AsyncCompanyManager {
     public static CompletableFuture<TransferOutput> transferFounderAsync(String companyName, UUID caller, String targetName) {
         InputData input = InputData.of(FunctionType.TRANSFER_FOUNDER, new TransferInput(companyName, caller, targetName));
         CompletableFuture<TransferOutput> future = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
+        return future;
+    }
+
+    /**
+     * BS-235 — master: a company admin ({@link #gateManage}) accepts the company's share excess and
+     * resumes its dividends. {@code caller} null = master console (op level checked by the command).
+     */
+    public static ShareAcknowledgeOutput acknowledgeShareExcess(String companyName, @Nullable UUID caller,
+                                                                IServerBankManager bm, CompanyManager cm) {
+        Company company = cm.getByName(companyName);
+        if (company == null) return new ShareAcknowledgeOutput(CODE_NOT_FOUND, companyName, 0L);
+        if (caller != null) {
+            int gate = gateManage(company.getCompanyId(), caller, bm, cm);
+            if (gate != CODE_OK) return new ShareAcknowledgeOutput(gate, company.getName(), 0L);
+        }
+        boolean wasOpen = company.isShareExcessOpen();
+        long excess = ShareIntegrity.acknowledge(cm, company.getCompanyId());
+        if (excess < 0) return new ShareAcknowledgeOutput(CODE_INTERNAL, company.getName(), 0L);
+        if (wasOpen) // BS-257: only an open alert changes state
+            net.kroia.banksystem.banking.ledger.AdminAudit.adminChange("FLAG_ACK", "company " + company.getCompanyId() + " "
+                            + net.kroia.banksystem.banking.ledger.AdminAudit.quote(company.getName()) + " account " + company.getBankAccountNr()
+                            + " flag SHARE_EXCESS excess " + excess, "acknowledged",
+                    caller == null ? net.kroia.banksystem.api.ledger.LedgerActor.console() : net.kroia.banksystem.banking.ledger.TransactionLedger.player(caller));
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.info("[ShareIntegrity] " + (caller == null ? "console" : AsyncForwardingRequest.tryGetPlayerName(caller))
+                    + " acknowledged a share excess of " + excess + " for company " + company.getName()
+                    + " (#" + company.getCompanyId() + ")");
+        return new ShareAcknowledgeOutput(CODE_OK, company.getName(), excess);
+    }
+
+    public static CompletableFuture<ShareAcknowledgeOutput> acknowledgeShareExcessAsync(String companyName, UUID caller) {
+        InputData input = InputData.of(FunctionType.ACKNOWLEDGE_SHARE_EXCESS, new DissolveInput(companyName, caller));
+        CompletableFuture<ShareAcknowledgeOutput> future = new CompletableFuture<>();
         dispatchInput(input).thenAccept(out -> future.complete(out == null ? null : out.decodeResult()));
         return future;
     }
@@ -2425,9 +2648,15 @@ public final class AsyncCompanyManager {
             case INSUFFICIENT_FUNDS, CURRENCY_ITEM_MISSING -> CODE_INSUFFICIENT_FUNDS;
             case NO_PERMISSION -> CODE_NO_PERMISSION;
             case ACCOUNT_FROZEN -> CODE_ACCOUNT_FROZEN;
+            case SHARES_UNDER_REVIEW -> CODE_SHARES_UNDER_REVIEW;
         };
         return OutputData.of(FunctionType.PAY_DIVIDEND,
                 new PayDividendOutput(code, result.totalPaid(), result.holderCount()));
+    }
+
+    /** BS-240: slave → master SHARE_CREATED report; fire and forget (null on failure). */
+    public static CompletableFuture<OutputData> reportShareCreatedAsync(String who, int companyId, long count, String how) {
+        return dispatchInput(InputData.of(FunctionType.REPORT_SHARE_CREATED, new ShareCreatedInput(who, companyId, count, how)));
     }
 
     /** Task #49 (v2.1.0) — slave helper: forward a dividend distribution request to master. */
@@ -2562,13 +2791,14 @@ public final class AsyncCompanyManager {
         return f;
     }
 
-    /** Task #1 (v2.1.0) — slave helper: probe whether SM has a market for this company's share. */
-    public static CompletableFuture<Integer> marketExistsForCompanyAsync(int companyId) {
+    /** Task #1 (v2.1.0) — slave helper: probe whether SM has a market for this company's share,
+     *  and which share ItemID the server keys it by (BS-178). Never completes with null. */
+    public static CompletableFuture<MarketExistsOutput> marketExistsForCompanyAsync(int companyId) {
         InputData input = InputData.of(FunctionType.MARKET_EXISTS_FOR_COMPANY, new GetShareVisualsInput(companyId));
-        CompletableFuture<Integer> f = new CompletableFuture<>();
+        CompletableFuture<MarketExistsOutput> f = new CompletableFuture<>();
         dispatchInput(input).thenAccept(o -> {
-            Integer v = o == null ? null : o.decodeResult();
-            f.complete(v == null ? MARKET_EXISTS_UNAV : v);
+            MarketExistsOutput v = o == null ? null : o.decodeResult();
+            f.complete(v == null ? MarketExistsOutput.UNAVAILABLE : v);
         });
         return f;
     }
@@ -2717,7 +2947,7 @@ public final class AsyncCompanyManager {
                             CompanyStatsQuery.getHeadlineMetrics(conn, acctNr, itemFilter, fromMs);
                     totalEarnings = metrics.totalEarnings();
                     totalSpendings = metrics.totalSpendings();
-                    daysToInsolvency = CompanyStatsQuery.getDaysToInsolvency(conn, acctNr, scheduleObligation, balance);
+                    daysToInsolvency = CompanyStatsQuery.getDaysToInsolvency(conn, acctNr, itemFilter, scheduleObligation, balance);
                 } catch (Exception e) {
                     if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
                         BACKEND_INSTANCES.LOGGER.warn("[CompanyStats] DB query failed: " + e);

@@ -69,6 +69,13 @@ public class ShareStamperContainerMenu extends AbstractContainerMenu {
         return blockEntity != null && blockEntity.stillValid(player);
     }
 
+    /** Frees the stamper's single-viewer lock. AbstractContainerMenu#removed does not call Container#stopOpen. */
+    @Override
+    public void removed(Player player) {
+        super.removed(player);
+        if (blockEntity != null && !player.level().isClientSide()) blockEntity.releaseViewer(player.getUUID());
+    }
+
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
         // Two BE slots [0..1], then 27 inv, then 9 hotbar.
