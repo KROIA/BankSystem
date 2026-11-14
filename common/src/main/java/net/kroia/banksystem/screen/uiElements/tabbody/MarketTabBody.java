@@ -165,7 +165,7 @@ public class MarketTabBody extends TabBody {
     public void openChart() {
         if (chart != null || state != MarketState.HAS_MARKET || !smClientApi || !hasMarketItemId()) return;
         // A late async state update on a hidden screen or a replaced body must not start a stream.
-        if (Minecraft.getInstance().screen != screen || !screen.isMarketBody(this)) return;
+        if (net.kroia.modutilities.gui.client.ClientCompat.screen() != screen || !screen.isMarketBody(this)) return;
         chart = StockMarketClientBridge.createPriceChart(marketItemId);
         if (chart == null) return;
         addChild(chart);
