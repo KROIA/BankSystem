@@ -86,6 +86,7 @@ public class CompanyManagerTests extends TestSuite {
         addTest("share_excess_refuses_dividend_schedules", this::testShareExcessRefusesDividendSchedules); // BS-241
         addTest("share_acknowledge_rights_and_suggestions", this::testShareAcknowledgeRights);
         addTest("stamper_needs_company_manage", this::testStamperNeedsCompanyManage); // BS-261
+        addTest("uninstall_drops_companies_of_previous_world", this::testUninstallDropsCompanies); // BS-275
         // BS-238 — dividends count every share variant
         addTest("dividend_holdings_sum_all_share_variants", this::testDividendHoldingsSumAllVariants);
     }
@@ -152,6 +153,22 @@ public class CompanyManagerTests extends TestSuite {
     }
 
     // ------------------------------------------------------------------
+    private TestResult testUninstallDropsCompanies() {
+        CompanyManager live = CompanyManager.get(); // may be the running world's manager: put it back below
+        try {
+            CompanyManager.resetForTest().detachBankManager();
+            if (CompanyManager.get().createCompany("OldWorld", 1, FOUNDER_A, 100L).result != CompanyManager.CreateResult.OK)
+                return fail("create failed");
+            CompanyManager.uninstall();
+            if (CompanyManager.get() != null) return fail("get() must be null after uninstall");
+            CompanyManager.install();
+            return assertTrue("new manager must start empty", CompanyManager.get().listAllCompanies().isEmpty());
+        } finally {
+            CompanyManager.restoreForTest(live);
+            if (live != null) CompanyManager.install(); // re-wires the founder callback
+        }
+    }
+
     private TestResult testCaseInsensitiveNameUniqueness() {
         CompanyManager cm = fresh();
         CompanyManager.CreateOutcome first = cm.createCompany("Acme", 1, FOUNDER_A, 100L);

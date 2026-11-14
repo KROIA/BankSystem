@@ -685,6 +685,7 @@ public class BankSystemModBackend implements BankSystemAPI {
 
             BankSystemDataHandler.resetBankDataLoaded();
             BankSystemDataHandler.resetGlobalDataLoaded();
+            net.kroia.banksystem.banking.company.CompanyManager.uninstall(); // after the save above
         } else {
             // Mirror the master-side unregister above: the slave-latch watchdog is registered
             // on every slave onServerStart, so it must be unregistered on every stop to avoid

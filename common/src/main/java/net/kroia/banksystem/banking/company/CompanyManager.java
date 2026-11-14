@@ -60,6 +60,16 @@ public final class CompanyManager implements ServerSaveableChunked {
                 });
     }
 
+    /** Drops the singleton on server stop so a new world never inherits the previous world's companies. */
+    public static void uninstall() {
+        INSTANCE = null;
+    }
+
+    /** Test hook: puts a saved instance back (e.g. after {@link #uninstall()}). */
+    public static void restoreForTest(@Nullable CompanyManager saved) {
+        INSTANCE = saved;
+    }
+
     /** {@code null} on slave servers or before install. */
     @Nullable
     public static CompanyManager get() {
