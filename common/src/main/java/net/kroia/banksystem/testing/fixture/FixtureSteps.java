@@ -510,7 +510,7 @@ public final class FixtureSteps {
         FixtureKey key = FixtureKey.current();
         Tester x = ensureTester(slave, CLEAN_BURST), y = ensureTester(slave, CLEAN_SHARES), w = ensureTester(slave, ADMIN_TARGET);
         ServerPlayer client = client(slave);
-        String clientName = client == null ? null : client.getGameProfile().getName();
+        String clientName = client == null ? null : client.getName().getString();
         if (client != null && client.getUUID().equals(FixtureKey.testerUuid(clientName)))
             key.addPlayer(clientName, "client player: holds TesterX's notes (C13), deleted with payout (C16)");
         ItemID money = MoneyItem.getItemID();
@@ -535,7 +535,8 @@ public final class FixtureSteps {
 
         BlockPos pos = onSlave(slave, () -> {
             ServerLevel level = slave.overworld();
-            BlockPos p = level.getSharedSpawnPos().offset(2, -3, 2);
+            BlockPos p = level.getSharedSpawnPos().offset(2, -3, 2); // mc<=1.21.8
+            //BlockPos p = level.getRespawnData().pos().offset(2, -3, 2); // mc>=1.21.9
             level.setBlock(p, Blocks.CHEST.defaultBlockState(), 3);
             if (!(level.getBlockEntity(p) instanceof ChestBlockEntity chest)) throw new IllegalStateException("C13: no chest at " + p);
             chest.clearContent();
@@ -579,8 +580,8 @@ public final class FixtureSteps {
             key.addBanknote(null, "container@" + pos.getX() + "," + pos.getY() + "," + pos.getZ(), moneyIn(chest));
         ServerPlayer client = client(slave);
         if (client != null) {
-            key.addBanknote(client.getGameProfile().getName(), "inventory", moneyIn(client.getInventory()));
-            key.addBanknote(client.getGameProfile().getName(), "enderchest", moneyIn(client.getEnderChestInventory()));
+            key.addBanknote(client.getName().getString(), "inventory", moneyIn(client.getInventory()));
+            key.addBanknote(client.getName().getString(), "enderchest", moneyIn(client.getEnderChestInventory()));
         }
     }
 
@@ -708,7 +709,7 @@ public final class FixtureSteps {
         String note = "";
 
         if (client != null) {
-            String name = client.getGameProfile().getName();
+            String name = client.getName().getString();
             Tester z = ensureUser(slave, name, client.getUUID());
             allow(slave, Items.DIAMOND);
             long aFrom = now();

@@ -186,12 +186,14 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
         UUID u = p.getUUID();
         String node = BankSystemPermissions.COMMAND_BACKUP;
         PlayerList players = getServer().getPlayerList();
-        ServerOpListEntry opBefore = players.getOps().get(p.getGameProfile());
+        ServerOpListEntry opBefore = players.getOps().get(p.getGameProfile()); // mc<=1.21.8
+        //ServerOpListEntry opBefore = players.getOps().get(new net.minecraft.server.players.NameAndId(p.getGameProfile())); // mc>=1.21.9
         Optional<Boolean> nodeBefore = await(Lp.userNode(u, node), TIMEOUT);
         try {
-            players.getOps().remove(p.getGameProfile());
+            players.getOps().remove(p.getGameProfile()); // mc<=1.21.8
+            //players.getOps().remove(new net.minecraft.server.players.NameAndId(p.getGameProfile())); // mc>=1.21.9
             players.sendPlayerPermissionLevel(p);
-            if (p.hasPermissions(BankSystemPermissions.FALLBACK_LEVEL))
+            if (net.kroia.modutilities.PermissionCompat.hasPermission(p, BankSystemPermissions.FALLBACK_LEVEL))
                 return skip("player keeps op level without an ops entry (singleplayer owner); use an mp cell");
             await(Lp.unsetUserNode(u, node), TIMEOUT);
             if (!pumpUntil(() -> !hasBackupNode(p), 5000))
