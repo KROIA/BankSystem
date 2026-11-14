@@ -153,7 +153,8 @@ public class AdminAuditTests extends TestSuite {
 
     /** A level-0 (non-op) source of {@code player} whose messages go to {@code out}. */
     private static CommandSourceStack nonOp(ServerPlayer player, Capture out) {
-        return player.createCommandSourceStack().withPermission(0).withSource(out);
+        return player.createCommandSourceStack().withPermission(0).withSource(out); // mc<=1.21.10
+        //return player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))).withSource(out); // mc>=1.21.11
     }
 
     /** BS-209: on the master a flagged non-op runs {@code /banksystem symbols list}. */
@@ -298,7 +299,8 @@ public class AdminAuditTests extends TestSuite {
                 BankSystemPermissions.canUseFlagGatedCommand(console, BankSystemPermissions.COMMAND_RESTORE_BINDING));
         if (!r.passed()) return r;
         return assertFalse("level-0 non-player source is refused",
-                BankSystemPermissions.canUseFlagGatedCommand(console.withPermission(0), BankSystemPermissions.COMMAND_RESTORE_BINDING));
+                BankSystemPermissions.canUseFlagGatedCommand(console.withPermission(0), BankSystemPermissions.COMMAND_RESTORE_BINDING)); // mc<=1.21.10
+                //BankSystemPermissions.canUseFlagGatedCommand(console.withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))), BankSystemPermissions.COMMAND_RESTORE_BINDING)); // mc>=1.21.11
     }
 
     /** BS-196: a player's flag-gated command runs if and only if they have the BankSystem admin flag, op or not. */
@@ -311,7 +313,8 @@ public class AdminAuditTests extends TestSuite {
         try {
             manager.setBanksystemAdminMode(uuid, flag);
             Capture out = new Capture();
-            CommandSourceStack source = players.get(0).createCommandSourceStack().withPermission(opLevel).withSource(out);
+            CommandSourceStack source = players.get(0).createCommandSourceStack().withPermission(opLevel).withSource(out); // mc<=1.21.10
+            //CommandSourceStack source = players.get(0).createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(opLevel))).withSource(out); // mc>=1.21.11
             TestResult r = assertTrue("player passes the requires check",
                     BankSystemPermissions.canUseFlagGatedCommand(source, BankSystemPermissions.COMMAND_SYMBOLS));
             if (!r.passed()) return r;
