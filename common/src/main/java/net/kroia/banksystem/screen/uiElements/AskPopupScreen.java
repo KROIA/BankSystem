@@ -45,6 +45,8 @@ public class AskPopupScreen extends BankSystemGuiScreen {
     private final Label msgLabel;
     private final Button yesButton;
     private final Button noButton;
+    private Button cancelButton = null;
+    private Runnable onCancel = null;
 
     private int frameWidth = 200;
     private int frameHeight = 100;
@@ -102,6 +104,24 @@ public class AskPopupScreen extends BankSystemGuiScreen {
         noButton.setLabel(no);
     }
 
+    /** BS-234: adds a third (Cancel) button; it and Esc run {@code onCancel} after returning to the parent. */
+    public void addCancelButton(String label, Runnable onCancel)
+    {
+        this.onCancel = onCancel;
+        cancelButton = new Button(label, this::onClose);
+        frame.addChild(cancelButton);
+        updateLayout(getGui());
+    }
+
+    /** BS-234: greys out the yes / no button; the tooltip says why. */
+    public void disableButton(boolean yes, String reason)
+    {
+        Button b = yes ? yesButton : noButton;
+        b.setClickable(false);
+        b.setTextColor(0xFF808080);
+        b.setHoverTooltipSupplier(() -> reason);
+    }
+
     /**
      * Esc = cancel: return to the parent without running either callback.
      * Closing to no screen would orphan an open container menu when the
@@ -111,9 +131,11 @@ public class AskPopupScreen extends BankSystemGuiScreen {
     public void onClose() {
         if (parent == null) {
             super.onClose();
-            return;
+        } else {
+            switchScreen(parent);
         }
-        switchScreen(parent);
+        if (onCancel != null)
+            onCancel.run();
     }
 
     public void setSize(int width, int height)
@@ -144,8 +166,20 @@ public class AskPopupScreen extends BankSystemGuiScreen {
         int padding = 5;
         titleLabel.setBounds(padding,padding,frame.getWidth()-2*padding,20);
         msgLabel.setBounds(padding+5,titleLabel.getBottom(),frame.getWidth()-2*padding,frame.getHeight()-titleLabel.getBottom()-padding-20);
-        noButton.setBounds(frame.getWidth()-padding-50,msgLabel.getBottom(),50,20);
-        yesButton.setBounds(noButton.getLeft()-20-noButton.getWidth(),noButton.getTop(),noButton.getWidth(),noButton.getHeight());
+        int right = frame.getWidth()-padding;
+        if (cancelButton != null) {
+            int w = buttonWidth(cancelButton);
+            cancelButton.setBounds(right-w,msgLabel.getBottom(),w,20);
+            right = cancelButton.getLeft()-20;
+        }
+        int w = Math.max(buttonWidth(noButton), buttonWidth(yesButton));
+        noButton.setBounds(right-w,msgLabel.getBottom(),w,20);
+        yesButton.setBounds(noButton.getLeft()-20-w,noButton.getTop(),w,20);
 
+    }
+
+    private static int buttonWidth(Button b)
+    {
+        return Math.max(50, b.getTextWidth(b.getText())+10);
     }
 }

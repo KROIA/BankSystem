@@ -107,8 +107,10 @@ public class DangerTabBody extends TabBody {
                             if (out != null && out.resultCode() == AsyncCompanyManager.CODE_OK) {
                                 screen.onClose();
                             } else {
+                                String reason = out != null && out.resultCode() == AsyncCompanyManager.CODE_NOT_A_WORKER
+                                        ? tr("transfer_not_worker").replace("%target%", selectedTarget) : tr("action_failed");
                                 net.kroia.banksystem.util.BankSystemGuiScreen.switchScreen(new InfoPopupScreen(screen,
-                                        tr("error_title"), tr("action_failed")));
+                                        tr("error_title"), reason));
                             }
                         })),
                 () -> {},

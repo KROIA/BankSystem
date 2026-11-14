@@ -33,6 +33,7 @@ import net.kroia.banksystem.banking.clientdata.BankManagerData;
 import net.kroia.banksystem.banking.clientdata.ItemInfoData;
 import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
+import net.kroia.banksystem.banking.ledger.AdminAudit;
 import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
@@ -343,8 +344,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         User user = userMap.get(playerUUID);
         if (user == null)
             return false;
+        boolean changed = user.isBanksystemAdmin() != isAdmin;
         user.setBanksystemAdmin(isAdmin);
         markPersistDirty(); // Task #55 (User field is serialized in the bank-data save unit)
+        if (changed) // BS-257: every path (command, request, LuckPerms / slave sync) lands here; callers set the actor
+            AdminAudit.adminChange(isAdmin ? "RIGHTS_OP" : "RIGHTS_DEOP", "player " + playerUUID + " " + AdminAudit.quote(user.getName()),
+                    isAdmin ? "admin" : "not_admin", TransactionLedger.currentActor());
         return true;
     }
 
@@ -416,7 +421,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public void trustSlaveServer(String slaveID)
     {
-        trustedSlaveServers.add(slaveID);
+        if (trustedSlaveServers.add(slaveID)) // BS-257
+            AdminAudit.adminChange("SLAVE_TRUST", "slave " + AdminAudit.quote(slaveID), "trusted", TransactionLedger.currentActor());
         markPersistDirty(); // Task #55
         // T-128 (cross-repo): notify dependent mods (e.g. StockMarket) that the
         // trust set changed so they can propagate the new state to their own
@@ -433,7 +439,8 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public void untrustSlaveServer(String slaveID)
     {
-        trustedSlaveServers.remove(slaveID);
+        if (trustedSlaveServers.remove(slaveID)) // BS-257
+            AdminAudit.adminChange("SLAVE_UNTRUST", "slave " + AdminAudit.quote(slaveID), "untrusted", TransactionLedger.currentActor());
         markPersistDirty(); // Task #55
         // T-128 (cross-repo): see trustSlaveServer above for the full rationale.
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_EVENTS != null) {
@@ -599,6 +606,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             markPersistDirty(); // Task #55 (also cascades account removals below)
             // Task #127: the rows are written when delivery is known; the caller's withActor scope is gone by then
             LedgerActor actor = TransactionLedger.currentActor();
+            TransactionLedger.Scope scope = TransactionLedger.scope(); // BS-258: origin server, same reason
 
             // Collect non-zero balances from accounts that will be deleted or are personal accounts of the removed user
             Map<Integer, Map<ItemID, Long>> balances = new LinkedHashMap<>(); // Task #127: per account, for the ledger
@@ -667,11 +675,11 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
             BACKEND_INSTANCES.SERVER_EVENTS.USER_REMOVED.notifyListeners(user);
             info("Removed user with UUID: " + userUUID);
-            return delivery.thenApply(counts -> {
+            return delivery.thenApply(counts -> scope.run(() -> {
                 PayoutResult r = inRawUnits(counts, units, fractions);
                 logDeletePayout(balances, r, userUUID, actor);
                 return r;
-            });
+            }));
         } else {
             warn("No user found with UUID: " + userUUID);
             return null;
@@ -711,10 +719,14 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 if (loss > 0) {
                     TransactionLedger.logRow(account.getKey(), LedgerType.ACCOUNT_DELETE_LOSS, e.getKey(), loss, actor, null,
                             note + "; not delivered: " + result.reason(), unknown);
-                    if (unknown != null) // the items may have arrived after all: flag it, like a parked withdraw DROP
+                    if (unknown != null) { // the items may have arrived after all: flag it, like a parked withdraw DROP
+                        // BS-242: the flag amount is money; other items go into the details, scaled and named
+                        boolean money = e.getKey().getShort() == MoneyItem.getItemID().getShort();
                         net.kroia.banksystem.banking.ledger.AdminAudit.raise(account.getKey(),
-                                net.kroia.banksystem.banking.ledger.SuspicionChecks.TRANSFER_PARKED, 2, loss, unknown,
-                                "user deletion DROP outcome unknown, logged as lost: " + e.getKey().getName() + " " + loss);
+                                net.kroia.banksystem.banking.ledger.SuspicionChecks.TRANSFER_PARKED, 2, money ? loss : 0, unknown,
+                                "user deletion DROP outcome unknown, logged as lost: " + (money ? e.getKey().getName() + " " + loss
+                                        : net.kroia.banksystem.banking.ledger.AdminAudit.itemAmount(e.getKey().getShort(), loss)));
+                    }
                 }
                 Deque<AbstractMap.SimpleEntry<String, Long>> q = sources.get(e.getKey());
                 for (long pay = e.getValue() - loss; pay > 0; ) {
@@ -1176,7 +1188,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
         markPersistDirty(); // Task #55 (new account + advanced nextAccountNumber)
-        info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
+        info("Created new bank account with number: " + accountNumber + " and name: " + account.getAccountName());
         return account;
     }
     @Override
@@ -1204,7 +1216,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
         bankAccounts.put(accountNumber, account);
         markPersistDirty(); // Task #55 (new account + advanced nextAccountNumber)
-        info("Created new bank account with number: " + accountNumber + " and name: " + accountName);
+        info("Created new bank account with number: " + accountNumber + " and name: " + account.getAccountName());
         return CompletableFuture.completedFuture(account);
     }
     @Override
@@ -1819,8 +1831,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
         // runtime blacklist — a normal allowed deposit has no ban-marked schedules. Gate on the
         // remove() result so the common path (nothing removed) skips the scan entirely.
         boolean wasBlacklisted = this.blacklistedItemIDs.remove(itemID);
-        this.allowedItemIDs.add(itemID);
+        boolean added = this.allowedItemIDs.add(itemID);
         markPersistDirty(); // Task #55 / #57 (allowed-set + runtime-blacklist change)
+        // BS-257: audit only an admin's allow (command / screen set the actor); automatic allows
+        // (new bank slot, company share item, default seeding, load repair) are not admin actions.
+        LedgerActor actor = TransactionLedger.currentActor();
+        if ((wasBlacklisted || added) && (actor.source() == LedgerActor.Source.ADMIN || actor.source() == LedgerActor.Source.CONSOLE))
+            AdminAudit.adminChange("ITEM_ALLOW", "item " + itemID.getShort() + " " + AdminAudit.quote(itemID.getName()), "allowed", actor);
 
         // Task #57b — re-allow resume: auto-resume ONLY schedules paused by this item's ban
         // (never a user-paused schedule). Company currency is NOT auto-restored. Master-only.
@@ -1877,8 +1894,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
                 ownerName = owner.getName();
             cleared.add(new DisallowedHolder(entry.getKey(), ownerName, free, locked));
             info("[disallowItem] '" + itemName + "' held by account #" + entry.getKey()
-                    + " (" + ownerName + "): free=" + free + " locked=" + locked
-                    + " total=" + (free + locked) + " — clearing (NO REFUND)");
+                    + " (" + ownerName + "): free=" + ServerBank.getFormattedAmountStatic(free)
+                    + " locked=" + ServerBank.getFormattedAmountStatic(locked)
+                    + " total=" + ServerBank.getFormattedAmountStatic(free + locked) + " — clearing (NO REFUND)");
         }
 
         // 2) Remove the slot from every holder.
@@ -1886,7 +1904,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             ServerBankAccount account = bankAccounts.get(holder.accountNr());
             if(account != null) {
                 boolean suspended = BankAccountBindings.isSuspended(holder.accountNr(), finalItemID); // removeBank logs it (Task #148)
-                account.removeBank(finalItemID);
+                TransactionLedger.withoutRawLog(() -> { account.removeBank(finalItemID); return null; }); // BS-254: row below
                 long cleared_ = holder.free() + holder.locked();
                 if (cleared_ != 0 && !suspended)
                     net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(holder.accountNr(), net.kroia.banksystem.api.ledger.LedgerType.ADMIN_DISALLOW_ITEM, finalItemID, cleared_,
@@ -1896,9 +1914,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
         // 3) Drop from the allowed set and add to the runtime blacklist so the disallow sticks
         //    even with ALLOW_ALL_ITEMS on, and survives a restart (persisted, Task #57).
-        allowedItemIDs.remove(finalItemID);
-        blacklistedItemIDs.add(finalItemID);
+        boolean changed = allowedItemIDs.remove(finalItemID) | blacklistedItemIDs.add(finalItemID);
         markPersistDirty(); // Task #55 (allowed-set change + cleared holder banks) / #57 (runtime blacklist)
+        // BS-257: one line for the item; the ADMIN_DISALLOW_ITEM rows above stay (one per account balance wiped)
+        if (changed)
+            AdminAudit.adminChange("ITEM_DISALLOW", "item " + finalItemID.getShort() + " " + AdminAudit.quote(itemName),
+                    "disallowed", TransactionLedger.currentActor());
         info("[disallowItem] '" + itemName + "' disallowed — cleared " + cleared.size()
                 + " holder account(s).");
 
@@ -2268,7 +2289,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean save(Map<String, ListTag> listTags) {
         CompoundTag metaData = new CompoundTag();
-        metaData.putInt("version", 1); // Versioning for future changes
+        metaData.putInt("version", SAVE_VERSION); // Versioning for future changes
         metaData.putInt("nextAccountNumber", nextAccountNumber);
         ListTag metaTagList = new ListTag();
         metaTagList.add(metaData);
@@ -2337,6 +2358,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
         return true;
     }
+
+    /** Bank_data meta "version"; a higher saved one refuses start-up (BS-274, BankSystemDataHandler.load_bank). */
+    public static final int SAVE_VERSION = 1;
 
     @Override
     public boolean load(Map<String, ListTag> listTags) {
@@ -2607,7 +2631,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
         Collection<ExternalCurrencyProvider> providers = BankSystemMod.getAPI().getCurrencyProviders();
         if (BACKEND_INSTANCES.LOGGER != null) {
-            BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] addDefaultBankSlots on account "
+            BACKEND_INSTANCES.LOGGER.debug("[ServerBankManager] addDefaultBankSlots on account "
                     + account.getAccountNumber() + ": " + providers.size() + " currency provider(s) registered");
         }
         for (ExternalCurrencyProvider provider : providers)
@@ -2644,7 +2668,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
             }
             boolean seeded = seedDefaultSlot(account, bankManager, itemID, true);
             if (seeded && BACKEND_INSTANCES.LOGGER != null)
-                BACKEND_INSTANCES.LOGGER.info("[ServerBankManager] seeded '" + itemIdStr
+                BACKEND_INSTANCES.LOGGER.debug("[ServerBankManager] seeded '" + itemIdStr
                         + "' slot on account " + account.getAccountNumber() + " (provider '" + providerId
                         + "', itemID short=" + itemID.getShort() + ")");
         }
@@ -2720,6 +2744,29 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *         violation (WARN-logged with a human-readable reason)
      */
     public BankStatus bindExternalAccount(int accountId, ItemID itemId, ExternalAccountRef ref) {
+        return withSlotDelta(accountId, itemId, LedgerType.EXTERNAL_BIND,
+                "bound to " + (ref == null ? "?" : ref.providerId() + ":" + ref.accountKey()),
+                () -> bindExternalAccountUnlogged(accountId, itemId, ref));
+    }
+
+    /**
+     * BS-254: runs a bind / unbind of the slot and writes one {@code type} row for the change of the slot's total
+     * balance it caused (the external balance joining or staying behind, unit conversion, discarded dust).
+     */
+    private BankStatus withSlotDelta(int accountId, @Nullable ItemID itemId, LedgerType type, String note,
+                                     java.util.function.Supplier<BankStatus> body) {
+        ServerBankAccount account = bankAccounts.get(accountId);
+        ServerBank bank = account == null ? null : account.getBank(itemId);
+        long before = bank == null ? 0L : bank.getTotalBalance();
+        BankStatus status = TransactionLedger.withoutRawLog(body); // the inner moves are this one row
+        if (bank != null) {
+            long after = bank.getTotalBalance();
+            TransactionLedger.logDelta(accountId, type, bank.getItemID(), after - before, after, note);
+        }
+        return status;
+    }
+
+    private BankStatus bindExternalAccountUnlogged(int accountId, ItemID itemId, ExternalAccountRef ref) {
         if (itemId == null || !itemId.isValid() || ref == null) {
             warn("bindExternalAccount refused: invalid arguments (accountId=" + accountId
                     + ", itemId=" + itemId + ", ref=" + ref + ")");
@@ -2920,6 +2967,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
      *         when the provider is unavailable and locked/dust funds would be lost
      */
     public BankStatus unbindExternalAccount(int accountId, ItemID itemId, boolean keepOnBankSystem) {
+        return withSlotDelta(accountId, itemId, LedgerType.EXTERNAL_UNBIND,
+                keepOnBankSystem ? "unbound, funds kept on BankSystem" : "unbound, funds left on the external account",
+                () -> unbindExternalAccountUnlogged(accountId, itemId, keepOnBankSystem));
+    }
+
+    private BankStatus unbindExternalAccountUnlogged(int accountId, ItemID itemId, boolean keepOnBankSystem) {
         if (itemId == null || !itemId.isValid()) {
             warn("unbindExternalAccount refused: invalid itemId (" + itemId + ")");
             return BankStatus.FAILED_INVALID_ITEM_ID;

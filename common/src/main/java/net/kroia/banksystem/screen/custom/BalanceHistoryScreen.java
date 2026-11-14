@@ -171,7 +171,8 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
                     List<BalanceHistoryChart.Marker> list = new ArrayList<>();
                     for (var m : r.markers())
                         list.add(new BalanceHistoryChart.Marker(m.time(),
-                                m.typeName() + " (" + fmt.format(new Date(m.time())) + ")\n" + m.details()));
+                                m.typeName() + "\n" + fmt.format(new Date(m.time()))
+                                        + (m.details() == null || m.details().isBlank() ? "" : "\n" + m.details())));
                     chart.setMarkers(list);
                 }));
     }

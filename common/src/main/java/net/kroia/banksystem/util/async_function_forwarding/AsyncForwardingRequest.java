@@ -106,7 +106,7 @@ public abstract class AsyncForwardingRequest<
             if (!isAllowedToCallByUntrustedSlaveServer(input)) {
                 if (!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID)) {
                     warn("The slave server: '" + slaveID + "' try's to call the function: '" + input.function.toString() + "' which is not allowed for an untrusted slave server!");
-                    String userMsg = "[BankSystem] Your server '" + slaveID + "' is not trusted by the bank master. " +
+                    String userMsg = "§c[BankSystem] Your server '" + slaveID + "' is not trusted by the bank master. " + // SM-312: red
                             "This action is not allowed. Contact a bank admin to grant trust for cross-server bank operations.";
                     if (playerSender != null) {
                         // Player UUID was propagated (e.g. client-initiated request); target them specifically.

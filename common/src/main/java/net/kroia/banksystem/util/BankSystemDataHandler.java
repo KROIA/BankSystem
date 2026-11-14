@@ -5,6 +5,7 @@ import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.IBankSystemDataHandler;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.minecraft.compat.OldBankDataLoader;
 import net.kroia.modutilities.ServerPlayerUtilities;
@@ -36,7 +37,6 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     /** Task #43 (v2.1.0): chunked-NBT folder for Company persistence (master only). */
     private final String COMPANIES_FOLDER_NAME = "Companies";
     public static final Path BASE_PATH = Path.of("data", "BankSystem");
-    private static final Path OLD_PATH = Path.of("Finance", "BankSystem");
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
     private static boolean globalSettingsLoaded = false;
@@ -131,6 +131,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     }
     public static void resetBankDataLoaded() {
         bankDataLoaded = false;
+        // BS-269: called after the shutdown save, so a save suppression held through the stop ends with the session
+        suppressBankSave = false;
+        suppressBankSaveHeld = false;
     }
 
     public void tickUpdate()
@@ -151,49 +154,36 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         }
     }
 
+    /**
+     * Runs on every load and save. BS-276: the old Finance/BankSystem move used to run here too, so a failed
+     * delete re-copied stale data over live data on every save; it is now data-migration step 1
+     * ({@link BankSystemDataMigration}), which runs once.
+     */
     @Override
     public void setLevelSavePath(Path path) {
-        migrateFromOldPath(path);
         super.setLevelSavePath(path);
         createSaveFolder();
     }
 
-    private void migrateFromOldPath(Path worldRoot) {
-        Path oldDir = worldRoot.resolve(OLD_PATH);
-        if (!Files.isDirectory(oldDir)) {
+    /**
+     * BS-274: a file written by a newer BankSystem (its version above what this build writes) refuses start-up
+     * like a newer Meta_data.nbt, instead of the load-failure recovery that would move it aside and start empty.
+     * Every save of this session is prohibited, so the file on disk stays byte-identical.
+     */
+    private void refuseIfNewer(String name, int savedVersion, int supportedVersion) {
+        if (savedVersion <= supportedVersion)
             return;
-        }
+        savingProhibited = true;
+        throw new BankSystemStartupAbortException(name + " has save version " + savedVersion
+                + ", but this BankSystem build (v" + BankSystemMod.VERSION + ") only supports versions up to "
+                + supportedVersion + ". This world was saved by a newer BankSystem — update the mod. "
+                + "Nothing was saved; the world data on disk is untouched.");
+    }
 
-        info("Found old data at " + oldDir + ", migrating to new location...");
-
-        Path backupDir = worldRoot.resolve("Finance").resolve("BankSystemBackup_" + System.currentTimeMillis());
-        try {
-            copyFolder(oldDir, backupDir);
-            info("Created backup of old data at: " + backupDir);
-        } catch (IOException e) {
-            error("Failed to backup old data, aborting migration", e);
-            return;
-        }
-
-        Path newDir = worldRoot.resolve(BASE_PATH);
-        try {
-            if (!Files.exists(newDir)) {
-                Files.createDirectories(newDir);
-            }
-            copyFolder(oldDir, newDir);
-            info("Migrated old data from " + oldDir + " to " + newDir);
-        } catch (IOException e) {
-            error("Failed to copy old data to new location", e);
-            return;
-        }
-
-        try {
-            deleteFolderContents(oldDir);
-            Files.deleteIfExists(oldDir);
-            info("Deleted old data directory: " + oldDir);
-        } catch (IOException e) {
-            error("Failed to delete old data directory: " + oldDir, e);
-        }
+    /** The {@code version} of the first {@code meta} entry of a chunked folder (Bank_data, Companies); 0 when absent. */
+    private static int metaVersion(Map<String, ListTag> data) {
+        ListTag meta = data.get("meta");
+        return meta == null || meta.isEmpty() ? 0 : NbtCompat.getInt(NbtCompat.getCompound(meta, 0), "version");
     }
 
     /**
@@ -289,6 +279,11 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         boolean success = true;
         boolean metadataLoaded = load_metadata();
         success &= metadataLoaded;
+        // BS-271: brand-new world (no metadata, no old or new bank data). Only the log lines
+        // differ; the false return value still drives the backend's create-and-retry.
+        boolean freshWorld = metadataLoadState == LoadState.FRESH
+                && !fileExists(getAbsoluteSavePath("Bank_data.dat"))
+                && !folderExists(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME));
 
         // Load (or create) the global settings BEFORE the ItemID registry: the startup merge
         // guard inside load_itemIDs() must know the config-sourced part of the component sets
@@ -344,7 +339,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                 // early, so the caller's recovery would never run and the latch would stay armed.
                 success = recoverUnreadableItemIDsForCompatMode();
                 // load in compatibility mode
-                info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
+                if (!freshWorld)
+                    info("Loading BankSystem Mod data in compatibility mode. This is only needed if you updated the mod to a newer version and the old data is not compatible with the new version.");
 
                 success &= load_bank_compatibilityMode();
 
@@ -374,7 +370,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
                     ItemIDManager.consolidatePendingMerges();
                     saveAll();
                     debug("BankSystem Mod data loaded and saved in new format.");
-                } else
+                } else if (freshWorld)
+                    info("No saved BankSystem data yet, starting fresh.");
+                else
                     error("Failed to load BankSystem Mod data.");
                 return success;
             }
@@ -415,6 +413,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             debug("BankSystem Mod data loaded successfully.");
             BACKEND_INSTANCES.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.notifyListeners();
         }
+        else if (freshWorld)
+            info("No saved BankSystem data yet, starting fresh.");
         else
             error("Failed to load BankSystem Mod data.");
         return success;
@@ -551,8 +551,30 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         return save_bank(true);
     }
 
+    /** BS-269: dev-only "stop without a final save": bank data is not written and bank_last_save_ms stays behind. */
+    private static volatile boolean suppressBankSave;
+    /** BS-269: the suppression ignores "off" until the server stops (the fixture world copy is taken after the stop). */
+    private static volatile boolean suppressBankSaveHeld;
+
+    /** Dev builds only (a release jar refuses). Also holds for the shutdown save, which is the point. Off is ignored while held. */
+    public static void suppressBankSave_forTesting(boolean on) {
+        if (!BankSystemMod.ENABLE_DEV_FEATURES)
+            throw new IllegalStateException("save suppression exists in dev builds only");
+        if (!suppressBankSaveHeld)
+            suppressBankSave = on;
+    }
+
+    /** Dev builds only: an active suppression now holds through the server stop. @return whether it is held */
+    public static boolean holdBankSaveSuppressionUntilStop_forTesting() {
+        if (!BankSystemMod.ENABLE_DEV_FEATURES)
+            throw new IllegalStateException("save suppression exists in dev builds only");
+        return suppressBankSaveHeld = suppressBankSave;
+    }
+
     public boolean save_bank(boolean forced)
     {
+        if (suppressBankSave) // BS-269: the bank stays dirty; callers see no failure
+            return true;
         // Save gate: never overwrite Bank_data/ when the bank data was not successfully
         // loaded this session — an aborted/failed load would otherwise be crash-saved as
         // an EMPTY bank manager, destroying every account (see LoadState).
@@ -586,6 +608,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     public boolean load_bank()
     {
         Map<String, ListTag> bankData = readDataCompoundListMap(getAbsoluteSavePath(BANK_DATA_FOLDER_NAME));
+        if (bankData != null)
+            refuseIfNewer(BANK_DATA_FOLDER_NAME, metaVersion(bankData), ServerBankManager.SAVE_VERSION);
         ServerBankManager bankManager = (ServerBankManager) BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
         if(bankData == null || bankData.isEmpty() || !bankData.containsKey("itemCentScaleFactors")) {
 
@@ -659,6 +683,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             return true;
         }
         CompoundTag tag = readDataCompound(filePath);
+        if (tag != null)
+            refuseIfNewer(BANK_ACCOUNT_BINDINGS_FILE_NAME, tag.contains(BankAccountBindings.NBT_VERSION)
+                    ? NbtCompat.getInt(tag, BankAccountBindings.NBT_VERSION) : 1, BankAccountBindings.SCHEMA_VERSION);
         if (tag != null && BACKEND_INSTANCES.BANK_ACCOUNT_BINDINGS.load(tag)) {
             bankAccountBindingsLoadState = LoadState.LOADED;
             return true;
@@ -722,6 +749,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
             error("Companies/ exists but could not be read.");
             return false;
         }
+        refuseIfNewer(COMPANIES_FOLDER_NAME, metaVersion(data), net.kroia.banksystem.banking.company.CompanyManager.SAVE_VERSION);
         boolean success = mgr.load(data);
         companiesLoadState = success ? LoadState.LOADED : LoadState.NOT_LOADED;
         return success;
@@ -808,12 +836,7 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         {
             globalSettingsLoaded = true;
             settingsLoadState = LoadState.LOADED;
-            // Task #119: pre-2.2.0 files keep Placeholder.* / Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION;
-            // copy them into Integrations once and re-save so the old keys disappear.
-            if (BACKEND_INSTANCES.SERVER_SETTINGS.migrateIntegrations(filePath)) {
-                info("Migrated Placeholder settings and SYNC_ADMIN_FLAG_WITH_PERMISSION into the Integrations group.");
-                save_globalSettings(filePath);
-            }
+            // Task #119: the pre-2.2.0 Placeholder keys were moved into Integrations by data-migration step 1 (BS-274).
             // Same clamps as the in-game Mod Settings Apply, so a hand-edited file can't bypass them.
             for (String change : net.kroia.banksystem.networking.general.ModSettingsRequest
                     .sanitizeAndListChanges(BACKEND_INSTANCES.SERVER_SETTINGS))

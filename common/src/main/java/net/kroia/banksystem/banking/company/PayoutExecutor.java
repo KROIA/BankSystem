@@ -68,6 +68,11 @@ public final class PayoutExecutor {
         if (b != null && b.LOGGER != null) b.LOGGER.info("[PayoutExecutor] " + msg);
     }
 
+    /** BS-265: a raw fixed-point amount as the real amount plus the currency item, e.g. "9.99 banksystem:money". */
+    private static String amountLabel(long raw, ItemID currency) {
+        return net.kroia.banksystem.banking.bank.ServerBank.getFormattedAmountStatic(raw) + " " + currency.getName();
+    }
+
     private PayoutExecutor() {}
 
     /**
@@ -171,6 +176,33 @@ public final class PayoutExecutor {
         return executeFixed(company, schedule, amount, bm, nowMs, ledgerRows);
     }
 
+    /**
+     * BS-233: the two ledger legs of one payout / dividend transfer, written like a transfer
+     * ({@code ServerBank.logTransferLedger}): {@code -amount} on the paying account, {@code +amount}
+     * on the receiver, each naming the other account, with the run's shared {@code ref} and the
+     * bank balance (free + locked) after the move. Call after the transfer succeeded.
+     */
+    public static void addLegs(List<TransactionLogRecord> rows, net.kroia.banksystem.api.ledger.LedgerType type,
+                               short item, long amount, net.kroia.banksystem.api.ledger.LedgerActor actor,
+                               int companyId, long nowMs, String ref, @Nullable String note,
+                               int sourceAccountNr, ISyncServerBank sourceBank,
+                               int targetAccountNr, ISyncServerBank targetBank) {
+        rows.add(TransactionLogRecord.ofAt(sourceAccountNr, type, item, -amount, actor, targetAccountNr, companyId,
+                nowMs, ref, note, sourceBank.getTotalBalance()));
+        rows.add(TransactionLogRecord.ofAt(targetAccountNr, type, item, amount, actor, sourceAccountNr, companyId,
+                nowMs, ref, note, targetBank.getTotalBalance()));
+    }
+
+    /** BS-233: scheduled payouts and their catch-ups are done by the system on behalf of the company. */
+    public static net.kroia.banksystem.api.ledger.LedgerActor companyActor(Company company) {
+        return new net.kroia.banksystem.api.ledger.LedgerActor(null, company.getName(),
+                net.kroia.banksystem.api.ledger.LedgerActor.Source.SYSTEM);
+    }
+
+    private static String scheduleNote(PayoutSchedule schedule) {
+        return "Payout schedule #" + schedule.getScheduleId();
+    }
+
     /** Resolve the payout currency's ItemID ({@code 0} short → money). */
     private static @Nullable ItemID resolveCurrency(PayoutSchedule schedule) {
         if (schedule.isMoneyCurrency()) return MoneyItem.getItemID();
@@ -242,15 +274,9 @@ public final class PayoutExecutor {
                     : PayoutFailureReason.CURRENCY_ITEM_MISSING, playerName, accountName);
         }
         // TransactionLog PAYOUT rows — one on the source account (out), one on the target (in).
-        short currencyShort = currency.getShort();
-        ledgerRows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                company.getBankAccountNr(), null, net.kroia.banksystem.api.ledger.LedgerType.PAYOUT, currencyShort,
-                amount, targetAccount.getAccountNumber(), company.getCompanyId(),
-                nowMs, null));
-        ledgerRows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                targetAccount.getAccountNumber(), null, net.kroia.banksystem.api.ledger.LedgerType.PAYOUT, currencyShort,
-                amount, company.getBankAccountNr(), company.getCompanyId(),
-                nowMs, null));
+        addLegs(ledgerRows, net.kroia.banksystem.api.ledger.LedgerType.PAYOUT, currency.getShort(), amount,
+                companyActor(company), company.getCompanyId(), nowMs, UUID.randomUUID().toString(), scheduleNote(schedule),
+                company.getBankAccountNr(), sourceBank, targetAccount.getAccountNumber(), finalTargetBank);
         return new Outcome(null, playerName, accountName);
     }
 
@@ -263,23 +289,17 @@ public final class PayoutExecutor {
     private static Outcome executeDividend(Company company, PayoutSchedule schedule, long amount,
                                            ISyncServerBankManager bm, long nowMs,
                                            List<TransactionLogRecord> ledgerRows) {
-        ItemID shareItemId = resolveShareItemID(company.getCompanyId());
         String dividendName = "Shareholders";
-        if (shareItemId == null) {
-            return new Outcome(PayoutFailureReason.TARGET_NOT_FOUND, dividendName, "");
-        }
+        // BS-235: more shares banked than stamped -> skip until an admin acknowledges; schedule stays
+        if (company.isShareExcessOpen()) return new Outcome(PayoutFailureReason.SHARES_UNDER_REVIEW, dividendName, "");
         int companyAccountNr = company.getBankAccountNr();
-        Set<Integer> holderAccounts = bm.listAccountsHolding(shareItemId);
+        // BS-238: every share variant counts; one entry per account (free + locked, raw units).
         List<long[]> snapshots = new ArrayList<>(); // {accountNr, shares}
         long totalShares = 0L;
-        for (int accountNr : holderAccounts) {
-            if (accountNr == companyAccountNr) continue;
-            IServerBankAccount account = bm.getBankAccount(accountNr);
-            if (account == null) continue;
-            ISyncServerBank shareBank = account.getBank(shareItemId);
-            if (shareBank == null) continue;
-            long shares = shareBank.getTotalBalance();
-            if (shares <= 0L) continue;
+        for (java.util.Map.Entry<Integer, Long> e : CompanyStatsQuery.sharesRawPerAccount(bm, company.getCompanyId()).entrySet()) {
+            int accountNr = e.getKey();
+            long shares = e.getValue();
+            if (accountNr == companyAccountNr || shares <= 0L) continue;
             snapshots.add(new long[]{accountNr, shares});
             totalShares += shares;
         }
@@ -304,6 +324,7 @@ public final class PayoutExecutor {
         }
 
         short currencyShort = currency.getShort();
+        String runRef = UUID.randomUUID().toString(); // BS-233: one ref for every leg of this run
         int paidHolders = 0;
         long paidTotal = 0L;
         for (long[] snap : snapshots) {
@@ -318,9 +339,9 @@ public final class PayoutExecutor {
             }
             if (payAmount <= 0L) {
                 logWarn("dividend schedule " + schedule.getScheduleId() + " company "
-                        + company.getCompanyId() + ": holder account " + accountNr
+                        + company.logLabel() + ": holder account " + accountNr
                         + " share " + shares + "/" + totalShares
-                        + " rounds to 0 for amount " + amount + " — skipped");
+                        + " rounds to 0 for amount " + amountLabel(amount, currency) + " — skipped");
                 continue;
             }
             IServerBankAccount targetAccount = bm.getBankAccount(accountNr);
@@ -333,7 +354,7 @@ public final class PayoutExecutor {
             }
             if (targetBank == null) {
                 logWarn("dividend schedule " + schedule.getScheduleId() + " company "
-                        + company.getCompanyId() + ": holder account " + accountNr
+                        + company.logLabel() + ": holder account " + accountNr
                         + " could not create a bank for the payout currency — skipped");
                 continue;
             }
@@ -342,18 +363,15 @@ public final class PayoutExecutor {
             BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutTransferLog(() -> sourceBank.transfer(finalPayAmount, finalTargetBank));
             if (status != BankStatus.SUCCESS) {
                 logWarn("dividend schedule " + schedule.getScheduleId() + " company "
-                        + company.getCompanyId() + ": transfer of " + payAmount
+                        + company.logLabel() + ": transfer of " + amountLabel(payAmount, currency)
                         + " to account " + accountNr + " failed with status " + status);
                 continue;
             }
             paidHolders++;
             paidTotal += payAmount;
-            ledgerRows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    companyAccountNr, null, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, currencyShort,
-                    payAmount, accountNr, company.getCompanyId(), nowMs, null));
-            ledgerRows.add(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    accountNr, null, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, currencyShort,
-                    payAmount, companyAccountNr, company.getCompanyId(), nowMs, null));
+            addLegs(ledgerRows, net.kroia.banksystem.api.ledger.LedgerType.DIVIDEND, currencyShort, payAmount,
+                    companyActor(company), company.getCompanyId(), nowMs, runRef, scheduleNote(schedule),
+                    companyAccountNr, sourceBank, accountNr, finalTargetBank);
         }
         // BUG 4 fix (v2.1.0) — a run that moved no money must not report success.
         // Previously every transfer inside the loop could silently skip (rounding
@@ -361,13 +379,13 @@ public final class PayoutExecutor {
         // an OK history row while no balance changed anywhere.
         if (paidHolders == 0) {
             logWarn("dividend schedule " + schedule.getScheduleId() + " company "
-                    + company.getCompanyId() + ": no holder received a payment (amount="
-                    + amount + ", totalShares=" + totalShares + ") — reporting failure");
+                    + company.logLabel() + ": no holder received a payment (amount="
+                    + amountLabel(amount, currency) + ", totalShares=" + totalShares + ") — reporting failure");
             return new Outcome(money ? PayoutFailureReason.INSUFFICIENT_FUNDS
                     : PayoutFailureReason.CURRENCY_ITEM_MISSING, dividendName, "");
         }
         logInfo("dividend schedule " + schedule.getScheduleId() + " company "
-                + company.getCompanyId() + ": paid " + paidTotal + " to " + paidHolders + " holder(s)");
+                + company.logLabel() + ": paid " + amountLabel(paidTotal, currency) + " to " + paidHolders + " holder(s)");
         // Task #52 (v2.1.0) — record the scheduled dividend event for history.
         try {
             BankSystemModBackend.Instances b = backend;
@@ -380,20 +398,5 @@ public final class PayoutExecutor {
             logWarn("Failed to record dividend history: " + t.getMessage());
         }
         return new Outcome(null, dividendName, "");
-    }
-
-    /**
-     * Resolve the stamped-share ItemID bound to {@code companyId}. BUG 4 unification —
-     * uses the same direct template lookup as the (working) manual
-     * {@link net.kroia.banksystem.banking.share.DividendPayer} instead of reverse-iterating
-     * the ItemID registry.
-     */
-    private static @Nullable ItemID resolveShareItemID(int companyId) {
-        net.minecraft.world.item.ItemStack template =
-                net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem.ofCompany(
-                        net.kroia.banksystem.minecraft.item.BankSystemItems.STAMPED_SHARE.get(), companyId);
-        ItemID shareItemId = net.kroia.banksystem.util.ItemIDManager.getItemID(template);
-        if (shareItemId == null || !shareItemId.isValid()) return null;
-        return shareItemId;
     }
 }
