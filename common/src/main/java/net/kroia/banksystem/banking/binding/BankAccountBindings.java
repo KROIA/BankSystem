@@ -51,9 +51,9 @@ public class BankAccountBindings {
     /** NBT key for the top-level list holding every {@link BindingRow}. */
     private static final String NBT_ROWS = "rows";
     /** NBT key stamping the on-disk schema version (currently 1). */
-    private static final String NBT_VERSION = "version";
-    /** Current on-disk schema version. */
-    private static final int SCHEMA_VERSION = 1;
+    public static final String NBT_VERSION = "version";
+    /** Current on-disk schema version; a higher saved one refuses start-up (BS-274, BankSystemDataHandler). */
+    public static final int SCHEMA_VERSION = 1;
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
@@ -403,9 +403,9 @@ public class BankAccountBindings {
     /**
      * Populates the state from a tag previously written by {@link #save(CompoundTag)}.
      * Rows whose NBT is unusable (missing keys, unknown provider id, malformed
-     * ref, ...) are skipped with a WARN; unknown schema versions abort the load
-     * with a WARN and leave the map empty (the file gets backed up aside by
-     * the data handler's usual recovery flow).
+     * ref, ...) are skipped with a WARN; a newer schema version leaves the map
+     * empty and returns false (the data handler refuses start-up before calling
+     * this, BS-274).
      *
      * @param tag source tag; may be {@code null}
      * @return {@code true} on successful load, {@code false} on version
@@ -420,8 +420,7 @@ public class BankAccountBindings {
         if (version > SCHEMA_VERSION) {
             warn("BankAccountBindings.nbt has schema version " + version
                     + ", but this build only supports up to " + SCHEMA_VERSION
-                    + ". Refusing to load — the file will be backed up aside "
-                    + "and a fresh (empty) one written in its place.");
+                    + ". Refusing to load.");
             return false;
         }
         if (!NbtCompat.contains(tag, NBT_ROWS, Tag.TAG_LIST)) {

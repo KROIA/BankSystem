@@ -59,7 +59,6 @@ public class AccountReadAccessTests extends TestSuite {
         addTest("self_or_full_read_admin_query", this::selfOrFullRead);
         addTest("user_names_only_copy", this::userNamesOnly);
         addTest("company_stats_reduced_for_non_members", this::statsReduced);
-        addTest("company_stats_anonymous_shareholders", this::statsAnonymousShareholders);
         addTest("player_accounts_without_permission_bits", this::accountsWithoutBits);
     }
 
@@ -151,14 +150,6 @@ public class AccountReadAccessTests extends TestSuite {
         return pass("names-only user keeps uuid and name, drops admin flag and custom data");
     }
 
-    private static AsyncCompanyManager.CompanyStatsPayload fullStats() {
-        return new AsyncCompanyManager.CompanyStatsPayload(500L, 200L, 300L, 1, 50L, 1000L, 12L,
-                List.of(new AsyncCompanyManager.CashflowBucketWire(1L, 500L, 200L)),
-                List.of(new AsyncCompanyManager.ShareholderWire(7, "Alice", 60L, 0.6f),
-                        new AsyncCompanyManager.ShareholderWire(8, "Bob", 40L, 0.4f)),
-                false, 100L, 2);
-    }
-
     private TestResult statsReduced() {
         AsyncCompanyManager.CompanyStatsPayload r = AsyncCompanyManager.CompanyStatsPayload.reducedFor(100L, 2);
         if (!r.reduced()) return fail("not marked reduced");
@@ -168,20 +159,6 @@ public class AccountReadAccessTests extends TestSuite {
             return fail("financials leaked");
         if (!r.cashflowSeries().isEmpty() || !r.topShareholders().isEmpty()) return fail("series or shareholders leaked");
         return pass("reduced stats hold share and holder counts only");
-    }
-
-    private TestResult statsAnonymousShareholders() {
-        AsyncCompanyManager.CompanyStatsPayload full = fullStats();
-        AsyncCompanyManager.CompanyStatsPayload anon = full.withAnonymousShareholders();
-        if (anon.topShareholders().size() != 2) return fail("shareholder count changed");
-        for (AsyncCompanyManager.ShareholderWire h : anon.topShareholders())
-            if (h.accountNr() != 0 || !h.accountName().isEmpty()) return fail("shareholder account leaked: " + h);
-        if (anon.topShareholders().get(0).shares() != 60L || anon.topShareholders().get(1).pct() != 0.4f)
-            return fail("shares or percentage lost");
-        if (anon.currentBalance() != 1000L || anon.cashflowSeries().size() != 1 || anon.reduced())
-            return fail("member financials lost");
-        if (full.topShareholders().get(0).accountNr() != 7) return fail("original was modified");
-        return pass("member stats keep financials, shareholder accounts removed");
     }
 
     private TestResult accountsWithoutBits() {

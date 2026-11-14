@@ -189,6 +189,29 @@ public final class DiagnosticsDatabase {
         return done;
     }
 
+    /**
+     * BS-255 — writes a consistent copy of the file to {@code target} with {@code VACUUM INTO} on the writer thread,
+     * after every earlier write. The target must not exist yet.
+     *
+     * @return completes once the copy is written; fails when the write cannot be queued (disabled, closed, full)
+     *         or the copy fails
+     */
+    public CompletableFuture<Void> snapshotTo(Path target) {
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        if (!enqueue(() -> {
+            try {
+                Connection c = open();
+                if (c == null) throw new SQLException("diagnostics database is disabled");
+                DatabaseManager.vacuumInto(c, target);
+                done.complete(null);
+            } catch (Exception e) {
+                done.completeExceptionally(e);
+            }
+        }))
+            done.completeExceptionally(new IllegalStateException("diagnostics database is disabled, closed or its queue is full"));
+        return done;
+    }
+
     /** Drains the queue for up to {@value #CLOSE_DRAIN_MS} ms, then the connection is committed and closed. */
     public void close() {
         executor.shutdown();
@@ -224,13 +247,7 @@ public final class DiagnosticsDatabase {
     public static Connection connect(Path file) throws SQLException {
         Driver driver;
         try {
-            Class<?> cls;
-            try {
-                cls = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                cls = DiagnosticsDatabase.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }
-            driver = (Driver) cls.getDeclaredConstructor().newInstance();
+            driver = DatabaseManager.newSqliteDriver();
         } catch (ReflectiveOperationException e) {
             throw new SQLException("SQLite JDBC driver not found", e);
         }
@@ -304,9 +321,20 @@ public final class DiagnosticsDatabase {
                 }
                 st.execute("INSERT OR IGNORE INTO Meta (key, value) VALUES ('created_ms', '" + System.currentTimeMillis() + "')");
             }
-            try (PreparedStatement ps = c.prepareStatement("INSERT OR REPLACE INTO Meta (key, value) VALUES ('schema_version', ?)")) {
-                ps.setString(1, schemaVersion); // caller-supplied text
-                ps.executeUpdate();
+            // BS-274: never stamp a lower version over a file a newer build wrote (its extra tables/columns stay;
+            // this build only leaves them empty). Gameplay never reads this file, so it is no reason to refuse start-up.
+            String saved = null;
+            try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery("SELECT value FROM Meta WHERE key = 'schema_version'")) {
+                if (rs.next()) saved = rs.getString(1);
+            }
+            if (isNewerVersion(saved, schemaVersion)) {
+                warn(TAG + file + " has schema_version " + saved + " from a newer version (this one writes " + schemaVersion
+                        + "); keeping it.");
+            } else {
+                try (PreparedStatement ps = c.prepareStatement("INSERT OR REPLACE INTO Meta (key, value) VALUES ('schema_version', ?)")) {
+                    ps.setString(1, schemaVersion); // caller-supplied text
+                    ps.executeUpdate();
+                }
             }
             c.commit();
             return c;
@@ -316,6 +344,15 @@ public final class DiagnosticsDatabase {
             } catch (SQLException ignored) {
             }
             throw e;
+        }
+    }
+
+    /** Both versions are integers and {@code saved} is the higher one; anything else counts as not newer. */
+    private static boolean isNewerVersion(@Nullable String saved, String ours) {
+        try {
+            return saved != null && Integer.parseInt(saved.trim()) > Integer.parseInt(ours.trim());
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 
