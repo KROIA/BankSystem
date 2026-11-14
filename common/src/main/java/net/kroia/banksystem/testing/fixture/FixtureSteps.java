@@ -304,7 +304,7 @@ public final class FixtureSteps {
      * Transfers: D → E $1M into a new account (TRANSFER_TO_NEW_ACCOUNT), D → C $999,999.99 (clean), E → company $500k.
      * Wealth: snapshot + sweep: B and C jump (WEALTH_JUMP), D moved $2M through but ends flat (clean); skipped without a
      * price provider. Clean burst: after the sweep TesterX gets $9.5M, withdraws it in one burst (below $10M) and pays it
-     * back. Parked: a terminal deposit with RESTART_AFTER_APPLY (TRANSFER_PARKED + a parked transfer), a normal one
+     * back. Parked: a terminal deposit with RESTART_AFTER_APPLY (TRANSFER_PARKED; the transfer itself resolved: ok), a normal one
      * (clean). Binding: D's stone slot bound to TesterA's stub account (EXTERNAL_BINDING_SUSPENDED), E's to E's own
      * (clean). Shares: {@link #CLEAN_COMPANY} (founded by TesterY) stamps 3 and TesterY banks them (clean SHARE_CREATED /
      * SHARE_EXCESS); {@link #COMPANY} gets 5 reported as made by /give (SHARE_CREATED), banked unstamped by E (SHARE_EXCESS).
@@ -458,13 +458,15 @@ public final class FixtureSteps {
                 .subject(String.valueOf(d.account())).window(parkCleanFrom, parkCleanTo).planted("test hook")
                 .ledger(refIds(slave, okDeposit).toArray()).note("the same terminal deposit without the fault"));
         String ironName = await(slave, ItemIDManager.registerItemStackServerSide(new ItemStack(Items.IRON_INGOT))).getName();
-        key.addCase(kase(cases, "C11-transfer-parked-flag", "flag", "transfer").subject(parked.transferId()).item(ironName)
+        // AT-48: keyed as the resolved outcome (master row + slave took the items); its TRANSFER_PARKED flag is C11-6-flag
+        key.addCase(kase(cases, "C11-transfer-resolved-clean", "clean", "transfer").subject(parked.transferId()).item(ironName)
                 .window(parkFrom, parkTo).amount(0).tolerance(0)
-                .transfer(parked.transferId(), TransferJournal.TO_MASTER, TransferJournal.ASYNC_BANK, "parked",
+                .transfer(parked.transferId(), TransferJournal.TO_MASTER, TransferJournal.ASYNC_BANK, "ok",
                         Map.of(ironName, 3 * SCALE), Map.of(ironName, 3 * SCALE))
-                .ledger(refIds(slave, parked.transferId()).toArray()).flags(park.get("id").getAsLong())
+                .ledger(refIds(slave, parked.transferId()).toArray())
                 .transfers(parked.transferId()).planted("test hook")
-                .note("simulated restart; reply lost, request timed out, status unknown → TIMED_OUT (master row written)"));
+                .note("simulated restart; reply lost, request timed out, status unknown → TIMED_OUT, but the master wrote the row"
+                        + " and the slave took the 3 iron: resolved, sent = received"));
         key.addCase(kase(cases, "C11-transfer-ok-clean", "clean", "transfer").subject(okDeposit).item(ironName)
                 .window(parkCleanFrom, parkCleanTo).amount(0).tolerance(0)
                 .transfer(okDeposit, TransferJournal.TO_MASTER, TransferJournal.ASYNC_BANK, "ok",
@@ -778,14 +780,14 @@ public final class FixtureSteps {
      * the C13 banknote count stays exact; no clean case has TesterY's account as subject). C11 / C15 / C16 already key an
      * ok terminal deposit, converter commit, upload, download and DROP. This step adds:
      * <ul>
-     *   <li>ok: a terminal withdraw; a terminal deposit into the frozen account, refused → RETURNED.</li>
+     *   <li>ok: a terminal withdraw; a terminal deposit into the frozen account, refused → RETURNED; BS-267 #1 download
+     *       block withdraw with RESTART_AFTER_APPLY (master debits, reply lost → TIMED_OUT, the block keeps the items).</li>
      *   <li>known-gap: a raw deposit (no ledger type: the master's RAW_CHANGE row has no id); a craft ingredient
      *       withdraw (CRAFT_CONSUME) the master refuses (frozen), its own lock freed by the craft-failure unlock while
      *       the #6 lock stays (6b, clean look-alike); a DEPOSIT with no block context the master refuses (frozen).</li>
-     *   <li>parked: BS-267 #1 download block withdraw with RESTART_AFTER_APPLY (master debits, reply lost → TIMED_OUT,
-     *       the block keeps the items); #6 terminal withdraw with THROW_BEFORE_APPLY (TIMED_OUT, lock kept), 6a the
-     *       admin "reset locked balance" on the same account + item; #2 craft output deposit with THROW_BEFORE_APPLY
-     *       (TIMED_OUT, items gone).</li>
+     *   <li>twice: BS-267 #6 terminal withdraw with THROW_BEFORE_APPLY (TIMED_OUT, never debited, lock kept; a real
+     *       terminal hands the items out), 6a the admin "reset locked balance" on the same account + item.</li>
+     *   <li>parked: BS-267 #2 craft output deposit with THROW_BEFORE_APPLY (TIMED_OUT, items gone).</li>
      *   <li>planted (DB edit): lost = a CONFIRMED deposit whose master row is deleted; twice = a raw deposit's
      *       RAW_CHANGE row relabelled DEPOSIT with an earlier deposit's id; created = the same with a fresh id.</li>
      * </ul>
@@ -858,9 +860,11 @@ public final class FixtureSteps {
         AdminAudit.parkTransfer(y.account(), diamondId, 5 * SCALE, six.transferId(), y.uuid(), "terminal withdraw", six.future().exceptionNow());
         expectStep(slave, six.transferId(), TransferJournal.TIMED_OUT);
         JsonObject park6 = awaitFlag(slave, flag0, SuspicionChecks.TRANSFER_PARKED, y.account(), WAIT_MS);
-        transferCase(key, cases, "D-6-transfer-parked-flag", six.transferId(), fromM, async, "parked", diamond, 0, 0, sixFrom, List.of(),
-                park6.get("id").getAsLong(), "test hook", "BS-267 #6: terminal withdraw of 5 diamonds, THROW_BEFORE_APPLY on the master:"
-                        + " never applied, status UNKNOWN → TIMED_OUT; the items are out (terminal-style: none handed out here), the 5 stay locked");
+        // AT-48: keyed as a real terminal: it hands the 5 out, the master never debits, 6a frees the lock → twice
+        transferCase(key, cases, "D-6-transfer-twice-flag", six.transferId(), fromM, async, "twice", diamond, 0, 5 * SCALE, sixFrom, List.of(),
+                null, "test hook", "BS-267 #6: terminal withdraw of 5 diamonds, THROW_BEFORE_APPLY on the master:"
+                        + " never debited, status UNKNOWN → TIMED_OUT; a real terminal hands the 5 out (none handed out here) and 6a"
+                        + " frees the lock: the diamonds exist twice");
 
         // 6b + refused deposits: account frozen (console /banksystem freeze)
         long lockedBefore = await(slave, bank.getLockedBalanceAsync());
@@ -922,10 +926,10 @@ public final class FixtureSteps {
         }
         JsonObject park1 = awaitFlag(slave, flag0, SuspicionChecks.TRANSFER_PARKED, y.account(), WAIT_MS);
         List<Long> oneRows = refIds(slave, one);
-        transferCase(key, cases, "D-1-transfer-parked-flag", one, fromM, async, "parked", diamond, 3 * SCALE, 0, oneFrom, oneRows,
-                park1.get("id").getAsLong(), "test hook", "BS-267 #1: download block withdraw of 3 diamonds, RESTART_AFTER_APPLY: the"
-                        + " master debited (DOWNLOAD_WITHDRAW), simulated restart, reply lost → TIMED_OUT; the block keeps the items"
-                        + " (received = the journal's view: no DELIVERED step)");
+        transferCase(key, cases, "D-1-transfer-ok-clean", one, fromM, async, "ok", diamond, 3 * SCALE, 3 * SCALE, oneFrom, oneRows,
+                null, "test hook", "BS-267 #1: download block withdraw of 3 diamonds, RESTART_AFTER_APPLY: the"
+                        + " master debited (DOWNLOAD_WITHDRAW), simulated restart, reply lost → TIMED_OUT; the block keeps the items:"
+                        + " sent = received");
 
         // BS-267 #2: craft output deposit, outcome unknown, items gone
         long twoFrom = now();
@@ -999,15 +1003,16 @@ public final class FixtureSteps {
 
     /**
      * C12 — bank saves suppressed (after a {@code save-all flush}), then 3 terminal deposits of iron by TesterD: their
-     * ledger rows are behind bank_last_save_ms. Leaves the suppression ON (the export must see it); turn it off with
-     * {@code suppressSave {"on":false}}.
+     * ledger rows are behind bank_last_save_ms. Keys the balances as that save wrote them (the export and the world copy
+     * show the saved bank, not the live one). Leaves the suppression ON (the export must see it; {@link #finish} holds it
+     * through the server stop); turn it off with {@code suppressSave {"on":false}}.
      */
     public static Step lastSave(MinecraftServer slave) {
         long from = now();
         Tester d = ensureTester(slave, "TesterD");
         List<String> cases = new ArrayList<>(), transfers = new ArrayList<>();
         List<Long> ledger = new ArrayList<>();
-        master(slave, "suppressSave", obj("on", true));
+        keyBalances(FixtureKey.current(), master(slave, "suppressSave", obj("on", true)));
         for (int n = 2; n <= 4; n++) transfers.add(depositOk(slave, d.uuid(), d.account(), new ItemStack(Items.IRON_INGOT, n)));
         master(slave, "barrier", obj());
         for (String t : transfers) ledger.addAll(refIds(slave, t));
@@ -1022,12 +1027,13 @@ public final class FixtureSteps {
 
     /**
      * The copy moment, the last step (after {@link #lastSave}): master export {@code fixture} + key balances (master,
-     * as exported) → master quiet → {@code beforeSlaveExport} (StockMarket: its quiet part and its last cases; null =
+     * as exported; already keyed by lastSave as saved) → master quiet → {@code beforeSlaveExport} (StockMarket: its quiet part and its last cases; null =
      * none) → D after-snapshot: a terminal deposit of 1 diamond by TesterY sent while {@link SimulatedMasterHang} drops
      * it, so the slave journal has only REQUESTED at the export (a later timeout ends NOT_APPLIED, which writes no
      * step) → slave {@code saveEverything} (world + player inventories; bank saves stay suppressed from lastSave) →
      * {@link #banknotesAtCopy} → slave export {@code fixture} → key servers (paths relative to the fixture root:
-     * {@code master/…}, {@code slave/…}) → {@code <slave run dir>/fixture/answer-key.json}. Server thread.
+     * {@code master/…}, {@code slave/…}) → master holds the bank save suppression until it stops → {@code <slave run
+     * dir>/fixture/answer-key.json}. Server thread.
      *
      * @return the written key file
      */
@@ -1035,11 +1041,11 @@ public final class FixtureSteps {
         FixtureKey key = FixtureKey.current();
         JsonObject mx = JsonParser.parseString(await(slave, FixtureStepRequest.call("export", obj("name", "fixture").toString()),
                 FixtureStepRequest.INSTANCE.getTimeoutMs())).getAsJsonObject();
-        for (JsonElement e : master(slave, "balances", obj()).getAsJsonArray("balances")) {
-            JsonObject b = e.getAsJsonObject();
-            key.addBalance(b.get("account").getAsInt(), b.get("item").getAsString(), b.get("raw").getAsLong(),
-                    b.get("locked").getAsLong());
+        boolean keyed;
+        synchronized (key) {
+            keyed = !key.balances.isEmpty();
         }
+        if (!keyed) keyBalances(key, master(slave, "balances", obj())); // no lastSave: the export saved the live state
         master(slave, "quiet", obj());
         if (beforeSlaveExport != null) beforeSlaveExport.run();
 
@@ -1059,10 +1065,21 @@ public final class FixtureSteps {
                 "master/" + mx.get("folder").getAsString());
         key.addServer("slave", id == null ? null : id.serverUid().toString(), "slave/" + rel(runDir, slave.getWorldPath(LevelResource.ROOT)),
                 "slave/" + rel(runDir, sx.folder()));
+        // the copy is taken after the server stop: the C12 suppression must survive the drivers' cleanup "off" and the stop save
+        master(slave, "suppressSave", obj("untilStop", true));
         try {
             return key.write(runDir);
         } catch (IOException e) {
             throw new IllegalStateException("answer key not written: " + e, e);
+        }
+    }
+
+    /** Keys every {@code balances} entry of a master {@code balances} / {@code suppressSave} answer. */
+    private static void keyBalances(FixtureKey key, JsonObject answer) {
+        for (JsonElement e : answer.getAsJsonArray("balances")) {
+            JsonObject b = e.getAsJsonObject();
+            key.addBalance(b.get("account").getAsInt(), b.get("item").getAsString(), b.get("raw").getAsLong(),
+                    b.get("locked").getAsLong());
         }
     }
 

@@ -131,6 +131,9 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
     }
     public static void resetBankDataLoaded() {
         bankDataLoaded = false;
+        // BS-269: called after the shutdown save, so a save suppression held through the stop ends with the session
+        suppressBankSave = false;
+        suppressBankSaveHeld = false;
     }
 
     public void tickUpdate()
@@ -563,12 +566,22 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
     /** BS-269: dev-only "stop without a final save": bank data is not written and bank_last_save_ms stays behind. */
     private static volatile boolean suppressBankSave;
+    /** BS-269: the suppression ignores "off" until the server stops (the fixture world copy is taken after the stop). */
+    private static volatile boolean suppressBankSaveHeld;
 
-    /** Dev builds only (a release jar refuses). Also holds for the shutdown save, which is the point. */
+    /** Dev builds only (a release jar refuses). Also holds for the shutdown save, which is the point. Off is ignored while held. */
     public static void suppressBankSave_forTesting(boolean on) {
         if (!BankSystemMod.ENABLE_DEV_FEATURES)
             throw new IllegalStateException("save suppression exists in dev builds only");
-        suppressBankSave = on;
+        if (!suppressBankSaveHeld)
+            suppressBankSave = on;
+    }
+
+    /** Dev builds only: an active suppression now holds through the server stop. @return whether it is held */
+    public static boolean holdBankSaveSuppressionUntilStop_forTesting() {
+        if (!BankSystemMod.ENABLE_DEV_FEATURES)
+            throw new IllegalStateException("save suppression exists in dev builds only");
+        return suppressBankSaveHeld = suppressBankSave;
     }
 
     public boolean save_bank(boolean forced)

@@ -80,9 +80,12 @@ import java.util.function.Supplier;
  *       throws, nothing moves, no reply; status UNKNOWN → the slave parks the transfer (TIMED_OUT). RESTART_AFTER_APPLY:
  *       the apply happens (ledger row written), then the status cache is wiped as by a restart and the reply is lost;
  *       status UNKNOWN → TIMED_OUT + TRANSFER_PARKED. NONE disarms. Key label: "test hook".</li>
- *   <li>{@code suppressSave}: {@code {"on":true}} → {@code {"ok":true}}. On: runs {@code save-all flush} first, then
- *       skips every later bank-data save (also the shutdown save) and keeps {@code bank_last_save_ms} where it is.
- *       {@code {"on":false}} saves normally again (no save is triggered).</li>
+ *   <li>{@code suppressSave}: {@code {"on":true}} → {@code {"ok":true,"balances":[…]}}. On: runs {@code save-all flush}
+ *       first, then skips every later bank-data save (also the shutdown save) and keeps {@code bank_last_save_ms} where
+ *       it is; {@code balances} (as the {@code balances} op) = the bank state that save wrote, read when the suppression
+ *       starts. {@code {"on":false}} saves normally again (no save is triggered), unless held.
+ *       {@code {"untilStop":true}} → {@code {"ok":true,"held":true|false}}: an active suppression ignores "off" until the
+ *       server stops (the stop resets it after its suppressed save); held false = no suppression was on.</li>
  *   <li>{@code ledgerRows}: {@code {"ref":"<ref>"}} → {@code {"rows":[{"id":12,"account_number":3,"type_code":2,
  *       "kind":"DEPOSIT","item_id":5,"amount":1000,"ref":"…","note":null,"ts":1763000000000,…},…]}}, every TransactionLog
  *       column by its SQL name (numbers as JSON numbers, SQL NULL as null), ordered by id.</li>
@@ -199,11 +202,18 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
                 TransferStatusRequest.armFault_forTesting("NONE".equals(f) ? null : TransferStatusRequest.Fault.valueOf(f));
                 yield CompletableFuture.completedFuture(ok());
             }
-            case "suppressSave" -> a.get("on").getAsBoolean()
-                    ? command(server, "save-all flush").thenCompose(r -> barrier(server)).thenApply(v -> {
-                        BankSystemDataHandler.suppressBankSave_forTesting(true);
-                        return ok();
+            case "suppressSave" -> a.has("untilStop") ? onServer(server, () -> {
+                        JsonObject r = ok();
+                        r.addProperty("held", BankSystemDataHandler.holdBankSaveSuppressionUntilStop_forTesting());
+                        return r;
                     })
+                    : a.get("on").getAsBoolean()
+                    ? command(server, "save-all flush").thenCompose(r -> barrier(server)).thenCompose(v -> onServer(server, () -> {
+                        BankSystemDataHandler.suppressBankSave_forTesting(true);
+                        JsonObject r = balances();
+                        r.addProperty("ok", true);
+                        return r;
+                    }))
                     : onServer(server, () -> {
                         BankSystemDataHandler.suppressBankSave_forTesting(false);
                         return ok();
@@ -239,27 +249,7 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
                         r.add("warnings", w);
                         return r;
                     });
-            case "balances" -> onServer(server, () -> {
-                JsonArray out = new JsonArray();
-                if (BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm)
-                    for (int nr : bm.getAllAccountNumbers()) {
-                        var account = bm.getBankAccount(nr);
-                        if (account == null) continue;
-                        for (Map.Entry<ItemID, IServerBank> e : account.getAllBanks().entrySet()) {
-                            if (e.getValue() == null) continue;
-                            JsonObject b = new JsonObject();
-                            b.addProperty("account", nr);
-                            b.addProperty("item", e.getKey().getName());
-                            b.addProperty("itemId", e.getKey().getShort());
-                            b.addProperty("raw", Long.toString(e.getValue().getBalance()));
-                            b.addProperty("locked", Long.toString(e.getValue().getLockedBalance()));
-                            out.add(b);
-                        }
-                    }
-                JsonObject r = new JsonObject();
-                r.add("balances", out);
-                return r;
-            });
+            case "balances" -> onServer(server, FixtureStepRequest::balances);
             case "quiet" -> onServer(server, () -> {
                 BankSystemModBackend.getInstances_forTesting().SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(0L);
                 return ok();
@@ -413,6 +403,29 @@ public class FixtureStepRequest extends BankSystemGenericRequest<FixtureStepRequ
             }
         }
         return rows;
+    }
+
+    /** {@code {"balances":[…]}} as the {@code balances} op answers. Server thread. */
+    private static JsonObject balances() {
+        JsonArray out = new JsonArray();
+        if (BankSystemModBackend.getInstances_forTesting().SERVER_BANK_MANAGER.getSync() instanceof ServerBankManager bm)
+            for (int nr : bm.getAllAccountNumbers()) {
+                var account = bm.getBankAccount(nr);
+                if (account == null) continue;
+                for (Map.Entry<ItemID, IServerBank> e : account.getAllBanks().entrySet()) {
+                    if (e.getValue() == null) continue;
+                    JsonObject b = new JsonObject();
+                    b.addProperty("account", nr);
+                    b.addProperty("item", e.getKey().getName());
+                    b.addProperty("itemId", e.getKey().getShort());
+                    b.addProperty("raw", Long.toString(e.getValue().getBalance()));
+                    b.addProperty("locked", Long.toString(e.getValue().getLockedBalance()));
+                    out.add(b);
+                }
+            }
+        JsonObject r = new JsonObject();
+        r.add("balances", out);
+        return r;
     }
 
     private static ServerBankManager bankManager() {

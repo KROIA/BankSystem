@@ -25,7 +25,8 @@ import java.util.Set;
  * BS-269 — smoke run of the BankSystem fixture steps A → C9 → C10 → C11 → C13 → C14 → C15 → C16 → D → E (bank) → C12 on a trusted
  * slave, then {@link FixtureSteps#finish} (exports, after-snapshot transfer, banknotes, answer key in the cell's slave run dir). Opt-in: skips
  * unless named by {@code --only} ({@link TestRegistry#INCLUDE_PROPERTY}), because it leaves testers, flags and a
- * suppressed bank save behind. Cleanup: bank saves on again.
+ * suppressed bank save behind. Cleanup: bank saves on again, except after a finished key (finish holds the suppression
+ * through the master's stop, so the world copy keeps the planted last-save state).
  */
 public class FixtureStepsTests extends TestSuite {
 
