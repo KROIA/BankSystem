@@ -23,7 +23,9 @@ public class ATMSoftware extends Software{
     @Override
     protected void onRightClickedServerSide(ServerPlayer player)
     {
-        if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE)
+        if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+            net.kroia.banksystem.minecraft.block.custom.ATMBlock.setOpenedAt(player.getUUID(), null); // BS-258: not at a block
             SyncOpenGUIPacket.send_openATMScreen(player);
+        }
     }
 }

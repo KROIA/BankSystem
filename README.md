@@ -288,13 +288,14 @@ Key commands for players and admins:
 | `/company create <name> <maxSupply>` | Found a company and its bank account |
 | `/company info <name>` | Print a company's details to chat |
 | `/company manage <name>` | Open the Company Management screen |
+| `/company shares acknowledge <name>` | Accept a share excess and resume the company's dividends (company admins) |
 | `/banksystem symbols list\|add\|remove\|reload` | Manage the share symbol library (admin only) |
 
 For the full command reference, see [Commands](documentation/user-guide/Commands.md).
 
 ### Permissions (LuckPerms)
 
-Admin functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player. Without a permission mod, each node requires operator level 2 (same as before). `banksystem.admin.*` grants all of them.
+Admin functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player. Without a permission mod, each node requires operator level 2 (same as before), except the `symbols`, `restorebinding` and `shares` command nodes: they let every player through and the BankSystem admin flag (`/banksystem op`) decides. `banksystem.admin.*` grants all of them.
 
 | Node | Grants |
 |------|--------|

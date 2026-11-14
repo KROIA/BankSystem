@@ -48,6 +48,41 @@ public class ModSettingsTests extends TestSuite {
         addTest("migrate_integrations_already_migrated", this::test_migrateIntegrationsAlreadyMigrated);
         addTest("migrate_integrations_no_old_keys", this::test_migrateIntegrationsNoOldKeys);
         addTest("load_clamps_hand_edited_values", this::test_loadClampsHandEditedValues);
+        addTest("request_needs_admin_and_op", this::test_requestNeedsAdminAndOp);
+    }
+
+    /**
+     * BS-221: a GET needs the BankSystem admin flag AND operator level 2 on this server. Uses the
+     * first online player: without the flag it is refused; with the flag it passes exactly when the
+     * player has op level 2 (the harness cannot change a real player's op level, so a non-op player
+     * cell covers the "admin flag without op" case and an op cell the positive case).
+     */
+    private TestResult test_requestNeedsAdminAndOp() {
+        if (getServer() == null) return skip("no server");
+        net.kroia.banksystem.api.bankmanager.IBankManager bm = net.kroia.banksystem.BankSystemMod.getAPI().getServerBankManager();
+        if (bm == null || bm.getSync() == null || net.kroia.banksystem.BankSystemModBackend.getInstances_forTesting().isSlaveServer)
+            return skip("no master server");
+        List<net.minecraft.server.level.ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty()) return skip("no online player");
+        net.minecraft.server.level.ServerPlayer player = players.get(0);
+        java.util.UUID uuid = player.getUUID();
+        ModSettingsRequest.InputData get = new ModSettingsRequest.InputData(ModSettingsRequest.Action.GET, "");
+        boolean before = bm.getSync().isBanksystemAdmin(uuid);
+        try {
+            bm.getSync().setBanksystemAdminMode(uuid, false);
+            ModSettingsRequest.OutputData out = net.kroia.banksystem.networking.BankSystemNetworking.MOD_SETTINGS_REQUEST.handleOnMasterServer(get, "", uuid).join();
+            TestResult r = assertFalse("no admin flag: refused", out.success());
+            if (!r.passed()) return r;
+            r = assertTrue("refusal names both requirements", out.message().contains("operator level 2"));
+            if (!r.passed()) return r;
+
+            bm.getSync().setBanksystemAdminMode(uuid, true);
+            boolean op = net.kroia.modutilities.PermissionCompat.hasPermission(player, ModSettingsRequest.REQUIRED_OP_LEVEL);
+            out = net.kroia.banksystem.networking.BankSystemNetworking.MOD_SETTINGS_REQUEST.handleOnMasterServer(get, "", uuid).join();
+            return assertEquals("admin flag: allowed iff op level 2 (op=" + op + ")", op, out.success());
+        } finally {
+            bm.getSync().setBanksystemAdminMode(uuid, before);
+        }
     }
 
     /**
@@ -305,15 +340,19 @@ public class ModSettingsTests extends TestSuite {
 
     // ---- Task #119: one-time migration into the Integrations group ----
 
-    /** Writes {@code json} to a temp file, loads it like load_globalSettings does, runs {@code body}, deletes the file. */
+    /**
+     * Writes {@code json} to a temp file, runs the migration on it (data-migration step 1, BS-274), loads it
+     * like load_globalSettings does, runs {@code body}, deletes the file.
+     */
     private TestResult withSettingsFile(String json, MigrationCase body) {
         Path file = null;
         try {
             file = Files.createTempFile("banksystem_settings_migration", ".json");
             Files.writeString(file, json);
+            boolean migrated = BankSystemModSettings.migrateIntegrations(file);
             BankSystemModSettings settings = new BankSystemModSettings();
             new SettingsStore().loadFromFile(settings.getEditableGroups(), file.toFile());
-            return body.run(settings, file);
+            return body.run(settings, file, migrated);
         } catch (Exception e) {
             return fail("Migration test threw " + e);
         } finally {
@@ -322,15 +361,15 @@ public class ModSettingsTests extends TestSuite {
     }
 
     private interface MigrationCase {
-        TestResult run(BankSystemModSettings settings, Path file) throws Exception;
+        TestResult run(BankSystemModSettings settings, Path file, boolean migrated) throws Exception;
     }
 
-    /** A pre-2.2.0 file: Placeholder.* and Utilities.SYNC_* are copied, and a re-save drops the old keys. */
+    /** A pre-2.2.0 file: Placeholder.* and Utilities.SYNC_* move into Integrations and the old keys are gone. */
     private TestResult test_migrateIntegrationsOldFile() {
         String json = "{\"Utilities\":{\"SAVE_INTERVAL_SECONDS\":9,\"SYNC_ADMIN_FLAG_WITH_PERMISSION\":true},"
                 + "\"Placeholder\":{\"PLAYER_REFRESH_MS\":2500,\"SERVER_REFRESH_MS\":40000,\"TOP_COUNT\":7,\"MONEY_FORMAT\":\"%s EUR\"}}";
-        return withSettingsFile(json, (settings, file) -> {
-            TestResult r = assertTrue("migration reports copied values", settings.migrateIntegrations(file));
+        return withSettingsFile(json, (settings, file, migrated) -> {
+            TestResult r = assertTrue("migration reports a rewritten file", migrated);
             if (!r.passed()) return r;
             BankSystemModSettings.Integrations in = settings.INTEGRATIONS;
             r = assertEquals("PLAYER_REFRESH_MS copied", 2500, (int) in.PLAYER_REFRESH_MS.get());
@@ -350,8 +389,6 @@ public class ModSettingsTests extends TestSuite {
             r = assertEquals("unrelated Utilities value still loaded", 9L, (long) settings.UTILITIES.SAVE_INTERVAL_SECONDS.get());
             if (!r.passed()) return r;
 
-            // Re-save like load_globalSettings does: registered groups only.
-            new SettingsStore().saveToFile(settings.getEditableGroups(), file.toFile());
             JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
             r = assertTrue("rewritten file has Integrations", root.has("Integrations"));
             if (!r.passed()) return r;
@@ -362,17 +399,20 @@ public class ModSettingsTests extends TestSuite {
             if (!r.passed()) return r;
             r = assertEquals("rewritten Integrations.TOP_COUNT", 7, root.getAsJsonObject("Integrations").get("TOP_COUNT").getAsInt());
             if (!r.passed()) return r;
-            r = assertFalse("second migration is a no-op", settings.migrateIntegrations(file));
+            String once = Files.readString(file);
+            r = assertFalse("second migration is a no-op", BankSystemModSettings.migrateIntegrations(file));
             if (!r.passed()) return r;
-            return pass("Old Placeholder/Utilities keys migrated into Integrations; re-save drops them");
+            r = assertEquals("second migration leaves the file untouched", once, Files.readString(file));
+            if (!r.passed()) return r;
+            return pass("Old Placeholder/Utilities keys migrated into Integrations; old keys removed");
         });
     }
 
     /** A file that already has Integrations is left alone, even if stale old keys are still present. */
     private TestResult test_migrateIntegrationsAlreadyMigrated() {
         String json = "{\"Integrations\":{\"TOP_COUNT\":3},\"Placeholder\":{\"TOP_COUNT\":9}}";
-        return withSettingsFile(json, (settings, file) -> {
-            TestResult r = assertFalse("migration skipped", settings.migrateIntegrations(file));
+        return withSettingsFile(json, (settings, file, migrated) -> {
+            TestResult r = assertFalse("migration skipped", migrated);
             if (!r.passed()) return r;
             r = assertEquals("Integrations value wins", 3, (int) settings.INTEGRATIONS.TOP_COUNT.get());
             if (!r.passed()) return r;
@@ -385,8 +425,8 @@ public class ModSettingsTests extends TestSuite {
     /** No old keys: nothing to migrate, defaults stay, no save requested. */
     private TestResult test_migrateIntegrationsNoOldKeys() {
         String json = "{\"Utilities\":{\"SAVE_INTERVAL_SECONDS\":9}}";
-        return withSettingsFile(json, (settings, file) -> {
-            TestResult r = assertFalse("migration reports nothing to do", settings.migrateIntegrations(file));
+        return withSettingsFile(json, (settings, file, migrated) -> {
+            TestResult r = assertFalse("migration reports nothing to do", migrated);
             if (!r.passed()) return r;
             BankSystemModSettings.Integrations in = settings.INTEGRATIONS;
             r = assertEquals("TOP_COUNT default", in.TOP_COUNT.getDefaultValue(), in.TOP_COUNT.get());
@@ -407,7 +447,7 @@ public class ModSettingsTests extends TestSuite {
     private TestResult test_loadClampsHandEditedValues() {
         String json = "{\"Utilities\":{\"SAVE_INTERVAL_SECONDS\":-5},"
                 + "\"Integrations\":{\"TOP_COUNT\":500,\"PLAYER_REFRESH_MS\":2500}}";
-        return withSettingsFile(json, (settings, file) -> {
+        return withSettingsFile(json, (settings, file, migrated) -> {
             List<String> changes = ModSettingsRequest.sanitizeAndListChanges(settings);
             TestResult r = assertEquals("TOP_COUNT clamped to max",
                     ModSettingsRequest.MAX_PLACEHOLDER_TOP_COUNT, (int) settings.INTEGRATIONS.TOP_COUNT.get());

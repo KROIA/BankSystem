@@ -1,6 +1,6 @@
 # BankSystem Events & Signals Reference
 
-This guide documents every event and signal BankSystem exposes to dependent mods (e.g. StockMarket) through its public API. Use it to react to bank-system state changes — user/account changes, ItemID merges, multi-server connection lifecycle, slave-trust changes, payouts, account freezes, ledger rows and suspicion flags — without polling.
+This guide documents every event and signal BankSystem exposes to dependent mods (e.g. StockMarket) through its public API. Use it to react to bank-system state changes — user/account changes, ItemID merges and removals, multi-server connection lifecycle, slave-trust changes, payouts, account freezes, ledger rows and suspicion flags — without polling.
 
 All events and signals are **server-side** and are reached through a single accessor.
 
@@ -61,6 +61,7 @@ Each entry below states its side and thread. When in doubt, marshal to the serve
 | `getBankAccountCreatedEvent()` | `DataEvent<ISyncServerBankAccount>` | new account | both | server | a bank account is created |
 | `getBankAccountDeletedEvent()` | `DataEvent<ISyncServerBankAccount>` | deleted account | both | server | a bank account is deleted |
 | `getItemIDsMergedEvent()` | `DataEvent<Map<ItemID,ItemID>>` | alias → canonical map (unmodifiable) | **master** | server | an ItemID volatile-component merge was consolidated |
+| `getItemIDsRemovedEvent()` | `DataEvent<Set<ItemID>>` | removed ItemIDs (unmodifiable) | **master** | server | an admin removed the items of missing mods; once per start, right after setup complete (since 2.2.0) |
 | `getBankDataSavedToFileSignal()` | `Signal` | — | both | server | bank data is saved to disk |
 | `getBankDataLoadedFromFileSignal()` | `Signal` | — | both | server | bank data is loaded from disk |
 | `getSettingsSavedToFileSignal()` | `Signal` | — | both | server | settings are saved to disk |
@@ -150,13 +151,25 @@ Contract:
 
 ---
 
-## ItemID merges
+## ItemID merges and removals
 
 ### `getItemIDsMergedEvent()` — master side
 
 Fires on the **master** after a volatile-component ItemID merge (see the Async Forwarding / ItemID docs) has been fully consolidated into BankSystem's own state (balances, locked balances, allowed items, account icons). Payload is an **unmodifiable** `Map<ItemID, ItemID>` of merged alias → canonical ItemID.
 
 Dependent mods must consolidate their own ItemID-keyed state (markets, orders, price histories, ...) under the canonical IDs when this fires. Dispatched on the **server thread**, after BankSystem's own consolidation completed.
+
+### `getItemIDsRemovedEvent()` — master side (since 2.2.0)
+
+When BankSystem finds items of mods that are no longer installed, it refuses to load the world until an admin decides. If the admin confirms removing them, BankSystem drops their balances from every bank account and deletes their ItemIDs (the numbers are never reused). This event then fires on the **master**, once per start, on the **server thread**, right after `getBanksystemSetupCompleteSignal()`, so dependent mods have already registered and loaded their data. It does not fire when nothing was removed.
+
+Payload: an **unmodifiable** `Set<ItemID>` of the removed ItemIDs. Delete your own state keyed by them (markets, orders, price histories, ...).
+
+```java
+events.getItemIDsRemovedEvent().addListener(removed -> {
+    for (ItemID id : removed) myMarkets.remove(id);
+});
+```
 
 ---
 
@@ -187,7 +200,7 @@ events.getPayoutExecutedEvent().addListener(info -> {
 | `TARGET_MISSING` | The target player or account no longer exists |
 | `TARGET_NO_DEPOSIT_RIGHT` | The target player has no DEPOSIT right on the schedule's explicit target account |
 | `CURRENCY_ITEM_MISSING` | The company account has no bank for the schedule's item |
-| `PAUSED` | The schedule is paused |
+| `PAUSED` | The schedule is paused, or (since 2.2.0) it is a `DIVIDEND`-mode schedule that was skipped because the company's share excess alert is open |
 | `UNKNOWN` | Any other failure |
 | `ACCOUNT_FROZEN` | The company account is frozen (since 2.2.0) |
 

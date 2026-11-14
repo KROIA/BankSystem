@@ -436,9 +436,9 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                     return;
                                 }
                                 TransferJournal.Ref journal = journalRef();
-                                net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
                                         uploadNote("coin " + itemID.getName() + " x" + stack.getCount()), journal,
-                                        () -> baseBank.depositAsync(finalDeposit)).thenAccept(status -> {
+                                        () -> baseBank.depositAsync(finalDeposit))).thenAccept(status -> {
                                     if (status != BankStatus.SUCCESS) {
                                         restore(finalI, stack, journal, status);
                                     } else {
@@ -491,8 +491,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             {
                                 long finalAmount = amount * ((MoneyItem)stack.getItem()).worth();
                                 TransferJournal.Ref journal = journalRef();
-                                CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
-                                        uploadNote("banknote " + itemID.getName() + " x" + amount), journal, () -> bank.depositAsync(finalAmount));
+                                CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                        uploadNote("banknote " + itemID.getName() + " x" + amount), journal, () -> bank.depositAsync(finalAmount)));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
                                         restore(finalI, stack, journal, depositStatus); // Restore item on failure
@@ -504,8 +504,8 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             else
                             {
                                 TransferJournal.Ref journal = journalRef();
-                                CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
-                                        uploadNote(null), journal, () -> bank.depositRealAsync((double)amount));
+                                CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                        uploadNote(null), journal, () -> bank.depositRealAsync((double)amount)));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
                                         restore(finalI, stack, journal, depositStatus); // Restore item on failure
@@ -529,8 +529,11 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
      * a no-op on a slave, where the tagged bank call carries the row to the master.
      */
     private void logUpload(ItemID bankItem, long amount, @Nullable String note) {
-        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, bankItem, amount,
-                net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerOwner), null, uploadNote(note));
+        net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> { // BS-258
+            net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, bankItem, amount,
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerOwner), null, uploadNote(note));
+            return null;
+        });
     }
 
     /** Task #124: journal id + context ("upload_block <dim> x y z") for one deposit. */
