@@ -762,12 +762,16 @@ public class PortCheckTests extends TestSuite {
         if (root == null) return fail("/banksystem is not registered");
         List<String> names = new ArrayList<>(List.of("trust", "untrust", "op", "deop", "backup"));
         if (BankSystemMod.ENABLE_DEV_FEATURES) names.add("exportrecipes");
-        List<CommandSourceStack> nonOps = new ArrayList<>(List.of(server.createCommandSourceStack().withPermission(0)));
-        List<CommandSourceStack> ops = new ArrayList<>(List.of(server.createCommandSourceStack().withPermission(2)));
+        List<CommandSourceStack> nonOps = new ArrayList<>(List.of(server.createCommandSourceStack().withPermission(0))); // mc<=1.21.10
+        //List<CommandSourceStack> nonOps = new ArrayList<>(List.of(server.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0))))); // mc>=1.21.11
+        List<CommandSourceStack> ops = new ArrayList<>(List.of(server.createCommandSourceStack().withPermission(2))); // mc<=1.21.10
+        //List<CommandSourceStack> ops = new ArrayList<>(List.of(server.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(2))))); // mc>=1.21.11
         ServerPlayer player = player();
         if (player != null && !dev.architectury.platform.Platform.isModLoaded("luckperms")) {
-            nonOps.add(player.createCommandSourceStack().withPermission(0));
-            ops.add(player.createCommandSourceStack().withPermission(2));
+            nonOps.add(player.createCommandSourceStack().withPermission(0)); // mc<=1.21.10
+            //nonOps.add(player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(0)))); // mc>=1.21.11
+            ops.add(player.createCommandSourceStack().withPermission(2)); // mc<=1.21.10
+            //ops.add(player.createCommandSourceStack().withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.forLevel(net.minecraft.server.permissions.PermissionLevel.byId(2)))); // mc>=1.21.11
         }
         for (String name : names) {
             CommandNode<CommandSourceStack> node = root.getChild(name);
