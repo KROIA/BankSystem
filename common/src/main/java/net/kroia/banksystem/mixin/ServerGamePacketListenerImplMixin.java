@@ -46,7 +46,8 @@ public abstract class ServerGamePacketListenerImplMixin {
     }
 
     @Inject(method = "handleSetCreativeModeSlot", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/server/level/ServerPlayer;drop(Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/entity/item/ItemEntity;"))
+            target = "Lnet/minecraft/server/level/ServerPlayer;drop(Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/entity/item/ItemEntity;")) // mc<=26.2
+            //target = "Lnet/minecraft/server/level/ServerPlayer;drop(Lnet/minecraft/world/item/ItemStack;ZLnet/minecraft/util/Prediction;)Lnet/minecraft/world/entity/item/ItemEntity;")) // mc>=26.3
     private void banksystem$logCreativeDrop(ServerboundSetCreativeModeSlotPacket packet, CallbackInfo ci) {
         ItemStack stack = packet.itemStack();
         CreativeNoteFlow.add(player.getUUID(), stack, stack.getCount());
