@@ -72,7 +72,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, "No UUID found for Player: "+userName);
             return false;
         }
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().setBanksystemAdminMode(playerUUID, isAdmin))
+        if(net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), // BS-257: actor of the audit line
+                () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().setBanksystemAdminMode(playerUUID, isAdmin)))
         {
             sendMessage(executor, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
             if(!executor.equals(playerUUID))
@@ -102,7 +103,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
                 sendMessage(executor, "The slave '"+slaveID+"' is already trusted");
                 return true;
             }
-            manager.trustSlaveServer(slaveID);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), () -> { manager.trustSlaveServer(slaveID); return null; }); // BS-257
             sendMessage(executor, "The slave '"+slaveID+"' is now trusted");
         }
         else
@@ -112,7 +113,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
                 sendMessage(executor, "The slave '"+slaveID+"' was not trusted");
                 return true;
             }
-            manager.untrustSlaveServer(slaveID);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), () -> { manager.untrustSlaveServer(slaveID); return null; }); // BS-257
             sendMessage(executor, "The slave '"+slaveID+"' is no longer trusted");
         }
         return true;
@@ -141,7 +142,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
 
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().allowItemID(itemID)) {
+        if(net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), // BS-257: actor of the audit line
+                () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().allowItemID(itemID))) {
             sendMessage(executor, BankSystemTextMessages.getItemNowAllowedMessage(itemID.getName(), ServerBank.getFormattedAmountStatic(1)));
             return true;
         }
@@ -369,7 +371,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
 
-        BankStatus status = bank.depositReal(amount);
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.depositReal(amount)); // BS-254: ADMIN_ADD row below
         if(status == BankStatus.SUCCESS)
             net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_ADD, bank.convertToRawAmount(amount),
                     net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money add " + userName);
@@ -418,7 +420,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         long oldBalance = bank.getBalance();
-        bank.setRealBalance(amount);
+        net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.setRealBalance(amount)); // BS-254: ADMIN_SET row below
         net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_SET, Math.abs(bank.getBalance() - oldBalance),
                 net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money set " + userName + ": " + oldBalance + "->" + bank.getBalance());
         User owner = bankManager.getUserByName(userName);
@@ -466,7 +468,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
         if(bank.getRealBalance() >= amount) {
-            if(bank.withdrawReal(amount) == BankStatus.SUCCESS)
+            if(net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.withdrawReal(amount)) == BankStatus.SUCCESS) // BS-254: row below
                 net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_REMOVE, bank.convertToRawAmount(amount),
                         net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money remove " + userName);
         }
@@ -766,10 +768,15 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     public static final String NO_ADMIN_MESSAGE = "This command can only be used by BankSystem admins!";
     public static void sendNoAdminMessage(UUID executor)
     {
-        sendMessage(executor, NO_ADMIN_MESSAGE);
+        sendMessage(executor, "§c" + NO_ADMIN_MESSAGE); // SM-312: refusals are red (the packet carries plain text)
     }
+    /** Test hook (dev suites only, null otherwise): sees every executor message; the packet itself cannot be read back. */
+    public static @Nullable java.util.function.BiConsumer<UUID, String> messageListener_forTesting = null;
     public static void sendMessage(UUID player, String message)
     {
+        java.util.function.BiConsumer<UUID, String> listener = messageListener_forTesting;
+        if (listener != null)
+            listener.accept(player, message);
         ClientConsoleMessagePacket.sendMessageFromMaster(player, message);
     }
 

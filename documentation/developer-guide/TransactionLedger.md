@@ -6,16 +6,16 @@ BankSystem writes one row per balance change to the `TransactionLog` table in `b
 
 ## Multi-server
 
-Every money or item change runs on the master, so the master writes the row. A slave's request to the master carries the ledger type code with the amount, plus the player when the master cannot tell who caused it. The master checks the code against an allow-list for that request kind:
+Every money or item change runs on the master, so the master writes the row, with the slave's id in `origin_server`. A slave's request to the master carries the ledger type code with the amount, plus the player when the master cannot tell who caused it. The master checks the code against an allow-list for that request kind:
 
 | Request | Allowed codes |
 |---|---|
 | `DepositItemsInBankRequest`, `AsyncBank` deposit calls | DEPOSIT, CONVERTER_DEPOSIT, UPLOAD_DEPOSIT, CRAFT_OUTPUT, WITHDRAW_REFUND |
 | `WithdrawItemsFromBankRequest`, `AsyncBank` withdraw calls (incl. locked) | WITHDRAW, CONVERTER_WITHDRAW, DOWNLOAD_WITHDRAW, CRAFT_CONSUME |
 | `AsyncBank` transfer calls | TRANSFER |
-| `AsyncBank` set-balance, lock and unlock calls | none (no-log only) |
+| `AsyncBank` set-balance, lock and unlock calls | none (the code is ignored; a change of the total balance writes RAW_CHANGE) |
 
-A code that is unknown or not allowed is written as UNKNOWN_LEGACY (0) with the note `rejected code <n> from slave <id>`, and a warning is logged. The operation itself still runs. Raw `AsyncBank` calls without a code (for example StockMarket settlement, which logs through `logTrade`) send the wire-only code `-1` (`TransactionLedger.NO_LOG`) and write no row. Transfers always write their TRANSFER pair.
+A code that is unknown or not allowed is written as UNKNOWN_LEGACY (0) with the note `rejected code <n> from slave <id>`, and a warning is logged. The operation itself still runs. Raw `AsyncBank` calls without a code (for example StockMarket settlement, which logs through `logTrade`) send the wire-only code `-1` (`TransactionLedger.NO_LOG`); the master writes a RAW_CHANGE row for them (see [Changes nobody logs](#changes-nobody-logs)). Transfers always write their TRANSFER pair.
 
 Deposit and withdraw calls from a slave also carry a **transfer id**. The master writes it into the row's `ref`, so the slave's own records (its diagnostics `TransferJournal`) can be matched to the master's rows. The master applies each transfer id **at most once**: a repeated request gets the first answer and writes no second row. When the answer to a slave is lost, the slave asks the master for the transfer's status before it refunds anything; if the outcome stays unknown, nothing is refunded (see [When an async call fails](API.md#when-an-async-call-fails)).
 
@@ -40,13 +40,36 @@ Rows you write are treated like BankSystem's own: they fire [`getTransactionLogg
 
 To **react** to rows instead of writing them, subscribe to `api.getEvents().getTransactionLoggedEvent()` on the master (fires on the writer's thread).
 
-Actors (`LedgerActor`): `player(uuid, name)`, `admin(uuid, name)`, `console()`, `system()`, `stockmarket()`.
+Actors (`LedgerActor`): `player(uuid, name)`, `admin(uuid, name)`, `console()`, `system()`, `stockmarket()`, `unknown()`.
 
-Package: `net.kroia.banksystem.api.ledger` (`ITransactionLedger`, `LedgerType`, `LedgerActor`, `TradeLogEntry`, `TradeSide`, `TradeRowKind`).
+### Changes nobody logs
+
+Every change of a bank's total balance (free + locked) writes a row where it happens, so a caller cannot skip it:
+
+- A raw bank call (`deposit`, `withdraw`, `setBalance`, `withdrawLocked*` and their async/`Real` variants) that no typed row covers writes a RAW_CHANGE row with the signed change, source `UNKNOWN` (or the player of a slave request) and `balance_after`.
+- Creating a bank slot with a start balance, removing a slot and removing all slots of an account write RAW_CHANGE rows.
+- Binding a slot to an external currency account, or unbinding it, writes EXTERNAL_BIND / EXTERNAL_UNBIND with the change it caused.
+- Lock and unlock only move value between free and locked and write nothing. `transferFromLocked*` writes its TRANSFER pair like `transfer`.
+
+So for every account and item: closing total − opening total = signed sum of the rows in between. REFUND_LOST rows move nothing and are left out of this sum.
+
+A mod that writes its own rows for its bank calls (for example trade settlement logged with `logTrade`) makes those calls inside `callerLogs`, so they are not logged twice:
+
+```java
+ledger.callerLogs(() -> {
+    itemBank.deposit(qty);
+    return moneyBank.withdrawLockedPrefered(cost);
+});
+ledger.logTrade(...);
+```
+
+`callerLogs` covers the current thread only and does not stop the TRANSFER pair of a transfer.
+
+Package: `net.kroia.banksystem.api.ledger` (`ITransactionLedger`, `LedgerType`, `LedgerActor`, `TradeLogEntry`, `TradeSide`, `TradeRowKind`). `TradeSide.type()` gives the row type (`BUY` → TRADE_BUY, `SELL` → TRADE_SELL). `TradeRowKind`: `PERIODIC` (interval flush of an open order), `SHUTDOWN` (flush on server stop), `CLOSE` (the order filled or was cancelled).
 
 ## Type codes
 
-Codes are stored in `type_code` and are **append-only**: a code is never renumbered or reused. `LedgerType.fromCode` maps an unknown code to `UNKNOWN_LEGACY`.
+Codes are stored in `type_code` and are **append-only**: a code is never renumbered or reused. `LedgerType.code()` returns a type's code; `LedgerType.fromCode(int)` maps a code back and returns `UNKNOWN_LEGACY` for an unknown one (never `null`).
 
 | Code | Type | Written when |
 |---:|---|---|
@@ -79,8 +102,12 @@ Codes are stored in `type_code` and are **append-only**: a code is never renumbe
 | 26 | ACCOUNT_FREEZE | An account was frozen or unfrozen; amount 0, item 0, note `frozen` / `unfrozen`, actor = admin, console or the API caller |
 | 27 | ADMIN_DISALLOW_ITEM | An admin disallowed an item; one row per holder with the removed (non-refunded) balance |
 | 28 | ACCOUNT_DELETE_LOSS | Balance of a deleted user's account that could not be handed out and was destroyed; the note ends with `not delivered: <reason>`, where the reason is `player offline`, `outcome unknown, transfer <id>` (a slave's DROP stayed unknown; `ref` = that transfer id) or `outcome unknown: <cause>` |
+| 29 | RAW_CHANGE | Change of a slot's total balance that no other row covers: raw bank calls of other mods or slave requests, a slot created with a start balance, a slot removed with a balance. Signed; the note names the call (`deposit`, `setBalance`, `bank created`, `bank removed`, ...) |
+| 30 | EXTERNAL_BIND | A slot was bound to an external currency account; signed change of the slot's total (the external balance joining), note `bound to <provider>:<account>` |
+| 31 | EXTERNAL_UNBIND | A slot was unbound; signed change of the slot's total, note says whether the funds were kept on BankSystem or left on the external account |
+| 32 | REFUND_LOST | Marker, no balance change: banknotes withdrawn for a player (WITHDRAW row, same `ref`) were not handed out, and their refund could not be booked back (the account or its money bank is gone, or the deposit was refused), so the value is lost. Account = the account the refund was meant for (it may no longer exist), item = money, amount = the undelivered raw money, `ref` = the slave's DROP transfer id (same as the WITHDRAW row), note = the reason, actor = the player, `balance_after` null when the account or money bank is gone |
 
-Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
+Amounts are unsigned, except for TRANSFER, RAW_CHANGE, EXTERNAL_BIND and EXTERNAL_UNBIND, where the sign gives the direction.
 
 ## Columns
 
@@ -90,7 +117,7 @@ Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 | `account_number` | Account the row belongs to |
 | `actor_uuid` | Player or admin who caused the change; null for console/system |
 | `actor_name` | Actor name at the time of the change |
-| `source_kind` | `PLAYER`, `ADMIN`, `CONSOLE`, `SYSTEM` or `STOCKMARKET`; `UNKNOWN` on old rows |
+| `source_kind` | `PLAYER`, `ADMIN`, `CONSOLE`, `SYSTEM`, `STOCKMARKET` or `UNKNOWN` (old rows, and raw changes whose caller is not known) |
 | `type_code` | Type code (table above) |
 | `kind` | Type name (kept for older readers) |
 | `item_id` | Item of the bank that changed |
@@ -106,6 +133,8 @@ Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 | `currency_item` | Trade: currency item id |
 | `virtual_qty` | Trade: quantity filled against virtual (bot) liquidity, with no counterparty account |
 | `balance_after` | Bank total (free + locked) right after the change; null for trade rows |
+| `origin_server` | Server whose request caused the row: the slave id the master authenticated the slave's connection with (the `slave_id` in the slave's `server_identity.json`). Null for rows caused on the master, and for rows written before 2.2.0 |
+| `dimension`, `x`, `y`, `z` | Block where the action happened: bank terminal (deposit, withdraw, crafting), upload and download block, the ATM a converter commit or banknote withdrawal was made at, share stamper. A slave sends its block with the request. Null for rows not caused at a block (commands, screens, transfers, ATM opened by the ATM software), for banknote withdrawals made on a slave, and for rows written before 2.2.0 |
 
 ## Reads (master)
 
@@ -116,6 +145,18 @@ Amounts are unsigned, except for TRANSFER, where the sign gives the direction.
 ## Admin audit and suspicion flags
 
 `TransactionLedger.write` passes every master row to `AdminAudit.onLedgerRow`. Admin rows (codes 7–11, 26, 27, and 12 / 28 when the source is ADMIN) are appended to `<world>/data/BankSystem/audit/<yyyy-mm-dd>.log` and sent to BankSystem admins with alerts on (see [Administration](../user-guide/Administration.md#audit-and-admin-alerts)).
+
+Admin changes that write no ledger row get one line each in the same file (master only, no chat alert), written where the state changes and only when it changed. Every line starts with `yyyy-MM-dd HH:mm:ss` (server time zone); names are in double quotes, with inner double quotes replaced by single ones; the actor is a player name with ` (<uuid>)`, `Console`, `LuckPerms`, `LuckPerms via slave <id>`, or `SYSTEM` when the caller set no actor:
+
+| Line | Written when |
+|---|---|
+| `ADMIN RIGHTS_OP player <uuid> "<name>" state admin by <actor>` | the BankSystem admin flag is turned on (command, API request, LuckPerms sync) |
+| `ADMIN RIGHTS_DEOP player <uuid> "<name>" state not_admin by <actor>` | the flag is turned off |
+| `ADMIN SLAVE_TRUST slave "<id>" state trusted by <actor>` | a slave becomes trusted |
+| `ADMIN SLAVE_UNTRUST slave "<id>" state untrusted by <actor>` | a slave is no longer trusted |
+| `ADMIN ITEM_ALLOW item <itemId> "<item name>" state allowed by <actor>` | an admin (or the console) allows an item that was not allowed; automatic allows are not written |
+| `ADMIN ITEM_DISALLOW item <itemId> "<item name>" state disallowed by <actor>` | an item is disallowed; the cleared balances stay as one `ADMIN_DISALLOW_ITEM` line per account |
+| `ADMIN FLAG_ACK company <companyId> "<name>" account <account> flag SHARE_EXCESS excess <shares> state acknowledged by <actor>` | an open share-excess alert is acknowledged |
 
 BankSystem's own checks raise flags internally (`banking.ledger.AdminAudit.raise`, not part of the API). Each flag writes one row to the `SuspicionFlag` table (`id, ts, account_number, flag_type, severity, amount, ref, details, acknowledged`), the audit-file line `FLAG <type> ...` and the admin alert, then fires [`getSuspicionFlaggedEvent()`](EventsAndSignals.md#getsuspicionflaggedevent). Master only; it never throws. Admins read flags with `SuspicionFlagManager.getRecent(account, sinceMs, limit)` and mark them handled with `acknowledge(id)`.
 
@@ -137,4 +178,4 @@ The ledger hooks (codes 1, 2, 4) run from `TransactionLedger.write` and `Transac
 
 ## Upgrading old databases
 
-On start-up, the missing columns and indexes are added. Old rows get a type code from their `kind` text. `TRANSFER_OUT` rows become TRANSFER with a negated amount, and `TRANSFER_IN` rows become TRANSFER with a positive amount. The update only touches rows that are still at code 0, so running it again never negates a row twice. Old rows that cannot be mapped stay at code 0 and are still readable.
+On start-up, the missing columns and indexes are added. Old rows get a type code from their `kind` text (`LedgerType.fromLegacyKind(String)`, which returns `UNKNOWN_LEGACY` for anything it cannot map). `TRANSFER_OUT` rows become TRANSFER with a negated amount, and `TRANSFER_IN` rows become TRANSFER with a positive amount. The update only touches rows that are still at code 0, so running it again never negates a row twice. Old rows that cannot be mapped stay at code 0 and are still readable.

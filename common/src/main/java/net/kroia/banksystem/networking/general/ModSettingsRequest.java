@@ -157,6 +157,9 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         );
     }
 
+    /** BS-221: vanilla operator level needed for Mod Settings (in addition to the BankSystem admin flag). */
+    public static final int REQUIRED_OP_LEVEL = 2;
+
     @Override
     public String getRequestTypeID() {
         return ModSettingsRequest.class.getSimpleName();
@@ -176,12 +179,16 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
         if (isBlockedForUntrustedSlave(slaveID)) {
             return CompletableFuture.completedFuture(new OutputData(false, "Untrusted slave server", ""));
         }
-        // --- Permission check: BankSystem admin (User.isBanksystemAdmin()), the same
-        // gating used by the other admin requests. Enforced here regardless of the
-        // client-side button gating.
-        if (playerSender == null || !playerIsAdmin(playerSender)) {
+        // --- Permission check (BS-221, same rule as StockMarket): BankSystem admin
+        // (User.isBanksystemAdmin()) AND vanilla operator level REQUIRED_OP_LEVEL. The op level can
+        // only be checked for a player online on THIS server, so slave-forwarded requests are
+        // refused. Enforced here regardless of the client-side button gating.
+        net.minecraft.server.level.ServerPlayer onlineSender = playerSender == null ? null
+                : net.kroia.modutilities.ServerPlayerUtilities.getOnlinePlayer(playerSender);
+        if (playerSender == null || !playerIsAdmin(playerSender) || onlineSender == null
+                || !net.kroia.modutilities.PermissionCompat.hasPermission(onlineSender, REQUIRED_OP_LEVEL)) {
             warn("Rejected mod settings " + input.action() + " from " + getPlayerName(playerSender) + ": no permission");
-            return CompletableFuture.completedFuture(new OutputData(false, "No permission (BankSystem admin required)", ""));
+            return CompletableFuture.completedFuture(new OutputData(false, "No permission (operator level 2 and BankSystem admin required)", ""));
         }
 
         // --- Master check: only the master server's settings.json is editable
