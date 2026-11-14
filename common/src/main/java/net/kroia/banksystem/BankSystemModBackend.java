@@ -263,11 +263,14 @@ public class BankSystemModBackend implements BankSystemAPI {
         BankSystemNetworking.setBackend(INSTANCES);
         net.kroia.banksystem.banking.ledger.TransactionLedger.setBackend(INSTANCES); // Task #109
         DiagnosticsDatabase.setBackend(INSTANCES); // Task #123
+        net.kroia.banksystem.data.AuditExporter.setBackend(INSTANCES); // BS-255
+        net.kroia.banksystem.api.audit.AuditExport.register(BankSystemMod.MOD_ID, net.kroia.banksystem.data.AuditExporter::contributeBankSystem);
         net.kroia.banksystem.data.TransferJournal.setBackend(INSTANCES); // Task #124
         net.kroia.banksystem.banking.ledger.AccountFreeze.setBackend(INSTANCES); // Task #117
         net.kroia.banksystem.banking.ledger.AdminAudit.setBackend(INSTANCES); // Task #110
         net.kroia.banksystem.banking.ledger.SuspicionChecks.setBackend(INSTANCES); // Tasks #111/#114/#115
         net.kroia.banksystem.banking.ledger.AuditDigest.setBackend(INSTANCES); // Task #113
+        net.kroia.banksystem.banking.company.ShareIntegrity.setBackend(INSTANCES); // BS-235
         BankSystemTextMessages.setBackend(INSTANCES);
 
         net.kroia.banksystem.integration.numismatics.NumismaticsProvider.setBackend(INSTANCES);
@@ -304,6 +307,8 @@ public class BankSystemModBackend implements BankSystemAPI {
                 (ResourceManagerReloadListener) resourceManager -> VolatileItemComponents.onServerResourcesReloaded(),
                 BankSystemMod.id("volatile_components_reload"));
         TickEvent.SERVER_POST.register(server -> VolatileItemComponents.serverTick());
+        TickEvent.SERVER_POST.register(server -> net.kroia.banksystem.data.CreativeNoteFlow.tick()); // BS-227: every role
+        LifecycleEvent.SERVER_BEFORE_START.register(BankSystemModBackend::onServerBeforeStart); // BS-274: every role
         AdminFlagSync.init(); // Task #107: LuckPerms listener, no-op without LuckPerms
 
         if (BankSystemMod.ENABLE_DEV_FEATURES) {
@@ -368,8 +373,49 @@ public class BankSystemModBackend implements BankSystemAPI {
         }
     };
 
+    /** BS-274: refusal found by the data migration at SERVER_BEFORE_START; consumed by {@link #onServerStart}. */
+    private static volatile @Nullable BankSystemStartupAbortException pendingMigrationRefusal = null;
+
+    /**
+     * BS-274: upgrades older BankSystem world data ({@link BankSystemDataMigration}) once per start, before
+     * anything opens a BankSystem file; master, slave and singleplayer alike. The server can't be stopped
+     * cleanly this early, so a failure is kept and {@link #onServerStart} refuses the start (BS-195 path)
+     * before it touches any file.
+     */
+    public static void onServerBeforeStart(MinecraftServer server) {
+        pendingMigrationRefusal = null;
+        Path worldRoot = server.getWorldPath(LevelResource.ROOT);
+        java.util.Set<Path> zipsBefore = BankSystemDataMigration.backupZips(worldRoot);
+        try {
+            BankSystemDataMigration.migrate(worldRoot, INSTANCES.LOGGER);
+        } catch (net.kroia.modutilities.persistence.DataMigration.DataVersionTooNewException e) {
+            pendingMigrationRefusal = new BankSystemStartupAbortException("The saved BankSystem data version "
+                    + e.savedVersion + " is newer than this BankSystem (v" + BankSystemMod.VERSION + ") supports ("
+                    + e.supportedVersion + "). This world was saved by a newer BankSystem: update BankSystem. "
+                    + "Nothing was loaded or changed.");
+        } catch (java.io.IOException | RuntimeException e) {
+            INSTANCES.LOGGER.error("BankSystem data migration failed", e);
+            // The zip this run made (it exists only if a step was about to run); null = nothing was changed.
+            Path zip = BankSystemDataMigration.backupZips(worldRoot).stream()
+                    .filter(p -> !zipsBefore.contains(p)).findFirst().orElse(null);
+            pendingMigrationRefusal = new BankSystemDataMigration.Failed("Upgrading the BankSystem data of this "
+                    + "world failed, so BankSystem does not start on half-upgraded data. " + e.getMessage()
+                    + (e.getCause() != null ? " Cause: " + e.getCause() : "")
+                    + (zip != null ? " Backup of the BankSystem data from before the upgrade: " + zip.toAbsolutePath()
+                            + ". Fix the cause and restart (the upgrade continues), or restore the backup."
+                            : " Nothing was changed. Fix the cause and restart."), zip);
+        }
+    }
+
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
+        BankSystemStartupAbortException migrationRefusal = pendingMigrationRefusal;
+        if (migrationRefusal != null) { // BS-274: before anything below creates or opens a BankSystem file
+            pendingMigrationRefusal = null;
+            singleplayerRefusal = null;
+            refuseStartup(server, migrationRefusal);
+            return;
+        }
 
         OldBankDataLoader.setBackend(INSTANCES);
 
@@ -561,11 +607,13 @@ public class BankSystemModBackend implements BankSystemAPI {
 
     /**
      * What the singleplayer client shows after BankSystem refused to load the world (BS-195).
-     * {@code lines}: missing namespaces with counts, or merge groups. {@code worldDir}: the
+     * {@code lines}: missing namespaces with counts, or merge groups. {@code pendingMerges}: for
+     * missing mods, the merges the next successful load would apply (BS-250). {@code worldDir}: the
      * world folder, for the screen's one-shot confirm button and for reopening the world.
      */
-    public record StartupRefusal(Kind kind, int count, List<String> lines, Path worldDir) {
-        public enum Kind { MISSING_MODS, MERGE, OTHER }
+    public record StartupRefusal(Kind kind, int count, List<String> lines, List<String> pendingMerges, Path worldDir) {
+        /** MIGRATION_FAILED: {@code lines} holds the backup zip path, empty when none was made (BS-274). */
+        public enum Kind { MISSING_MODS, MERGE, MIGRATION_FAILED, OTHER }
     }
 
     /** Set on the integrated server's thread, consumed by the client tick (same JVM). */
@@ -600,16 +648,22 @@ public class BankSystemModBackend implements BankSystemAPI {
         StartupRefusal.Kind kind = StartupRefusal.Kind.OTHER;
         int count = 0;
         List<String> lines = new ArrayList<>();
+        List<String> pendingMerges = List.of();
         if (e instanceof ItemIDMissingModsException missing) {
             kind = StartupRefusal.Kind.MISSING_MODS;
             count = missing.missingCount;
             missing.missingNamespaces.forEach((ns, n) -> lines.add(ns + " (" + n + ")"));
+            pendingMerges = missing.pendingMerges;
         } else if (e instanceof ItemIDMergeAbortedException merge) {
             kind = StartupRefusal.Kind.MERGE;
             count = merge.summary.size();
             lines.addAll(merge.summary);
+        } else if (e instanceof BankSystemDataMigration.Failed failed) { // BS-274
+            kind = StartupRefusal.Kind.MIGRATION_FAILED;
+            if (failed.backupZip != null)
+                lines.add(failed.backupZip.toAbsolutePath().normalize().toString());
         }
-        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines),
+        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines), pendingMerges,
                 server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize());
         //server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
         server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2
@@ -631,12 +685,14 @@ public class BankSystemModBackend implements BankSystemAPI {
 
             BankSystemDataHandler.resetBankDataLoaded();
             BankSystemDataHandler.resetGlobalDataLoaded();
+            net.kroia.banksystem.banking.company.CompanyManager.uninstall(); // after the save above
         } else {
             // Mirror the master-side unregister above: the slave-latch watchdog is registered
             // on every slave onServerStart, so it must be unregistered on every stop to avoid
             // stacking a fresh handler on each session (see onSlaveLatchTimeoutTick Javadoc).
             TickEvent.SERVER_POST.unregister(ON_SLAVE_LATCH_TICK);
         }
+        net.kroia.banksystem.data.CreativeNoteFlow.flushAll(); // BS-227: before the diagnostics DB closes
         // Task #123: after the shutdown save above, so its bank_last_save_ms write is drained too.
         if (INSTANCES.DIAGNOSTICS_DB != null) {
             INSTANCES.DIAGNOSTICS_DB.close();
@@ -684,6 +740,8 @@ public class BankSystemModBackend implements BankSystemAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
+        if (INSTANCES.SERVER_BANK_MANAGER == null)
+            return; // BS-274: start refused before the managers exist; the server is halting
         INSTANCES.SERVER_BANK_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         ItemIDManager.onPlayerJoined(player);
         // Sync the ClientSettings snapshot (isMasterServer flag) to the joining
@@ -708,6 +766,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         // never send the ConverterDropAll packet on GUI close. Cache is per-server;
         // this hook runs on whichever server the player was connected to.
         if (player != null) {
+            net.kroia.banksystem.data.CreativeNoteFlow.flush(player.getUUID()); // BS-227
             try {
                 net.kroia.banksystem.networking.entity.ConverterDropAllPacket.dropAllForPlayer(player);
             } catch (Throwable t) {
@@ -828,6 +887,11 @@ public class BankSystemModBackend implements BankSystemAPI {
             net.kroia.banksystem.banking.company.PayoutExecutor.tick(payoutTickCounter, INSTANCES);
         }
         BankSystemDiscord.flush(); // Task #119: coalesced dividend / disallow posts of this tick
+    }
+
+    /** BS-269 fixture: one snapshot now. Call on the server thread. */
+    public static void takeBalanceSnapshot_forTesting() {
+        takeBalanceSnapshot();
     }
 
     private static void takeBalanceSnapshot() {
