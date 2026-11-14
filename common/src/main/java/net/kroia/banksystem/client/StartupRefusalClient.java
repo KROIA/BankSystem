@@ -65,6 +65,11 @@ public final class StartupRefusalClient {
                 flag = "CONFIRM_ITEMID_MERGE";
                 button = "gui.banksystem.load_refused.confirm_merge";
             }
+            case MIGRATION_FAILED -> { // BS-274: the data upgrade failed; name the backup zip
+                return new AlertScreen(back, title, refusal.lines().isEmpty()
+                        ? Component.translatable("gui.banksystem.load_refused.migration_failed_no_backup")
+                        : Component.translatable("gui.banksystem.load_refused.migration_failed", refusal.lines().get(0)));
+            }
             default -> {
                 return new AlertScreen(back, title, Component.translatable("gui.banksystem.load_refused.other"));
             }

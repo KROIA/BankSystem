@@ -428,6 +428,8 @@
   "gui.banksystem.load_refused.merge": "这些不同的物品将会变成同一个物品：",
   "gui.banksystem.load_refused.merge_hint": "请撤销导致此问题的更改（模组或配置），或确认合并。确认后它们的余额会相加。",
   "gui.banksystem.load_refused.other": "原因请查看日志文件（logs/latest.log）。世界数据未被更改。",
+  "gui.banksystem.load_refused.migration_failed": "此世界的 BankSystem 数据升级到新版本失败，因此未加载该世界。部分数据可能已经升级。升级前的 BankSystem 数据备份已保存到：\n%s\n原因请查看日志文件（logs/latest.log）。修复问题后重新打开世界即可继续升级，或者恢复该备份。",
+  "gui.banksystem.load_refused.migration_failed_no_backup": "此世界的 BankSystem 数据在升级到新版本时失败，尚未更改任何数据，因此未加载该世界。原因请查看日志文件（logs/latest.log）。",
   "gui.banksystem.load_refused.remove_missing": "移除缺失物品并加载",
   "gui.banksystem.load_refused.confirm_merge": "确认合并并加载",
   "gui.banksystem.load_refused.back": "返回",

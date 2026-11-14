@@ -2289,7 +2289,7 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public boolean save(Map<String, ListTag> listTags) {
         CompoundTag metaData = new CompoundTag();
-        metaData.putInt("version", 1); // Versioning for future changes
+        metaData.putInt("version", SAVE_VERSION); // Versioning for future changes
         metaData.putInt("nextAccountNumber", nextAccountNumber);
         ListTag metaTagList = new ListTag();
         metaTagList.add(metaData);
@@ -2358,6 +2358,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
         return true;
     }
+
+    /** Bank_data meta "version"; a higher saved one refuses start-up (BS-274, BankSystemDataHandler.load_bank). */
+    public static final int SAVE_VERSION = 1;
 
     @Override
     public boolean load(Map<String, ListTag> listTags) {

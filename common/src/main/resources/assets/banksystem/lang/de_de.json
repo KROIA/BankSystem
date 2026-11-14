@@ -428,6 +428,8 @@
   "gui.banksystem.load_refused.merge": "Diese unterschiedlichen Items würden zum selben Item werden:",
   "gui.banksystem.load_refused.merge_hint": "Mache die Änderung rückgängig (Mod oder Konfiguration) oder bestätige das Zusammenführen. Dabei werden ihre Guthaben addiert.",
   "gui.banksystem.load_refused.other": "Der Grund steht in der Logdatei (logs/latest.log). Die Weltdaten wurden nicht verändert.",
+  "gui.banksystem.load_refused.migration_failed": "Die Aktualisierung der BankSystem-Daten dieser Welt auf die neue Version ist fehlgeschlagen, deshalb wurde die Welt nicht geladen. Ein Teil der Daten kann bereits aktualisiert sein. Eine Sicherung der BankSystem-Daten von vor der Aktualisierung wurde hier gespeichert:\n%s\nDer Grund steht in der Logdatei (logs/latest.log). Behebe die Ursache und öffne die Welt erneut, um die Aktualisierung fortzusetzen, oder stelle die Sicherung wieder her.",
+  "gui.banksystem.load_refused.migration_failed_no_backup": "Die Aktualisierung der BankSystem-Daten dieser Welt auf die neue Version ist fehlgeschlagen, bevor etwas verändert wurde, deshalb wurde die Welt nicht geladen. Der Grund steht in der Logdatei (logs/latest.log).",
   "gui.banksystem.load_refused.remove_missing": "Fehlende Items entfernen und laden",
   "gui.banksystem.load_refused.confirm_merge": "Zusammenführen bestätigen und laden",
   "gui.banksystem.load_refused.back": "Zurück",

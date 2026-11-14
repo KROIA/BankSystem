@@ -858,7 +858,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     @Override
     public boolean save(Map<String, ListTag> listTags) {
         CompoundTag meta = new CompoundTag();
-        meta.putInt("version", 1);
+        meta.putInt("version", SAVE_VERSION);
         meta.putInt("nextCompanyId", nextCompanyId);
         ListTag metaList = new ListTag();
         metaList.add(meta);
@@ -891,6 +891,9 @@ public final class CompanyManager implements ServerSaveableChunked {
         listTags.put("stamper_bindings", bindingsList);
         return true;
     }
+
+    /** Companies meta "version"; a higher saved one refuses start-up (BS-274, BankSystemDataHandler.load_companies). */
+    public static final int SAVE_VERSION = 1;
 
     @Override
     public boolean load(Map<String, ListTag> listTags) {

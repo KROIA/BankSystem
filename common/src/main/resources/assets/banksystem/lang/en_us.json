@@ -427,6 +427,8 @@
   "gui.banksystem.load_refused.merge": "These different items would become the same item:",
   "gui.banksystem.load_refused.merge_hint": "Undo the change that caused this (mod or config), or confirm the merge. Confirming adds their balances together.",
   "gui.banksystem.load_refused.other": "The reason is in the log file (logs/latest.log). The world data was not changed.",
+  "gui.banksystem.load_refused.migration_failed": "Upgrading this world's BankSystem data to the new version failed, so the world was not loaded. Part of the data may already be upgraded. A backup of the BankSystem data from before the upgrade was saved here:\n%s\nThe reason is in the log file (logs/latest.log). Fix the cause and open the world again to continue the upgrade, or restore the backup.",
+  "gui.banksystem.load_refused.migration_failed_no_backup": "Upgrading this world's BankSystem data to the new version failed before anything was changed, so the world was not loaded. The reason is in the log file (logs/latest.log).",
   "gui.banksystem.load_refused.remove_missing": "Remove missing items and load",
   "gui.banksystem.load_refused.confirm_merge": "Confirm merge and load",
   "gui.banksystem.load_refused.back": "Back",
