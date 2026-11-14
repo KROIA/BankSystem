@@ -4,7 +4,6 @@ import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
-import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.minecraft.core.BlockPos;
@@ -59,6 +58,16 @@ public final class CompanyManager implements ServerSaveableChunked {
                     if (mgr == null) return false;
                     return mgr.isFounderOf(accountNr, uuid);
                 });
+    }
+
+    /** Drops the singleton on server stop so a new world never inherits the previous world's companies. */
+    public static void uninstall() {
+        INSTANCE = null;
+    }
+
+    /** Test hook: puts a saved instance back (e.g. after {@link #uninstall()}). */
+    public static void restoreForTest(@Nullable CompanyManager saved) {
+        INSTANCE = saved;
     }
 
     /** {@code null} on slave servers or before install. */
@@ -292,49 +301,39 @@ public final class CompanyManager implements ServerSaveableChunked {
     }
 
     /** Result of {@link #transferFounder}. */
-    public enum TransferResult { OK, COMPANY_MISSING, NOT_A_FOUNDER, ALREADY_A_FOUNDER }
+    public enum TransferResult { OK, COMPANY_MISSING, NOT_A_FOUNDER, ALREADY_A_FOUNDER, NOT_A_WORKER }
 
     /**
      * Removes {@code from} from the founder set, adds {@code to}, and mirrors the change
-     * on the bound bank account's MANAGE bit. Bank-account update is best-effort — if the
-     * bank manager is unavailable (test harness), only the founder set is mutated.
+     * on the bound bank account's MANAGE bit. {@code to} must already be a worker (a user
+     * of the company's bank account, the Workers tab list), else {@link TransferResult#NOT_A_WORKER}.
+     * Bank-account checks and updates are best-effort — if the bank manager is unavailable
+     * (test harness), only the founder set is mutated.
      */
     public TransferResult transferFounder(int companyId, UUID from, UUID to) {
         Company company = byId.get(companyId);
         if (company == null) return TransferResult.COMPANY_MISSING;
         if (from == null || !company.isFounder(from)) return TransferResult.NOT_A_FOUNDER;
         if (to != null && company.isFounder(to)) return TransferResult.ALREADY_A_FOUNDER;
+        IServerBankManager bankManager = getBankManager();
+        IServerBankAccount account = bankManager == null ? null : bankManager.getBankAccount(company.getBankAccountNr());
+        if (to != null && account != null && !account.hasUser(to)) return TransferResult.NOT_A_WORKER;
 
         company.removeFounder(from);
         if (to != null) company.addFounder(to);
         markPersistDirty(); // Task #55
 
-        IServerBankManager bankManager = getBankManager();
-        if (bankManager != null) {
-            IServerBankAccount account = bankManager.getBankAccount(company.getBankAccountNr());
-            if (account != null) {
-                // Grant MANAGE to the new founder (if any) on the bank account.
-                if (to != null) {
-                    User toUser = bankManager.getUserByUUID(to);
-                    if (toUser != null) {
-                        int existing = account.hasUser(to) ? account.getPermission(to) : 0;
-                        int newMask = existing | BankPermission.MANAGE.getValue();
-                        if (account.hasUser(to)) {
-                            account.setPermission(to, newMask);
-                        } else {
-                            account.addUser(toUser, newMask);
-                        }
-                    }
-                }
-                // Strip MANAGE from the departing founder (leave other bits if any).
-                if (account.hasUser(from)) {
-                    int mask = account.getPermission(from);
-                    int stripped = mask & ~BankPermission.MANAGE.getValue();
-                    account.setPermission(from, stripped);
-                }
+        if (account != null) {
+            // Grant MANAGE to the new founder (if any) on the bank account.
+            if (to != null) account.setPermission(to, account.getPermission(to) | BankPermission.MANAGE.getValue());
+            // Strip MANAGE from the departing founder (leave other bits if any).
+            if (account.hasUser(from)) {
+                int mask = account.getPermission(from);
+                int stripped = mask & ~BankPermission.MANAGE.getValue();
+                account.setPermission(from, stripped);
             }
         }
-        info("Transferred founder of company #" + companyId + " from " + from + " to " + to);
+        info("Transferred founder of company " + company.logLabel() + " from " + from + " to " + to);
         return TransferResult.OK;
     }
 
@@ -384,6 +383,27 @@ public final class CompanyManager implements ServerSaveableChunked {
         company.setTotalSharesIssued(cur - 1);
         markPersistDirty(); // Task #55
         broadcastSupply(companyId, cur - 1);
+        return true;
+    }
+
+    /** BS-235: stores the share integrity state of a company (see {@link ShareIntegrity}). Master-only. */
+    public void setShareState(int companyId, long consistentTs, long excessLevel, boolean excessOpen) {
+        Company company = byId.get(companyId);
+        if (company != null && company.setShareState(consistentTs, excessLevel, excessOpen)) markPersistDirty();
+    }
+
+    /**
+     * BS-234 — an admin destroyed {@code count} shares held by the company's own account:
+     * lower {@link Company#getTotalSharesIssued()} by that count, floored at zero.
+     * Master-only; broadcasts a supply update. Returns {@code false} if the company is missing.
+     */
+    public boolean destroyShares(int companyId, long count) {
+        Company company = byId.get(companyId);
+        if (company == null || count <= 0) return false;
+        long next = Math.max(0L, company.getTotalSharesIssued() - count);
+        company.setTotalSharesIssued(next);
+        markPersistDirty();
+        broadcastSupply(companyId, next);
         return true;
     }
 
@@ -620,8 +640,8 @@ public final class CompanyManager implements ServerSaveableChunked {
         int removed = company.stripSchedulesForUser(removedUser);
         if (removed > 0) {
             markPersistDirty(); // Task #55
-            info("Cascade-stripped " + removed + " payout schedule(s) from company #"
-                    + company.getCompanyId() + " for removed user " + removedUser);
+            info("Cascade-stripped " + removed + " payout schedule(s) from company "
+                    + company.logLabel() + " for removed user " + removedUser);
         }
         return removed;
     }
@@ -778,6 +798,14 @@ public final class CompanyManager implements ServerSaveableChunked {
         return out;
     }
 
+    /**
+     * BS-235: companies {@code uuid} administers (MANAGE or founder, see {@link #listCompaniesManagedBy});
+     * every company when {@code trustedAdmin} (BankSystem admin flag, not via an untrusted slave).
+     */
+    public Set<Company> listCompaniesAdministeredBy(UUID uuid, boolean trustedAdmin) {
+        return trustedAdmin ? listAllCompanies() : listCompaniesManagedBy(uuid);
+    }
+
     // ------------------------------------------------------------------
     // Task #51 (v2.1.0) — Share Stamper binding reverse index (runtime-only)
     // ------------------------------------------------------------------
@@ -840,7 +868,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     @Override
     public boolean save(Map<String, ListTag> listTags) {
         CompoundTag meta = new CompoundTag();
-        meta.putInt("version", 1);
+        meta.putInt("version", SAVE_VERSION);
         meta.putInt("nextCompanyId", nextCompanyId);
         ListTag metaList = new ListTag();
         metaList.add(meta);
@@ -873,6 +901,9 @@ public final class CompanyManager implements ServerSaveableChunked {
         listTags.put("stamper_bindings", bindingsList);
         return true;
     }
+
+    /** Companies meta "version"; a higher saved one refuses start-up (BS-274, BankSystemDataHandler.load_companies). */
+    public static final int SAVE_VERSION = 1;
 
     @Override
     public boolean load(Map<String, ListTag> listTags) {

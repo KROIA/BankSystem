@@ -24,6 +24,18 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
     // ponytail: outlasts a backup pause; a routed client→slave→master read waits the full 150 s if the master link drops (the client timer is the only timer)
     public static final long SLOW_READ_TIMEOUT_MS = DatabaseManager.DEFAULT_PAUSE_SAFETY_TIMEOUT_MS + RequestManager.DEFAULT_TIMEOUT_MS;
 
+    /**
+     * Test only (BS-200, dev builds): above 0, replaces the default timeout of every request that does not override
+     * {@link #getTimeoutMs()}, so master-hang tests stay short. Tests reset it to 0.
+     */
+    public static volatile long testTimeoutMs = 0;
+
+    @Override
+    public long getTimeoutMs() {
+        long t = testTimeoutMs;
+        return t > 0 && net.kroia.banksystem.BankSystemMod.ENABLE_DEV_FEATURES ? t : super.getTimeoutMs();
+    }
+
     protected static BankSystemModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(BankSystemModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
@@ -137,6 +149,19 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
         return isAccessAllowed(false, playerSender == null || playerIsAdmin(playerSender), isFromUntrustedSlave(slaveID));
     }
 
+    /**
+     * BS-246: true for an operator (permission level 2) who is online on THIS server and sent the
+     * request here directly. Slave-forwarded requests return false: a slave's op list can't be
+     * checked from here.
+     */
+    protected boolean isLocalOperator(@Nullable UUID playerSender, String slaveID)
+    {
+        if (playerSender == null || (slaveID != null && !slaveID.isEmpty()))
+            return false;
+        ServerPlayer p = net.kroia.modutilities.ServerPlayerUtilities.getOnlinePlayer(playerSender);
+        return p != null && net.kroia.modutilities.PermissionCompat.hasPermission(p, 2);
+    }
+
     /** Task #104: {@link #isAccessAllowed} applied to one account. False if the account is null. */
     protected boolean canReadAccount(@Nullable UUID playerSender, String slaveID, @Nullable ISyncServerBankAccount account)
     {
@@ -173,6 +198,18 @@ public abstract class BankSystemGenericRequest<IN, OUT> extends GenericRequest<I
     }
     protected void debug(String message) {
         BACKEND_INSTANCES.LOGGER.debug("["+getRequestTypeID()+"] "+ message);
+    }
+
+    /**
+     * BS-256: every ledger row a slave's request writes while it is handled carries the slave id as its origin
+     * server. The slave id is the one ModUtilities bound to the slave's connection at the handshake.
+     */
+    @Override
+    public CompletableFuture<net.minecraft.network.RegistryFriendlyByteBuf> decodeHandleEncodeOnMasterServer(
+            net.minecraft.network.RegistryFriendlyByteBuf inputBuf, net.minecraft.network.RegistryFriendlyByteBuf outputBuf,
+            String slaveID, @Nullable UUID playerSender) {
+        return net.kroia.banksystem.banking.ledger.TransactionLedger.withOrigin(slaveID,
+                () -> super.decodeHandleEncodeOnMasterServer(inputBuf, outputBuf, slaveID, playerSender));
     }
 
 }

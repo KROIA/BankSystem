@@ -2,12 +2,16 @@ package net.kroia.banksystem.screen.uiElements.tabbody;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
+import net.kroia.banksystem.integration.stockmarket.StockMarketClientBridge;
 import net.kroia.banksystem.screen.custom.CompanyManagementScreen;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.screen.uiElements.InfoPopupScreen;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
@@ -20,6 +24,11 @@ import net.minecraft.network.chat.Component;
  * Pause / Resume button. All widgets are created once and shown / hidden per
  * state; positions are set with explicit {@code setBounds} in
  * {@link #layoutChanged()} (spec §5.5).
+ *
+ * <p>BS-178: with StockMarket's client API present, {@code HAS_MARKET} also shows an
+ * "Open in StockMarket" button and SM's live price chart. The chart holds a price
+ * stream: it is closed in {@link #closeChart()} (state change, tab rebuild and
+ * {@link CompanyManagementScreen#removed()}) and reopened by {@link #openChart()}.
  */
 public class MarketTabBody extends TabBody {
 
@@ -35,9 +44,15 @@ public class MarketTabBody extends TabBody {
     private final Label closeHintLabel;
     private final TextBox closeConfirmBox;
     private final Button closeButton;
+    private final Button openInStockMarketButton;
+    /** SM live price chart (AutoCloseable); null unless HAS_MARKET on the shown screen. */
+    private GuiElement chart;
+    /** Share ItemID the server keys the market by (from the HAS_MARKET reply); never looked up locally. */
+    private ItemID marketItemId = ItemID.INVALID_ID;
 
     private final boolean authorised;
     private final boolean founder;
+    private final boolean smClientApi;
 
     private MarketState state = MarketState.LOADING;
     private boolean marketOpen = true;
@@ -46,6 +61,7 @@ public class MarketTabBody extends TabBody {
         super(screen);
         this.authorised = screen.canManageNow() || screen.isFounderNow();
         this.founder = screen.isFounderNow();
+        this.smClientApi = StockMarketClientBridge.isAvailable();
 
         statusLabel = new Label(tr("market_checking"));
         statusLabel.setAlignment(Label.Alignment.LEFT);
@@ -64,6 +80,7 @@ public class MarketTabBody extends TabBody {
         closeConfirmBox = new TextBox();
         closeConfirmBox.setOnTextChanged(t -> updateCloseButtonState());
         closeButton = new Button(tr("close_market"), this::onClose);
+        openInStockMarketButton = new Button(tr("open_in_stockmarket"), this::onOpenInStockMarket);
 
         addChild(statusLabel);
         addChild(priceLabel);
@@ -73,6 +90,7 @@ public class MarketTabBody extends TabBody {
         addChild(closeHintLabel);
         addChild(closeConfirmBox);
         addChild(closeButton);
+        addChild(openInStockMarketButton);
 
         applyState(MarketState.LOADING);
         refreshState();
@@ -89,10 +107,11 @@ public class MarketTabBody extends TabBody {
     /** Spec §5.4 — re-probe authoritative SM state and re-render. */
     private void refreshState() {
         AsyncCompanyManager.marketExistsForCompanyAsync(screen.getCompanyId())
-                .thenAccept(code -> onClientThread(() -> {
-                    int existsCode = code == null ? AsyncCompanyManager.MARKET_EXISTS_UNAV : code;
+                .thenAccept(out -> onClientThread(() -> {
+                    int existsCode = out == null ? AsyncCompanyManager.MARKET_EXISTS_UNAV : out.code();
                     switch (existsCode) {
                         case AsyncCompanyManager.MARKET_EXISTS_YES -> {
+                            marketItemId = out.shareItemId() == null ? ItemID.INVALID_ID : out.shareItemId();
                             applyState(MarketState.HAS_MARKET);
                             refreshOpenFlag();
                         }
@@ -118,6 +137,7 @@ public class MarketTabBody extends TabBody {
         priceBox.setEnabled(noMarket && authorised);
         createButton.setEnabled(noMarket && authorised);
         pauseResumeButton.setEnabled(hasMarket && authorised);
+        openInStockMarketButton.setEnabled(hasMarket && smClientApi && hasMarketItemId());
         closeHintLabel.setEnabled(hasMarket && founder);
         closeConfirmBox.setEnabled(hasMarket && founder);
         // Close button starts disabled; enabled only when the user types the company name.
@@ -129,7 +149,45 @@ public class MarketTabBody extends TabBody {
             case NO_MARKET -> tr("market_not_created");
             case HAS_MARKET -> tr("market_exists");
         });
+        if (hasMarket) openChart(); else closeChart();
         layoutChangedInternal();
+    }
+
+    // ------------------------------------------------------------------
+    // StockMarket client integration (BS-178)
+    // ------------------------------------------------------------------
+
+    private boolean hasMarketItemId() {
+        return marketItemId != null && marketItemId.getShort() != ItemID.INVALID_ID.getShort();
+    }
+
+    /** Adds SM's live price chart when the market exists and this body is on screen. Idempotent. */
+    public void openChart() {
+        if (chart != null || state != MarketState.HAS_MARKET || !smClientApi || !hasMarketItemId()) return;
+        // A late async state update on a hidden screen or a replaced body must not start a stream.
+        if (Minecraft.getInstance().screen != screen || !screen.isMarketBody(this)) return;
+        chart = StockMarketClientBridge.createPriceChart(marketItemId);
+        if (chart == null) return;
+        addChild(chart);
+        layoutChangedInternal();
+    }
+
+    /** Removes the chart and closes its price stream. Safe to call any time. */
+    public void closeChart() {
+        if (chart == null) return;
+        GuiElement old = chart;
+        chart = null;
+        removeChild(old);
+        StockMarketClientBridge.close(old);
+        layoutChangedInternal();
+    }
+
+    private void onOpenInStockMarket() {
+        ItemID market = marketItemId;
+        // SM swaps the screen itself: run after the click pass (see BankSystemGuiScreen.switchScreen).
+        BankSystemGuiScreen.runLater(() -> {
+            if (!StockMarketClientBridge.openTradeScreen(market)) statusLabel.setText(tr("market_not_on_client"));
+        });
     }
 
     // ------------------------------------------------------------------
@@ -235,8 +293,17 @@ public class MarketTabBody extends TabBody {
             y += ROW_HEIGHT + ROW_SPACING;
             createButton.setBounds(w - PADDING - 140, y, 140, ROW_HEIGHT);
         } else if (state == MarketState.HAS_MARKET) {
-            pauseResumeButton.setBounds(PADDING, y, Math.min(160, w - 2 * PADDING), ROW_HEIGHT);
+            int buttonWidth = Math.min(160, (w - 2 * PADDING - ROW_SPACING) / 2);
+            pauseResumeButton.setBounds(PADDING, y, buttonWidth, ROW_HEIGHT);
+            openInStockMarketButton.setBounds(w - PADDING - buttonWidth, y, buttonWidth, ROW_HEIGHT);
             y += ROW_HEIGHT + SECTION_SPACING * 2;
+            if (chart != null) {
+                // Chart fills the space between the buttons and the founder's close section.
+                int closeSection = founder ? 2 * ROW_HEIGHT + ROW_SPACING + SECTION_SPACING * 2 : 0;
+                int chartHeight = Math.max(60, getHeight() - y - PADDING - closeSection);
+                chart.setBounds(PADDING, y, w - 2 * PADDING, chartHeight);
+                y += chartHeight + SECTION_SPACING * 2;
+            }
             closeHintLabel.setBounds(PADDING, y, w - 2 * PADDING, ROW_HEIGHT);
             y += ROW_HEIGHT + ROW_SPACING;
             closeConfirmBox.setBounds(PADDING, y, w - 2 * PADDING - 110 - ROW_SPACING, ROW_HEIGHT);

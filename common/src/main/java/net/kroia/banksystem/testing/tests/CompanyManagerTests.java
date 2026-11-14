@@ -5,6 +5,16 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.banking.company.ShareVisuals;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
+import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.company.AsyncCompanyManager;
+import net.kroia.banksystem.banking.company.PayoutExecutor;
+import net.kroia.banksystem.banking.company.PayoutFailureReason;
+import net.kroia.banksystem.banking.company.PayoutSchedule;
+import net.kroia.banksystem.banking.company.ShareIntegrity;
+import net.kroia.banksystem.data.table.record.PayoutHistoryRecord;
+import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -13,8 +23,11 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -26,13 +39,29 @@ public class CompanyManagerTests extends TestSuite {
     private static final UUID FOUNDER_A = UUID.fromString("00000000-0000-0000-0000-0000AAAA0001");
     private static final UUID FOUNDER_B = UUID.fromString("00000000-0000-0000-0000-0000AAAA0002");
 
+    /** BS-205: slave half, the founder transfer forwarded to the master. */
+    private static final TestCategory COMPANY_SLAVE = new TestCategory(
+            "banksystem", "company_slave", "Company requests forwarded from a slave to the master",
+            TestCategory.ServerType.SLAVE_ONLY, true);
+
+    private final boolean slave;
+
+    public CompanyManagerTests(boolean slave) {
+        this.slave = slave;
+    }
+
     @Override
     public TestCategory getCategory() {
-        return BankSystemTestCategories.COMPANY;
+        return slave ? COMPANY_SLAVE : BankSystemTestCategories.COMPANY;
     }
 
     @Override
     public void registerTests() {
+        if (slave) {
+            addTest("transfer_founder_forwarded_from_slave", this::testTransferFounderFromSlave); // BS-205
+            addTest("stamper_apply_counted_once_on_master", this::testStamperApplyFromSlave); // BS-262
+            return;
+        }
         addTest("case_insensitive_name_uniqueness", this::testCaseInsensitiveNameUniqueness);
         addTest("max_supply_validation", this::testMaxSupplyValidation);
         addTest("monotonic_ids", this::testMonotonicIds);
@@ -40,6 +69,8 @@ public class CompanyManagerTests extends TestSuite {
         addTest("nbt_load_tolerates_missing_optional_fields", this::testNbtLoadTolerantMissingFields);
         addTest("load_drops_duplicate_name_keeping_older", this::testLoadDropsDuplicateNameKeepingOlder);
         addTest("transfer_founder_moves_uuid", this::testTransferFounderMovesUuid);
+        addTest("transfer_founder_requires_worker", this::testTransferFounderRequiresWorker); // BS-251
+        addTest("transfer_founder_request_path", this::testTransferFounderRequestPath); // BS-205
         addTest("is_founder_of_accounts", this::testIsFounderOfAccounts);
         addTest("delete_company_removes_from_indices", this::testDeleteCompanyRemovesFromIndices);
         addTest("get_by_name_case_insensitive", this::testGetByNameCaseInsensitive);
@@ -48,6 +79,16 @@ public class CompanyManagerTests extends TestSuite {
         addTest("list_companies_managed_by_falls_back_to_founder", this::testListCompaniesManagedByFallsBackToFounder);
         // Task #58 — per-player company cap
         addTest("per_player_company_cap_at_over_unlimited", this::testPerPlayerCompanyCap);
+        // BS-235 — share integrity
+        addTest("share_excess_raised_once_per_level", this::testShareExcessRaisedOnce);
+        addTest("share_dividends_paused_until_acknowledge", this::testShareDividendsPaused);
+        addTest("share_destroy_lowers_issued", this::testShareDestroyLowersIssued);
+        addTest("share_excess_refuses_dividend_schedules", this::testShareExcessRefusesDividendSchedules); // BS-241
+        addTest("share_acknowledge_rights_and_suggestions", this::testShareAcknowledgeRights);
+        addTest("stamper_needs_company_manage", this::testStamperNeedsCompanyManage); // BS-261
+        addTest("uninstall_drops_companies_of_previous_world", this::testUninstallDropsCompanies); // BS-275
+        // BS-238 — dividends count every share variant
+        addTest("dividend_holdings_sum_all_share_variants", this::testDividendHoldingsSumAllVariants);
     }
 
     @Nullable
@@ -112,6 +153,22 @@ public class CompanyManagerTests extends TestSuite {
     }
 
     // ------------------------------------------------------------------
+    private TestResult testUninstallDropsCompanies() {
+        CompanyManager live = CompanyManager.get(); // may be the running world's manager: put it back below
+        try {
+            CompanyManager.resetForTest().detachBankManager();
+            if (CompanyManager.get().createCompany("OldWorld", 1, FOUNDER_A, 100L).result != CompanyManager.CreateResult.OK)
+                return fail("create failed");
+            CompanyManager.uninstall();
+            if (CompanyManager.get() != null) return fail("get() must be null after uninstall");
+            CompanyManager.install();
+            return assertTrue("new manager must start empty", CompanyManager.get().listAllCompanies().isEmpty());
+        } finally {
+            CompanyManager.restoreForTest(live);
+            if (live != null) CompanyManager.install(); // re-wires the founder callback
+        }
+    }
+
     private TestResult testCaseInsensitiveNameUniqueness() {
         CompanyManager cm = fresh();
         CompanyManager.CreateOutcome first = cm.createCompany("Acme", 1, FOUNDER_A, 100L);
@@ -227,6 +284,193 @@ public class CompanyManagerTests extends TestSuite {
         return pass("Founder transfer moved UUID correctly.");
     }
 
+    /**
+     * BS-251: the founder role only goes to a worker (a user of the company bank account).
+     * A non-worker is refused without any change; a worker is accepted and gets MANAGE.
+     * Live bank manager; the test account and synthetic users are removed afterwards.
+     */
+    private TestResult testTransferFounderRequiresWorker() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        if (bm == null) return fail("no master bank manager");
+        UUID worker = UUID.fromString("00000000-0000-0000-0000-0000AAAA0005");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0006");
+        List<UUID> addedUsers = new ArrayList<>();
+        for (UUID u : List.of(FOUNDER_A, worker, outsider)) {
+            if (bm.userExists(u)) continue;
+            bm.addUser(new User(u, "Bs251User" + u.toString().substring(32)));
+            addedUsers.add(u);
+        }
+        net.kroia.banksystem.api.bankaccount.IServerBankAccount account = bm.createBankAccount("__bs251_transfer");
+        try {
+            if (account == null) return fail("could not create test account");
+            int manage = net.kroia.banksystem.banking.BankPermission.MANAGE.getValue();
+            account.addUser(bm.getUserByUUID(FOUNDER_A), manage);
+            account.addUser(bm.getUserByUUID(worker), net.kroia.banksystem.banking.BankPermission.DEPOSIT.getValue());
+            CompanyManager cm = new CompanyManager(); // not detached: the worker check needs the live account
+            Company c = cm.createCompany("Bs251Transfer", account.getAccountNumber(), FOUNDER_A, 100L).company;
+            if (c == null) return fail("test company not created");
+
+            CompanyManager.TransferResult r = cm.transferFounder(c.getCompanyId(), FOUNDER_A, outsider);
+            if (r != CompanyManager.TransferResult.NOT_A_WORKER) return fail("non-worker target: expected NOT_A_WORKER, got " + r);
+            if (!c.isFounder(FOUNDER_A) || c.isFounder(outsider) || account.hasUser(outsider))
+                return fail("refused transfer changed founders or account users");
+
+            r = cm.transferFounder(c.getCompanyId(), FOUNDER_A, worker);
+            if (r != CompanyManager.TransferResult.OK) return fail("worker target: expected OK, got " + r);
+            if (!c.isFounder(worker) || c.isFounder(FOUNDER_A)) return fail("founder not moved to the worker");
+            if ((account.getPermission(worker) & manage) == 0) return fail("new founder has no MANAGE on the account");
+            return pass("non-worker refused, worker became founder with MANAGE");
+        } finally {
+            if (account != null) bm.deleteBankAccount(account.getAccountNumber());
+            for (UUID u : addedUsers) bm.removeUser(u);
+        }
+    }
+
+    /** One TRANSFER_FOUNDER request as the Danger tab sends it: a client packet from {@code sender}. */
+    private static AsyncCompanyManager.TransferOutput transferRequest(String company, UUID sender, UUID caller, String target) {
+        return AsyncCompanyManager.Request.instance.handleOnMasterServer(
+                AsyncCompanyManager.InputData.of(AsyncCompanyManager.FunctionType.TRANSFER_FOUNDER,
+                        new AsyncCompanyManager.TransferInput(company, caller, target)), "", sender).join().decodeResult();
+    }
+
+    /**
+     * BS-205: the founder transfer through the master request handler (Danger tab path): spoofed caller, non-founder
+     * sender and non-worker target are refused without changes; founder to worker succeeds and the new founder can
+     * manage and hand the role back through the same request.
+     */
+    private TestResult testTransferFounderRequestPath() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        CompanyManager cm = CompanyManager.get();
+        if (bm == null || cm == null) return fail("no master bank or company manager");
+        UUID founder = UUID.fromString("00000000-0000-0000-0000-0000AAAA0205");
+        UUID worker = UUID.fromString("00000000-0000-0000-0000-0000AAAA0206");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0207");
+        Map<UUID, String> names = Map.of(founder, "Bs205Founder", worker, "Bs205Worker", outsider, "Bs205Outsider");
+        List<UUID> addedUsers = new ArrayList<>();
+        for (UUID u : names.keySet()) {
+            if (bm.userExists(u)) continue;
+            bm.addUser(new User(u, names.get(u)));
+            addedUsers.add(u);
+        }
+        net.kroia.banksystem.api.bankaccount.IServerBankAccount account = bm.createBankAccount("__bs205_transfer");
+        Company c = null;
+        try {
+            if (account == null) return fail("could not create test account");
+            account.addUser(bm.getUserByUUID(founder), net.kroia.banksystem.banking.BankPermission.MANAGE.getValue());
+            account.addUser(bm.getUserByUUID(worker), net.kroia.banksystem.banking.BankPermission.DEPOSIT.getValue());
+            c = cm.createCompany("Bs205Transfer" + account.getAccountNumber(), account.getAccountNumber(), founder, 100L).company;
+            if (c == null) return fail("test company not created");
+            String company = c.getName();
+
+            int code = transferRequest(company, worker, founder, names.get(worker)).resultCode();
+            if (code != AsyncCompanyManager.CODE_INTERNAL) return fail("spoofed caller UUID: expected CODE_INTERNAL, got " + code);
+            code = transferRequest(company, worker, worker, names.get(worker)).resultCode();
+            if (code != AsyncCompanyManager.CODE_NOT_FOUNDER) return fail("non-founder sender: expected CODE_NOT_FOUNDER, got " + code);
+            code = transferRequest(company, founder, founder, names.get(outsider)).resultCode();
+            if (code != AsyncCompanyManager.CODE_NOT_A_WORKER) return fail("non-worker target: expected CODE_NOT_A_WORKER, got " + code);
+            if (!c.isFounder(founder) || c.isFounder(worker) || c.isFounder(outsider))
+                return fail("a refused request changed the founders");
+
+            code = transferRequest(company, founder, founder, names.get(worker)).resultCode();
+            if (code != AsyncCompanyManager.CODE_OK) return fail("founder to worker: expected CODE_OK, got " + code);
+            if (!c.isFounder(worker) || c.isFounder(founder)) return fail("founder role not moved to the worker");
+            code = AsyncCompanyManager.gateManage(c.getCompanyId(), worker, bm, cm);
+            if (code != AsyncCompanyManager.CODE_OK) return fail("new founder can't manage: " + code);
+            code = transferRequest(company, worker, worker, names.get(founder)).resultCode();
+            if (code != AsyncCompanyManager.CODE_OK || !c.isFounder(founder))
+                return fail("new founder could not hand the role back: " + code);
+            return pass("spoofed caller, non-founder and non-worker refused; founder to worker OK, new founder manages");
+        } finally {
+            if (c != null) cm.deleteCompany(c.getCompanyId());
+            if (account != null) bm.deleteBankAccount(account.getAccountNumber());
+            for (UUID u : addedUsers) bm.removeUser(u);
+        }
+    }
+
+    /**
+     * BS-205: on a slave the founder transfer goes to the master. A trusted slave reaches the master's handler
+     * (unknown company: CODE_NOT_FOUND); an untrusted slave gets the master's refusal (CODE_INTERNAL).
+     */
+    private TestResult testTransferFounderFromSlave() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        if (i == null || !i.isSlaveServer) return skip("not a slave");
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem()) return skip("slave not connected to its master");
+        boolean trusted = Boolean.TRUE.equals(await(i.SERVER_BANK_MANAGER.getAsync().isSlaveServerTrustedAsync(""), 10_000));
+        AsyncCompanyManager.TransferOutput out = await(AsyncCompanyManager.transferFounderAsync(
+                "__bs205_no_such_company", FOUNDER_A, "Bs205Nobody"), 30_000);
+        if (out == null) return fail("no answer from the master");
+        int expected = trusted ? AsyncCompanyManager.CODE_NOT_FOUND : AsyncCompanyManager.CODE_INTERNAL;
+        if (out.resultCode() != expected)
+            return fail((trusted ? "trusted" : "untrusted") + " slave: expected code " + expected + ", got " + out.resultCode());
+        return pass((trusted ? "trusted slave reached the master's handler (CODE_NOT_FOUND)"
+                : "untrusted slave refused by the master (CODE_INTERNAL)"));
+    }
+
+    /**
+     * BS-262: the slave Share Stamper's master calls. STAMPER_GATE refuses a non-manager and lets the founder in;
+     * one STAMPER_APPLY raises the master's issued count by 1 and writes one SHARE_STAMP row (ref = the transfer id,
+     * origin = this slave); the same transfer id again is answered from the master's cache, not applied twice; a
+     * redeem brings the count back. Needs a slave the master trusts (STAMPER_APPLY is trusted-only), else skips.
+     * Removes the company, its account and the synthetic founder; the ledger rows stay (the ledger is append-only).
+     */
+    private TestResult testStamperApplyFromSlave() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        if (i == null || !i.isSlaveServer) return skip("not a slave");
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem()) return skip("slave not connected to its master");
+        net.kroia.banksystem.api.bankmanager.IAsyncBankManager mgr = i.SERVER_BANK_MANAGER.getAsync();
+        if (!Boolean.TRUE.equals(await(mgr.isSlaveServerTrustedAsync(""), 10_000)))
+            return skip("master does not trust this slave: STAMPER_APPLY is for trusted slaves only");
+        UUID founder = UUID.fromString("00000000-0000-0000-0000-0000AAAA0266");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0267");
+        String name = "__bs262_" + Long.toString(System.currentTimeMillis(), 36);
+        AsyncCompanyManager.CreateOutput created = await(AsyncCompanyManager.createCompanyAsync(name, 10L, founder, "Bs262Founder"), 30_000);
+        if (created == null || created.resultCode() != AsyncCompanyManager.CODE_OK) return fail("test company not created: " + created);
+        int cid = created.companyId();
+        try {
+            Integer gate = await(AsyncCompanyManager.stamperGateAsync(cid, outsider), 30_000);
+            if (gate == null || gate != AsyncCompanyManager.CODE_NO_PERMISSION) return fail("gate for a non-manager: " + gate);
+            gate = await(AsyncCompanyManager.stamperGateAsync(cid, founder), 30_000);
+            if (gate == null || gate != AsyncCompanyManager.CODE_OK) return fail("gate for the founder: " + gate);
+
+            String tid = net.kroia.banksystem.data.TransferJournal.newTransferId();
+            long sentMs = System.currentTimeMillis();
+            Integer code = await(AsyncCompanyManager.stamperApplyAsync(cid, false, founder, tid, sentMs, true), 30_000);
+            if (code == null || code != AsyncCompanyManager.CODE_OK) return fail("stamp: " + code);
+            code = await(AsyncCompanyManager.stamperApplyAsync(cid, false, founder, tid, sentMs, true), 30_000);
+            if (code == null || code != AsyncCompanyManager.CODE_OK) return fail("repeated stamp: " + code);
+            AsyncCompanyManager.CompanyInfoOutput info = await(AsyncCompanyManager.getCompanyInfoByIdAsync(cid), 30_000);
+            if (info == null || info.totalSharesIssued() != 1L)
+                return fail("issued after a stamp and its repeat: " + (info == null ? null : info.totalSharesIssued()) + ", expected 1");
+
+            List<net.kroia.banksystem.testing.LedgerByRefRequest.Row> rows = List.of();
+            long end = System.currentTimeMillis() + 10_000; // the ledger write is async
+            while (rows.isEmpty() && System.currentTimeMillis() < end) {
+                List<net.kroia.banksystem.testing.LedgerByRefRequest.Row> got =
+                        await(net.kroia.banksystem.testing.LedgerByRefRequest.INSTANCE.sendRequestToMaster(tid), 30_000);
+                if (got != null) rows = got;
+                if (rows.isEmpty()) pump(250);
+            }
+            String me = net.kroia.modutilities.networking.multi_server.MultiServerManager.getSlaveID();
+            if (rows.size() != 1 || rows.get(0).type() != net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP
+                    || rows.get(0).account() != created.bankAccountNr() || !rows.get(0).origin().equals(me))
+                return fail("ledger rows for " + tid + ": " + rows + " (this slave: " + me + ")");
+
+            code = await(AsyncCompanyManager.stamperApplyAsync(cid, true, founder,
+                    net.kroia.banksystem.data.TransferJournal.newTransferId(), System.currentTimeMillis(), true), 30_000);
+            info = await(AsyncCompanyManager.getCompanyInfoByIdAsync(cid), 30_000);
+            if (code == null || code != AsyncCompanyManager.CODE_OK || info == null || info.totalSharesIssued() != 0L)
+                return fail("redeem: " + code + ", issued " + (info == null ? null : info.totalSharesIssued()));
+            return pass("gate refuses a non-manager; one stamp counted once (repeat replayed), SHARE_STAMP row origin "
+                    + me + "; redeem back to 0");
+        } finally {
+            await(AsyncCompanyManager.dissolveCompanyAsync(name, founder), 30_000);
+            await(mgr.deleteBankAccountAsync(created.bankAccountNr()), 30_000);
+            await(mgr.removeUserAsync(founder), 30_000);
+        }
+    }
+
     private TestResult testIsFounderOfAccounts() {
         CompanyManager cm = fresh();
         Company c = cm.createCompany("Query", 77, FOUNDER_A, 100L).company;
@@ -303,5 +547,264 @@ public class CompanyManagerTests extends TestSuite {
         if (cm.getByName("Del") != null) return fail("byNameLower not cleared");
         if (cm.isNameTaken("del")) return fail("isNameTaken still true after delete");
         return pass("deleteCompany cleared all indices.");
+    }
+
+    // ------------------------------------------------------------------
+    // BS-235 — share integrity (pure state transitions; no flags, no DB)
+    // ------------------------------------------------------------------
+
+    /** Company id far above live ones, so supply broadcasts of these tests touch no real company. */
+    private static final int SHARE_TEST_ID = 900_001;
+
+    /** Fresh manager holding one company with {@code issued} stamped shares and no bank account. */
+    private CompanyManager freshWithIssued(long issued) {
+        CompanyManager cm = fresh();
+        Map<String, ListTag> data = new HashMap<>();
+        ListTag meta = new ListTag();
+        CompoundTag metaTag = new CompoundTag();
+        metaTag.putInt("nextCompanyId", SHARE_TEST_ID + 1);
+        meta.add(metaTag);
+        data.put("meta", meta);
+        ListTag companies = new ListTag();
+        CompoundTag c = new CompoundTag();
+        c.putInt("companyId", SHARE_TEST_ID);
+        c.putString("name", "ShareIntegrityTest");
+        c.putInt("bankAccountNr", 987_654_321);
+        c.putLong("maxSupply", 1000);
+        c.putLong("createdAt", 1L);
+        c.putLong("totalSharesIssued", issued);
+        companies.add(c);
+        data.put("companies", companies);
+        cm.load(data);
+        return cm;
+    }
+
+    private TestResult testShareExcessRaisedOnce() {
+        CompanyManager cm = freshWithIssued(10);
+        Company c = cm.getById(SHARE_TEST_ID);
+        if (c == null) return fail("test company did not load");
+        if (ShareIntegrity.apply(cm, c, 10, 100L) || c.isShareExcessOpen())
+            return fail("banked == stamped must not raise");
+        if (c.getShareConsistentTs() != 100L) return fail("consistent time not stored at equality");
+        if (!ShareIntegrity.apply(cm, c, 12, 200L) || !c.isShareExcessOpen() || c.getShareExcessLevel() != 2)
+            return fail("excess 2 must raise once and open the alert");
+        if (ShareIntegrity.apply(cm, c, 12, 300L)) return fail("same excess raised twice");
+        if (!ShareIntegrity.apply(cm, c, 13, 400L) || c.getShareExcessLevel() != 3)
+            return fail("growing excess must raise again");
+        if (c.getShareConsistentTs() != 100L) return fail("consistent time moved while in excess");
+        if (ShareIntegrity.acknowledge(cm, c, 13, 500L) != 3 || c.isShareExcessOpen())
+            return fail("acknowledge must close the alert at excess 3");
+        if (ShareIntegrity.apply(cm, c, 13, 600L)) return fail("acknowledged excess raised again");
+        if (!ShareIntegrity.apply(cm, c, 14, 700L)) return fail("excess past the acknowledged level must raise");
+        if (ShareIntegrity.apply(cm, c, 9, 800L) || c.isShareExcessOpen() || c.getShareExcessLevel() != 0)
+            return fail("back under stamped must close and reset");
+        return pass("raised at 2 and 3, not repeated, acknowledged at 3, reset when consistent");
+    }
+
+    private TestResult testShareDividendsPaused() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        ISyncServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        if (bm == null) return fail("no master bank manager");
+        CompanyManager cm = freshWithIssued(5);
+        Company c = cm.getById(SHARE_TEST_ID);
+        if (c == null) return fail("test company did not load");
+        PayoutSchedule dividend = new PayoutSchedule(1L, FOUNDER_A, 100L, 1000L, 0L, false, 1L, FOUNDER_A,
+                PayoutSchedule.NO_TARGET_ACCOUNT, "", "", PayoutSchedule.Mode.DIVIDEND, PayoutSchedule.MONEY_CURRENCY, 0L, 0);
+        PayoutSchedule fixed = new PayoutSchedule(2L, FOUNDER_A, 100L, 1000L, 0L, false, 1L, FOUNDER_A);
+        ShareIntegrity.apply(cm, c, 7, 100L);
+        List<TransactionLogRecord> rows = new ArrayList<>();
+        PayoutExecutor.Outcome paused = PayoutExecutor.executeOne(c, dividend, 100L, bm, 200L, rows);
+        if (paused.reason != PayoutFailureReason.SHARES_UNDER_REVIEW)
+            return fail("open excess: dividend reason " + paused.reason);
+        if (paused.reason.toStatus() != PayoutHistoryRecord.Status.PAUSED) return fail("history status not PAUSED");
+        if (PayoutExecutor.executeOne(c, fixed, 100L, bm, 200L, rows).reason == PayoutFailureReason.SHARES_UNDER_REVIEW)
+            return fail("fixed payout must not be paused");
+        ShareIntegrity.acknowledge(cm, c, 7, 300L);
+        PayoutExecutor.Outcome after = PayoutExecutor.executeOne(c, dividend, 100L, bm, 400L, rows);
+        if (after.reason == PayoutFailureReason.SHARES_UNDER_REVIEW) return fail("still paused after acknowledge");
+        if (!rows.isEmpty()) return fail("test moved value: " + rows.size() + " ledger rows");
+        return pass("dividend paused while open, fixed payout not, resumed after acknowledge (" + after.reason + ")");
+    }
+
+    private TestResult testShareExcessRefusesDividendSchedules() {
+        CompanyManager cm = freshWithIssued(5);
+        Company c = cm.getById(SHARE_TEST_ID);
+        if (c == null) return fail("test company did not load");
+        byte dividend = (byte) PayoutSchedule.Mode.DIVIDEND.ordinal(), fixed = (byte) PayoutSchedule.Mode.FIXED_PAYOUT.ordinal();
+        if (net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, dividend, cm))
+            return fail("refused without an open excess");
+        ShareIntegrity.apply(cm, c, 7, 100L);
+        if (!net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, dividend, cm))
+            return fail("dividend schedule allowed while the excess is open");
+        if (net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, fixed, cm))
+            return fail("fixed payout refused");
+        ShareIntegrity.acknowledge(cm, c, 7, 200L);
+        if (net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, dividend, cm))
+            return fail("still refused after acknowledge");
+        return pass("dividend schedules refused only while the excess is open; fixed payouts allowed");
+    }
+
+    private TestResult testShareDestroyLowersIssued() {
+        CompanyManager cm = freshWithIssued(10);
+        if (!cm.destroyShares(SHARE_TEST_ID, 3)) return fail("destroyShares refused");
+        Company c = cm.getById(SHARE_TEST_ID);
+        if (c == null || c.getTotalSharesIssued() != 7) return fail("issued not 7 after destroying 3");
+        cm.destroyShares(SHARE_TEST_ID, 50);
+        if (c.getTotalSharesIssued() != 0) return fail("issued not floored at 0: " + c.getTotalSharesIssued());
+        return pass("10 - 3 = 7, then floored at 0");
+    }
+
+    /**
+     * BS-235: /company shares acknowledge uses the company admin gate (MANAGE, founder or BankSystem
+     * admin) on the master, and its suggestions list only administered companies (all for an admin
+     * not coming through an untrusted slave). Synthetic admin user, removed afterwards.
+     */
+    private TestResult testShareAcknowledgeRights() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        if (bm == null) return fail("no master bank manager");
+        CompanyManager cm = fresh();
+        Company alpha = cm.createCompany("ShareAckAlpha", 987_654_321, FOUNDER_A, 100L).company;
+        Company beta = cm.createCompany("ShareAckBeta", 987_654_322, FOUNDER_B, 100L).company;
+        if (alpha == null || beta == null) return fail("test companies not created");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0003");
+        UUID admin = UUID.fromString("00000000-0000-0000-0000-0000AAAA0004");
+        boolean added = !bm.userExists(admin);
+        if (added) bm.addUser(new User(admin, "ShareAckTestAdmin"));
+        try {
+            bm.setBanksystemAdminMode(admin, true);
+            int id = alpha.getCompanyId();
+            if (AsyncCompanyManager.gateManage(id, FOUNDER_A, bm, cm) != AsyncCompanyManager.CODE_OK)
+                return fail("company admin (founder) refused");
+            if (AsyncCompanyManager.gateManage(id, outsider, bm, cm) != AsyncCompanyManager.CODE_NO_PERMISSION)
+                return fail("unrelated player allowed");
+            if (AsyncCompanyManager.gateManage(id, FOUNDER_B, bm, cm) != AsyncCompanyManager.CODE_NO_PERMISSION)
+                return fail("admin of another company allowed");
+            if (AsyncCompanyManager.gateManage(id, admin, bm, cm) != AsyncCompanyManager.CODE_OK)
+                return fail("BankSystem admin refused");
+            if (!cm.listCompaniesAdministeredBy(FOUNDER_A, false).equals(Set.of(alpha)))
+                return fail("company admin suggestions: " + cm.listCompaniesAdministeredBy(FOUNDER_A, false));
+            if (!cm.listCompaniesAdministeredBy(outsider, false).isEmpty())
+                return fail("unrelated player got suggestions");
+            if (!cm.listCompaniesAdministeredBy(admin, true).equals(Set.of(alpha, beta)))
+                return fail("BankSystem admin did not get every company");
+            if (!cm.listCompaniesAdministeredBy(admin, false).isEmpty())
+                return fail("admin flag counted without trust");
+            return pass("founder + BS admin allowed, outsider + other founder refused; suggestions filtered");
+        } finally {
+            if (added) bm.removeUser(admin);
+            else bm.setBanksystemAdminMode(admin, false);
+        }
+    }
+
+    /**
+     * BS-261: a bound Share Stamper (open, stamp/mode/auto-IO, unbind, stillValid all use
+     * {@link net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity#hasManagePermission})
+     * refuses an outsider and a DEPOSIT-only worker, allows a MANAGE worker, the founder and a BankSystem
+     * admin. Live bank + company manager; account, company and synthetic users are removed afterwards.
+     */
+    private TestResult testStamperNeedsCompanyManage() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        CompanyManager cm = CompanyManager.get();
+        if (bm == null || cm == null) return fail("no master bank or company manager");
+        UUID founder = UUID.fromString("00000000-0000-0000-0000-0000AAAA0261");
+        UUID manager = UUID.fromString("00000000-0000-0000-0000-0000AAAA0262");
+        UUID depositor = UUID.fromString("00000000-0000-0000-0000-0000AAAA0263");
+        UUID outsider = UUID.fromString("00000000-0000-0000-0000-0000AAAA0264");
+        UUID admin = UUID.fromString("00000000-0000-0000-0000-0000AAAA0265");
+        List<UUID> addedUsers = new ArrayList<>();
+        for (UUID u : List.of(founder, manager, depositor, outsider, admin)) {
+            if (bm.userExists(u)) continue;
+            bm.addUser(new User(u, "Bs261User" + u.toString().substring(32)));
+            addedUsers.add(u);
+        }
+        net.kroia.banksystem.api.bankaccount.IServerBankAccount account = bm.createBankAccount("__bs261_stamper");
+        Company c = null;
+        net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity stamper = null;
+        try {
+            if (account == null) return fail("could not create test account");
+            bm.setBanksystemAdminMode(admin, true);
+            account.addUser(bm.getUserByUUID(manager), net.kroia.banksystem.banking.BankPermission.MANAGE.getValue());
+            account.addUser(bm.getUserByUUID(depositor), net.kroia.banksystem.banking.BankPermission.DEPOSIT.getValue());
+            c = cm.createCompany("Bs261Stamper" + account.getAccountNumber(), account.getAccountNumber(), founder, 100L).company;
+            if (c == null) return fail("test company not created");
+            stamper = new net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity(new net.minecraft.core.BlockPos(0, -64, 0),
+                    net.kroia.banksystem.minecraft.block.BankSystemBlocks.SHARE_STAMPER_BLOCK.get().defaultBlockState());
+            stamper.bind(c.getCompanyId(), founder);
+            if (stamper.hasManagePermission(outsider)) return fail("outsider allowed");
+            if (stamper.hasManagePermission(depositor)) return fail("worker without MANAGE allowed");
+            if (!stamper.hasManagePermission(manager)) return fail("MANAGE worker refused");
+            if (!stamper.hasManagePermission(founder)) return fail("founder refused");
+            if (!stamper.hasManagePermission(admin)) return fail("BankSystem admin refused");
+            return pass("outsider + DEPOSIT worker refused; MANAGE worker, founder, BS admin allowed");
+        } finally {
+            if (stamper != null) stamper.unbind();
+            if (c != null) cm.deleteCompany(c.getCompanyId());
+            if (account != null) bm.deleteBankAccount(account.getAccountNumber());
+            if (!addedUsers.contains(admin)) bm.setBanksystemAdminMode(admin, false);
+            for (UUID u : addedUsers) bm.removeUser(u);
+        }
+    }
+
+    /**
+     * BS-238: the per-account holdings both dividend paths use count every share ItemID of the
+     * company (an anvil-renamed share is its own ItemID), free + locked. Account A holds only the
+     * renamed variant and must still be counted. Registry and item filters are restored afterwards.
+     */
+    private TestResult testDividendHoldingsSumAllVariants() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        ISyncServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        if (bm == null) return fail("no master bank manager");
+        if (net.kroia.banksystem.minecraft.item.BankSystemItems.STAMPED_SHARE.get() == null)
+            return fail("STAMPED_SHARE not registered");
+        final int companyId = 900_238;
+        net.kroia.banksystem.testing.LiveStateGuard guard = net.kroia.banksystem.testing.LiveStateGuard.capture(bm);
+        List<Integer> accounts = new ArrayList<>();
+        try {
+            net.minecraft.world.item.ItemStack base = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                    .ofCompany(net.kroia.banksystem.minecraft.item.BankSystemItems.STAMPED_SHARE.get(), companyId);
+            net.minecraft.world.item.ItemStack renamed = base.copy();
+            renamed.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+                    net.minecraft.network.chat.Component.literal("Renamed share"));
+            net.kroia.banksystem.util.ItemID baseId = net.kroia.banksystem.util.ItemIDManager.registerItemStackServerSide_direct(base);
+            net.kroia.banksystem.util.ItemID variantId = net.kroia.banksystem.util.ItemIDManager.registerItemStackServerSide_direct(renamed);
+            if (!baseId.isValid() || !variantId.isValid() || baseId.equals(variantId))
+                return fail("renamed share did not get its own ItemID: " + baseId + " / " + variantId);
+            List<net.kroia.banksystem.util.ItemID> ids = net.kroia.banksystem.banking.company.CompanyStatsQuery.shareItemIds(companyId);
+            if (!ids.contains(baseId) || !ids.contains(variantId)) return fail("shareItemIds misses a variant: " + ids);
+            bm.allowItemID(baseId);
+            bm.allowItemID(variantId);
+
+            net.kroia.banksystem.api.bankaccount.IServerBankAccount a = bm.createBankAccount("__bs238_variant_only");
+            net.kroia.banksystem.api.bankaccount.IServerBankAccount b = bm.createBankAccount("__bs238_mixed");
+            if (a == null || b == null) return fail("could not create test accounts");
+            accounts.add(a.getAccountNumber());
+            accounts.add(b.getAccountNumber());
+            if (a.createBank(variantId, 300L) == null || b.createBank(baseId, 200L) == null)
+                return fail("could not create share banks");
+            net.kroia.banksystem.api.bank.IServerBank bVariant = b.createBank(variantId, 100L);
+            if (bVariant == null) return fail("could not create variant bank on mixed account");
+            bVariant.lockAmount(40L); // locked shares still earn dividends
+
+            Map<Integer, Long> held = net.kroia.banksystem.banking.company.CompanyStatsQuery.sharesRawPerAccount(bm, companyId);
+            long heldA = held.getOrDefault(a.getAccountNumber(), 0L);
+            long heldB = held.getOrDefault(b.getAccountNumber(), 0L);
+            if (heldA != 300L) return fail("variant-only account counted " + heldA + ", expected 300");
+            if (heldB != 300L) return fail("mixed account counted " + heldB + ", expected 300 (200 base + 100 variant incl. 40 locked)");
+            return pass("variant-only account 300, mixed account 300 (base + variant, locked included)");
+        } finally {
+            for (int nr : accounts) {
+                net.kroia.banksystem.api.bankaccount.IServerBankAccount acct = bm.getBankAccount(nr);
+                if (acct != null) {
+                    for (net.kroia.banksystem.util.ItemID id : net.kroia.banksystem.banking.company.CompanyStatsQuery.shareItemIds(companyId)) {
+                        net.kroia.banksystem.api.bank.IServerBank bank = acct.getBank(id);
+                        if (bank != null) { bank.unlockAll(); bank.setBalance(0L); }
+                    }
+                }
+                bm.deleteBankAccount(nr);
+            }
+            net.kroia.banksystem.testing.LiveStateGuard.restore(guard);
+        }
     }
 }

@@ -84,6 +84,7 @@ public class DiscordFeedTests extends TestSuite {
         addTest("suspicion_flag_posts", () -> master(this::suspicion));
         addTest("config_file_lists_all_types", () -> master(this::configFile));
         addTest("default_templates_hide_account", this::defaultTemplates);
+        addTest("template_placeholders_are_posted_keys", () -> master(this::templateKeys)); // BS-202
         addTest("slave_posts_nothing", this::slave);
         addTest("live_webhook_posts", () -> master(this::live));
     }
@@ -244,6 +245,57 @@ public class DiscordFeedTests extends TestSuite {
             }
         }
         return pass("4 languages: {amountText}; bank-* show {player} without account/UUID/counterparty; bank-suspicion keeps {account}");
+    }
+
+    /**
+     * BS-202: one real post per type through the sink; every {placeholder} of that type's en_us template must be a
+     * key of the posted values, else the embed shows the raw placeholder.
+     */
+    private TestResult templateKeys() {
+        int cid = company.getCompanyId();
+        LedgerActor player = LedgerActor.player(PLAYER, "DiscordTestPlayer");
+        List<TransactionLogRecord> rows = List.of(
+                markerRow(holderAccount, LedgerType.DEPOSIT, 150_000L, player, null, null),
+                markerRow(holderAccount, LedgerType.WITHDRAW, -42_050L, player, null, null),
+                markerRow(holderAccount, LedgerType.TRANSFER, -75_000L, player, companyAccount, null),
+                markerRow(companyAccount, LedgerType.TRANSFER, 75_000L, player, holderAccount, null),
+                markerRow(holderAccount, LedgerType.PAYOUT, 120_000L, player, companyAccount, cid),
+                markerRow(holderAccount, LedgerType.DIVIDEND, 3_375L, player, companyAccount, cid),
+                markerRow(companyAccount, LedgerType.SHARE_STAMP, -10_000L, player, null, cid),
+                markerRow(holderAccount, LedgerType.ADMIN_ADD, 50_000L, LedgerActor.admin(PLAYER, "DiscordTestPlayer"), null, null),
+                markerRow(holderAccount, LedgerType.STARTING_BALANCE, 10_000L, LedgerActor.system(), null, null));
+        int flag = SuspicionChecks.LARGE_NOTE_WITHDRAWAL;
+        var posts = capture(true, () -> {
+            TransactionLedger.writeAll(rows);
+            BankSystemMod.getAPI().getEvents().getSuspicionFlaggedEvent().notifyListeners(new SuspicionFlaggedEvent(
+                    holderAccount, flag, SuspicionChecks.typeName(flag), 1, 42_050L, null, MARKER, System.currentTimeMillis()));
+        });
+        Map<String, Map<String, String>> byType = new java.util.HashMap<>();
+        for (var e : posts) byType.putIfAbsent(e.getKey(), e.getValue());
+        JsonObject root;
+        try (var in = DiscordFeedTests.class.getResourceAsStream("/assets/banksystem/discord/en_us.json")) {
+            if (in == null) return fail("missing template file en_us.json");
+            root = JsonParser.parseString(new String(in.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
+        } catch (Exception e) {
+            return fail("cannot read en_us.json: " + e);
+        }
+        java.util.regex.Pattern placeholder = java.util.regex.Pattern.compile("\\{([A-Za-z0-9_]+)}");
+        for (String type : BankSystemDiscord.TYPES) {
+            Map<String, String> v = byType.get(type);
+            if (v == null) return fail("no post for " + type + "; posted " + byType.keySet());
+            JsonObject template = root.getAsJsonObject(type);
+            if (template == null) return fail("en_us.json has no template for " + type);
+            java.util.regex.Matcher m = placeholder.matcher(template.toString());
+            while (m.find())
+                if (!v.containsKey(m.group(1)))
+                    return fail(type + ": template uses {" + m.group(1) + "}, the sink posts only " + v.keySet());
+        }
+        return pass(BankSystemDiscord.TYPES.size() + " types: every en_us placeholder is a posted key");
+    }
+
+    private TransactionLogRecord markerRow(int account, LedgerType type, long amount, LedgerActor actor,
+                                           @Nullable Integer other, @Nullable Integer companyId) {
+        return TransactionLogRecord.of(account, type, money, amount, actor, other, companyId, null, MARKER, null);
     }
 
     private TestResult slave() {

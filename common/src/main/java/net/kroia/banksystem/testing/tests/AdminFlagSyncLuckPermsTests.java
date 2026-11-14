@@ -7,6 +7,8 @@ import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.AdminFlagSync;
 import net.kroia.banksystem.util.BankSystemPermissions;
+import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.permission.LuckPermsBridge;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -17,7 +19,10 @@ import net.luckperms.api.LuckPermsProvider;
 import net.luckperms.api.model.group.GroupManager;
 import net.luckperms.api.node.Node;
 import net.luckperms.api.node.types.InheritanceNode;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.PlayerList;
+import net.minecraft.server.players.ServerOpListEntry;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Files;
@@ -27,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
 /**
@@ -35,8 +41,8 @@ import java.util.function.Supplier;
  * ({@code bs_test_*}) and, for the live listener test, the online test player; all are restored in {@code finally}
  * with the sync setting turned off first, so cleanup edits never flow back into flags.
  *
- * <p>Limit: the "still admin through a LuckPerms group" message goes to the executor through
- * ClientConsoleMessagePacket, which the server cannot read back; the group-deop test asserts the restored flag only.
+ * <p>The "still admin through a LuckPerms group" message is read through
+ * {@link ServerBankSystemCommandHandler#messageListener_forTesting} (the packet itself cannot be read back).
  */
 public class AdminFlagSyncLuckPermsTests extends TestSuite {
     static final String GROUP_PREFIX = "bs_test_";
@@ -62,6 +68,7 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
         addTest("lp_new_user_in_granted_group_becomes_admin", lp(this::testNewUserInGrantedGroup));
         addTest("lp_migration_runs_once", lp(this::testMigrationOnce));
         addTest("lp_setting_off_nothing_syncs", lp(this::testSettingOff));
+        addTest("lp_backup_node_lets_non_op_run_backup", lp(this::testBackupNodeNonOp)); // BS-204
     }
 
     private Supplier<TestResult> lp(Supplier<TestResult> test) {
@@ -146,16 +153,88 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
         if (!effectiveEventually(u.getUUID(), true))
             return fail("group grant not effective");
         pump(500);
-        if (!handler().banksystem_setBankSystemAdminMode_user(EXECUTOR, u.getName(), false))
-            return fail("deop returned false");
-        // deop clears the flag at once, then the group-wins follow-up sets it back
-        if (!pumpUntil(() -> manager().isBanksystemAdmin(u.getUUID()), 5000))
-            return fail("flag not restored after deop while a LuckPerms group grants " + NODE);
-        pump(1000);
-        TestResult r = assertTrue("flag stays after the follow-up settled", manager().isBanksystemAdmin(u.getUUID()));
-        if (!r.passed())
-            return r;
-        return pass("flag stays (executor message not observable server-side, see class docs)");
+        String kept = BankSystemTextMessages.getStillAdminViaLuckPermsGroupMessage(u.getName());
+        List<String> toExecutor = new CopyOnWriteArrayList<>();
+        ServerBankSystemCommandHandler.messageListener_forTesting = (to, msg) -> {
+            if (EXECUTOR.equals(to)) toExecutor.add(msg);
+        };
+        try {
+            if (!handler().banksystem_setBankSystemAdminMode_user(EXECUTOR, u.getName(), false))
+                return fail("deop returned false");
+            // deop clears the flag at once, then the group-wins follow-up sets it back
+            if (!pumpUntil(() -> manager().isBanksystemAdmin(u.getUUID()), 5000))
+                return fail("flag not restored after deop while a LuckPerms group grants " + NODE);
+            pump(1000);
+            TestResult r = assertTrue("flag stays after the follow-up settled", manager().isBanksystemAdmin(u.getUUID()));
+            if (!r.passed())
+                return r;
+            return assertTrue("executor got the 'flag kept' message, got " + toExecutor, toExecutor.contains(kept));
+        } finally {
+            ServerBankSystemCommandHandler.messageListener_forTesting = null;
+        }
+    }
+
+    /**
+     * BS-204: a non-op with {@code banksystem.admin.command.backup} granted in LuckPerms may run
+     * {@code /banksystem backup status}; once the node is unset the op-level fallback refuses it. Uses the online
+     * player, deopped for the test (both loaders fall back to the player's op level for an unset node).
+     */
+    private TestResult testBackupNodeNonOp() {
+        ServerPlayer p = player();
+        if (p == null)
+            return skip("no online player (LuckPerms resolves nodes of loaded, online players only)");
+        UUID u = p.getUUID();
+        String node = BankSystemPermissions.COMMAND_BACKUP;
+        PlayerList players = getServer().getPlayerList();
+        ServerOpListEntry opBefore = players.getOps().get(p.getGameProfile());
+        Optional<Boolean> nodeBefore = await(Lp.userNode(u, node), TIMEOUT);
+        try {
+            players.getOps().remove(p.getGameProfile());
+            players.sendPlayerPermissionLevel(p);
+            if (p.hasPermissions(BankSystemPermissions.FALLBACK_LEVEL))
+                return skip("player keeps op level without an ops entry (singleplayer owner); use an mp cell");
+            await(Lp.unsetUserNode(u, node), TIMEOUT);
+            if (!pumpUntil(() -> !hasBackupNode(p), 5000))
+                return fail("deopped player without the node still passes " + node);
+            TestResult r = assertFalse("non-op without the node is refused", runsBackupStatus(p));
+            if (!r.passed())
+                return r;
+
+            await(Lp.setUserNode(u, node, true), TIMEOUT);
+            if (!pumpUntil(() -> hasBackupNode(p), 5000))
+                return fail("LuckPerms grant of " + node + " not effective");
+            r = assertTrue("non-op with the node runs /banksystem backup status", runsBackupStatus(p));
+            if (!r.passed())
+                return r;
+
+            await(Lp.unsetUserNode(u, node), TIMEOUT);
+            if (!pumpUntil(() -> !hasBackupNode(p), 5000))
+                return fail("revoke of " + node + " not effective");
+            return assertFalse("non-op is refused again after the revoke", runsBackupStatus(p));
+        } finally {
+            if (nodeBefore.isPresent())
+                await(Lp.setUserNode(u, node, nodeBefore.get()), TIMEOUT);
+            else
+                await(Lp.unsetUserNode(u, node), TIMEOUT);
+            if (opBefore != null)
+                players.getOps().add(opBefore);
+            players.sendPlayerPermissionLevel(p);
+        }
+    }
+
+    private static boolean hasBackupNode(ServerPlayer p) {
+        return PermissionCompat.hasPermission(p.createCommandSourceStack(), BankSystemPermissions.COMMAND_BACKUP,
+                BankSystemPermissions.FALLBACK_LEVEL);
+    }
+
+    /** @return true if the player's source may run {@code /banksystem backup status} (its {@code requires} passed). */
+    private boolean runsBackupStatus(ServerPlayer p) {
+        try {
+            return getServer().getCommands().getDispatcher()
+                    .execute("banksystem backup status", p.createCommandSourceStack().withSuppressedOutput()) > 0;
+        } catch (CommandSyntaxException e) {
+            return false; // requires() failed: brigadier reports an unknown command
+        }
     }
 
     private TestResult testUserNodeDeop() {
@@ -317,23 +396,35 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
 
         /** The user's own global {@code banksystem.admin} entry, if any. */
         static CompletableFuture<Optional<Boolean>> userNode(UUID u) {
+            return userNode(u, NODE);
+        }
+
+        static CompletableFuture<Optional<Boolean>> userNode(UUID u, String node) {
             return api().getUserManager().loadUser(u).thenApply(user -> user.getNodes().stream()
-                    .filter(n -> n.getKey().equalsIgnoreCase(NODE) && n.getContexts().isEmpty())
+                    .filter(n -> n.getKey().equalsIgnoreCase(node) && n.getContexts().isEmpty())
                     .findFirst().map(Node::getValue));
         }
 
         /** Like {@code lp user <u> permission set banksystem.admin <value>}. */
         static CompletableFuture<Void> setUserNode(UUID u, boolean value) {
+            return setUserNode(u, NODE, value);
+        }
+
+        static CompletableFuture<Void> setUserNode(UUID u, String node, boolean value) {
             return api().getUserManager().modifyUser(u, user -> {
-                user.data().clear(n -> n.getKey().equalsIgnoreCase(NODE) && n.getContexts().isEmpty());
-                user.data().add(Node.builder(NODE).value(value).build());
+                user.data().clear(n -> n.getKey().equalsIgnoreCase(node) && n.getContexts().isEmpty());
+                user.data().add(Node.builder(node).value(value).build());
             });
         }
 
         /** Like {@code lp user <u> permission unset banksystem.admin}. */
         static CompletableFuture<Void> unsetUserNode(UUID u) {
+            return unsetUserNode(u, NODE);
+        }
+
+        static CompletableFuture<Void> unsetUserNode(UUID u, String node) {
             return api().getUserManager().modifyUser(u, user ->
-                    user.data().clear(n -> n.getKey().equalsIgnoreCase(NODE) && n.getContexts().isEmpty()));
+                    user.data().clear(n -> n.getKey().equalsIgnoreCase(node) && n.getContexts().isEmpty()));
         }
 
         static CompletableFuture<Void> clearTestGroups(UUID u) {

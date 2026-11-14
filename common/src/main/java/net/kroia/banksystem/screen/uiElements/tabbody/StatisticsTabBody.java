@@ -198,7 +198,7 @@ public class StatisticsTabBody extends TabBody {
 
         long net = stats.netCashflow();
         netCashflowLabel.setText(Component.translatable(PREFIX + "stats_net_cashflow").getString()
-                + ": " + (net >= 0 ? "+" : "") + fmtVal(Math.abs(net)));
+                + ": " + (net >= 0 ? "+" : "") + fmtVal(net)); // MoneyFormat writes the minus
 
         long days = stats.daysToInsolvency();
         String daysText;
@@ -220,7 +220,7 @@ public class StatisticsTabBody extends TabBody {
             maxVal = Math.max(maxVal, Math.max(b.earnings(), b.spendings()));
         yAxisTop.setText(fmtVal(maxVal));
         yAxisMid.setText("0");
-        yAxisBot.setText(fmtVal(maxVal));
+        yAxisBot.setText("-" + fmtVal(maxVal)); // spendings are drawn below the zero line
 
         // Shareholders table
         List<AsyncCompanyManager.ShareholderWire> holders = stats.topShareholders();
@@ -298,7 +298,7 @@ public class StatisticsTabBody extends TabBody {
         List<String[]> holderRows = new ArrayList<>();
         holderRows.add(new String[]{
                 Component.translatable(PREFIX + "holders").getString() + ": " + stats.holderCount(),
-                fmtVal(stats.sharesIssued()), ""});
+                String.valueOf(stats.sharesIssued()), ""}); // whole shares, not a raw bank value
         shareholdersTable.setData(holderRows, null, null);
         List<String[]> payoutRows = new ArrayList<>();
         payoutRows.add(new String[]{NO_VALUE, ""});
