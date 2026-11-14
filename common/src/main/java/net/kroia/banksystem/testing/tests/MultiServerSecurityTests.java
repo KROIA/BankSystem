@@ -17,11 +17,13 @@ import net.kroia.banksystem.networking.currency.ListBindableAccountsRequest;
 import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.general.GetUserCustomDataRequest;
 import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
+import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.networking.multi_server.WithdrawItemsFromBankRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.testing.StubCurrencyProvider;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -84,6 +86,7 @@ public class MultiServerSecurityTests extends TestSuite {
         // Untrusted slaves assert the player UUID: no commands, withdrawals or per-player reads through them
         addTest("command_rejects_untrusted_slave_forged_admin", this::testCommandRejectsUntrustedSlaveForgedAdmin);
         addTest("withdrawMoneyPacket_rejects_untrusted_slave", this::testWithdrawMoneyRejectsUntrustedSlave);
+        addTest("withdrawMoneyPacket_messages_reach_slave_player", this::testWithdrawMoneyMessagesReachSlave); // BS-273
         addTest("getUserCustomData_empty_for_untrusted_slave", this::testUserCustomDataEmptyForUntrustedSlave);
         addTest("listBindableAccounts_empty_for_untrusted_slave", this::testListBindableEmptyForUntrustedSlave);
 
@@ -708,6 +711,46 @@ public class MultiServerSecurityTests extends TestSuite {
         } finally {
             bank.withdraw(bank.getBalance());
             if (account.hasBank(money)) account.removeBank(money);
+        }
+    }
+
+    /**
+     * BS-273: the master's ATM withdraw refusals for a player on a slave go through the slave-bound
+     * ClientConsoleMessagePacket (its test sink sees them): "no permission" and "not enough money" from a trusted
+     * slave. An untrusted slave's refusal sends nothing that way: the slave shows its own untrusted line (BS-272).
+     */
+    private TestResult testWithdrawMoneyMessagesReachSlave() {
+        if (manager == null || testAccountNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER) return fail("Test account not set up");
+        IServerBankAccount account = manager.getBankAccount(testAccountNr);
+        if (account == null) return fail("Test account missing");
+        String trustedSlaveID = "bs273_trusted_slave", untrustedSlaveID = "bs273_untrusted_slave";
+        boolean wasTrusted = manager.isSlaveServerTrusted(trustedSlaveID);
+        if (manager.isSlaveServerTrusted(untrustedSlaveID)) manager.untrustSlaveServer(untrustedSlaveID);
+        manager.trustSlaveServer(trustedSlaveID);
+        ItemID money = MoneyItem.getItemID();
+        boolean hadMoneyBank = account.hasBank(money);
+        IServerBank moneyBank = account.getOrCreateBank(money); // empty: the owner has not enough money
+        if (moneyBank == null) return fail("Failed to create the money bank");
+        HashMap<ItemID, Long> notes = new HashMap<>();
+        notes.put(ItemID.of(net.kroia.banksystem.minecraft.item.BankSystemItems.MONEY5.get().getDefaultInstance()), 1L);
+        List<String> seen = new java.util.concurrent.CopyOnWriteArrayList<>();
+        ClientConsoleMessagePacket.testSink = seen::add;
+        try {
+            String noPermission = BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW);
+            new WithdrawMoneyPacket(notes, testAccountNr).handle(TEST_OUTSIDER, trustedSlaveID);
+            if (!seen.contains(noPermission)) return fail("no-permission line not sent to the slave: " + seen);
+            seen.clear();
+            String notEnough = BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), TEST_OWNER_NAME);
+            moneyBank.withdraw(moneyBank.getBalance());
+            new WithdrawMoneyPacket(notes, testAccountNr).handle(TEST_OWNER, trustedSlaveID);
+            if (!seen.contains(notEnough)) return fail("not-enough-money line not sent to the slave: " + seen);
+            seen.clear();
+            new WithdrawMoneyPacket(notes, testAccountNr).handle(TEST_OWNER, untrustedSlaveID);
+            return assertTrue("untrusted slave: nothing sent from the master, got " + seen, seen.isEmpty());
+        } finally {
+            ClientConsoleMessagePacket.testSink = null;
+            if (!wasTrusted) manager.untrustSlaveServer(trustedSlaveID);
+            if (!hadMoneyBank && account.hasBank(money)) account.removeBank(money);
         }
     }
 

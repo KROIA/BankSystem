@@ -13,6 +13,7 @@ import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -203,9 +204,7 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                         ConverterCacheManager.get().deposit(playerUUID, refund);
                         TransferJournal.step(journal.transferId(), TransferJournal.RETURNED,
                                 refund == amount ? null : Map.of(money, refund), null);
-                        ServerPlayerUtilities.printToClientConsole(playerUUID,
-                                "Converter deposit to bank refused by master; " + refund
-                                        + " cents returned to converter cache.");
+                        notifyRefused(playerUUID, refund);
                     };
                     net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
                     if (server != null) {
@@ -216,6 +215,21 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                         applyRefund.run();
                     }
                 });
+    }
+
+    /**
+     * BS-273: the refusal line after a refund. An untrusted slave gets the red untrusted line (once, instead of the
+     * refund line); otherwise the refund line. Public for the in-game test.
+     *
+     * @return true if the untrusted line was sent
+     */
+    public static CompletableFuture<Boolean> notifyRefused(UUID playerUUID, long refund) {
+        return MultiServerUtils.notifyIfUntrustedSlave(playerUUID).thenApply(untrusted -> {
+            if (!untrusted)
+                ServerPlayerUtilities.printToClientConsole(playerUUID,
+                        "Converter deposit to bank refused by master; " + refund + " cents returned to converter cache.");
+            return untrusted;
+        });
     }
 
     @Override

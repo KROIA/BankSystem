@@ -231,6 +231,9 @@ public class TransferJournalTests extends TestSuite {
             long credited = after.getOrDefault(money, 0L) - before.getOrDefault(money, 0L);
             if (credited != 300L) return fail("money bank credited " + credited + ", expected 300");
             if (cache != 0L) return fail("cache " + cache + " after commit, expected 0");
+            // BS-273: a refusal on a trusted slave keeps the refund line, not the untrusted one
+            if (!Boolean.FALSE.equals(await(ConverterCommitToBankPacket.notifyRefused(PLAYER, 1L), WAIT_MS)))
+                return fail("trusted slave: refusal line is the untrusted line");
             // a fresh account gets its money bank on the first deposit; any OTHER new bank (e.g. a note bank) is wrong
             Set<ItemID> added = new HashSet<>(after.keySet());
             added.removeAll(before.keySet());
@@ -267,6 +270,9 @@ public class TransferJournalTests extends TestSuite {
         // the refund hops to the server thread
         if (!pumpUntil(() -> ConverterCacheManager.get().getCache(PLAYER) == 300L, WAIT_MS))
             return fail("cache " + ConverterCacheManager.get().getCache(PLAYER) + " after refusal, expected 300");
+        // BS-273: the refund's chat line is the red untrusted one (and only that)
+        if (!Boolean.TRUE.equals(await(ConverterCommitToBankPacket.notifyRefused(PLAYER, 300L), WAIT_MS)))
+            return fail("untrusted slave: refusal line is not the untrusted line");
 
         await(db.flush(), WAIT_MS);
         String json = "{\"" + money.getShort() + "\":300}";

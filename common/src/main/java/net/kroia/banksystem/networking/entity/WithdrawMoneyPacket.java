@@ -13,6 +13,7 @@ import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -179,6 +180,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if(slaveID != null && !slaveID.isEmpty() && !bankManager.isSlaveServerTrusted(slaveID))
         {
             warn("The slave server: '" + slaveID + "' tried to withdraw money, which is not allowed for an untrusted slave server!");
+            // Stays master-local on purpose: the slave shows its own untrusted line (routeToMaster, BS-272), so the player sees it once.
             ServerPlayerUtilities.printToClientConsole(player, "[BankSystem] Your server '" + slaveID + "' is not trusted by the bank master. "
                     + "Contact a bank admin to grant trust for cross-server bank operations.");
             return;
@@ -190,7 +192,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
         if(!account.hasPermission(player, BankPermission.WITHDRAW))
         {
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
+            // BS-273: through the slave-bound message packet, so a player on a slave sees it too
+            ClientConsoleMessagePacket.sendMessageFromMaster(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
             return;
         }
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(finalCurrentSelectedAccountNumber, LedgerType.WITHDRAW, player)) // Task #117
@@ -239,7 +242,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 User user = bankManager.getUserByUUID(player);
                 if(user == null) continue;
                 String userName = user.getName();
-                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), userName));
+                ClientConsoleMessagePacket.sendMessageFromMaster(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), userName)); // BS-273
                 continue;
             }
 
