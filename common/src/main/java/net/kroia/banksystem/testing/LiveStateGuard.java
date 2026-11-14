@@ -242,6 +242,7 @@ public final class LiveStateGuard {
             ItemIDManager.replaceState_forTesting(live,
                     ItemIDManager.getItemIDAliasMap(),
                     ItemIDManager.getNextShortCounter_forTesting());
+            ItemIDManager.broadcastFullSync_forTesting(); // BS-264
             if (itemIDMap != null)
                 itemIDMap.remove(stale);
             purge(stale);
@@ -339,6 +340,7 @@ public final class LiveStateGuard {
             if (itemIDMap != null) {
                 ItemIDManager.replaceState_forTesting(itemIDMap, aliasMap, shortCounter);
                 ItemIDManager.restoreQuarantinedAliases_forTesting(quarantinedAliases);
+                ItemIDManager.broadcastFullSync_forTesting(); // BS-264: undo what slaves adopted
             }
         } catch (Throwable t) {
             LOGGER.error("LiveStateGuard: could not restore the ItemID registry: {}",

@@ -106,6 +106,21 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
 
+    /** Amber of a Save button while there are unsaved edits. */
+    public static final int UNSAVED_COLOR = 0xFFD99A26;
+
+    /**
+     * Recolors a button including its hover/pressed shades. {@code color} 0 restores the default
+     * button colors (same formula as ModUtilities EmptyButton). Cheap enough to call every frame.
+     */
+    public static void setButtonColor(net.kroia.modutilities.gui.elements.EmptyButton button, int color) {
+        int base = color != 0 ? color : net.kroia.modutilities.ColorUtilities.setBrightness(
+                net.kroia.modutilities.gui.elements.base.GuiElement.DEFAULT_BACKGROUND_COLOR, 0.8f);
+        button.setBackgroundColor(base);
+        button.setHoverColor(net.kroia.modutilities.ColorUtilities.setBrightness(base, 0.8f));
+        button.setPressedColor(net.kroia.modutilities.ColorUtilities.setBrightness(base, 0.6f));
+    }
+
     /**
      * @return true if the server this client is connected to is the MASTER server
      *         (or a regular single server, which acts as its own master). Synced at

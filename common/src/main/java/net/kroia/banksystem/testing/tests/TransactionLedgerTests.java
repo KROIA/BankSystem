@@ -19,6 +19,7 @@ import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
+import net.kroia.banksystem.banking.ledger.AdminAudit;
 import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
@@ -30,6 +31,7 @@ import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.minecraft.command.ServerBankSystemCommandHandler;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.kroia.banksystem.networking.entity.WithdrawMoneyPacket;
 import net.kroia.banksystem.networking.general.UpdateBankAccountRequest;
 import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
@@ -112,8 +114,10 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("user_deletion_offline_writes_loss_rows", () -> threw(this::userDeletionOfflineLoss)); // Task #127
         addTest("user_deletion_splits_payout_and_loss", this::userDeletionSplit); // Task #127
         addTest("user_deletion_keeps_company_account", this::userDeletionKeepsCompanyAccount); // Task #127
+        addTest("share_balance_admin_edit", this::shareBalanceAdminEdit); // BS-234
         addTest("user_deletion_payout_rows_per_transfer", this::userDeletionPayoutLegs); // Task #136
         addTest("user_deletion_unknown_outcome_loss_ref", () -> threw(this::userDeletionUnknownOutcome)); // Task #136
+        addTest("user_deletion_unknown_outcome_item_flag", () -> threw(this::userDeletionUnknownOutcomeItem)); // BS-242
         addTest("user_deletion_raw_to_items", this::payoutRawToItems); // Task #136
         addTest("slave_code_allow_list", this::slaveCodeAllowList);
         addTest("async_bank_code_logged_on_master", this::asyncBankCodeLoggedOnMaster);
@@ -134,6 +138,13 @@ public class TransactionLedgerTests extends TestSuite {
         addTest("transfer_id_applies_once", () -> threw(this::transferIdAppliesOnce));
         addTest("drop_unknown_outcome_parks", () -> threw(this::dropUnknownParks));
         addTest("drop_not_sent_refunds_with_switch_on", this::dropNotSentRefundsWithSwitchOn);
+        // BS-256 — origin server of slave rows
+        addTest("origin_server_on_slave_rows_null_on_master", () -> threw(this::originServer));
+        // BS-258 — block position of rows caused at a block
+        addTest("block_position_on_block_rows_null_elsewhere", () -> threw(this::blockPosition));
+        // BS-267 — reset locked balance on an account with a parked transfer
+        addTest("reset_locked_balance_warns_on_parked_transfer", () -> threw(this::resetLockWarnsParked));
+        addTest("drop_refund_to_gone_account_writes_refund_lost", () -> threw(this::dropRefundLost)); // BS-267
     }
 
     @Override
@@ -187,6 +198,8 @@ public class TransactionLedgerTests extends TestSuite {
                 {LedgerType.DIVIDEND, 21}, {LedgerType.SHARE_STAMP, 22}, {LedgerType.SHARE_REDEEM, 23},
                 {LedgerType.SHARE_TRADE, 24}, {LedgerType.ACCOUNT_DELETE_PAYOUT, 25}, {LedgerType.ACCOUNT_FREEZE, 26},
                 {LedgerType.ADMIN_DISALLOW_ITEM, 27}, {LedgerType.ACCOUNT_DELETE_LOSS, 28},
+                {LedgerType.RAW_CHANGE, 29}, {LedgerType.EXTERNAL_BIND, 30}, {LedgerType.EXTERNAL_UNBIND, 31},
+                {LedgerType.REFUND_LOST, 32},
         };
         if (expected.length != LedgerType.values().length)
             return fail("LedgerType has " + LedgerType.values().length + " constants, table lists " + expected.length
@@ -230,6 +243,8 @@ public class TransactionLedgerTests extends TestSuite {
             List<TransactionLogRecord> rows = mgr.getByAccount(5, 0).get(10, TimeUnit.SECONDS);
             TestResult r = assertEquals("all legacy rows load", 6, rows.size());
             if (!r.passed()) return r;
+            for (TransactionLogRecord row : rows)
+                if (row.originServer() != null) return fail("legacy row got an origin server: " + row); // BS-256
             // newest first: SOMETHING_OLD, SHARE_TRADE, PAYOUT, TRANSFER_IN, TRANSFER_OUT, DEPOSIT
             LedgerType[] types = {LedgerType.UNKNOWN_LEGACY, LedgerType.SHARE_TRADE, LedgerType.PAYOUT,
                     LedgerType.TRANSFER, LedgerType.TRANSFER, LedgerType.DEPOSIT};
@@ -539,6 +554,29 @@ public class TransactionLedgerTests extends TestSuite {
         return fail("no TRANSFER_PARKED flag for " + tid);
     }
 
+    /** BS-242: a parked non-money item: flag amount 0, the alert names the scaled item amount, no money sign. */
+    private TestResult userDeletionUnknownOutcomeItem() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        if (!(manager instanceof ServerBankManager sbm)) return fail("live manager is not a ServerBankManager");
+        var flags = BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER;
+        if (flags == null) return fail("no flag manager");
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        String tid = TransferJournal.newTransferId();
+        sbm.logDeletePayout(Map.of(otherAccountNr, Map.of(diamond, 250L)),
+                new ServerBankManager.PayoutResult(Map.of(diamond, 250L), "outcome unknown, transfer " + tid, Map.of(), tid),
+                UUID.randomUUID(), LedgerActor.system());
+        for (SuspicionFlagRecord f : flags.getRecent(otherAccountNr, 0, 0).get(10, TimeUnit.SECONDS)) {
+            if (f.flagType() != SuspicionChecks.TRANSFER_PARKED || !tid.equals(f.ref())) continue;
+            if (f.amount() != 0) return fail("flag amount " + f.amount() + ", expected 0");
+            String chat = AdminAudit.flagChat(otherAccountNr, f.flagType(), f.severity(), f.amount(), f.details());
+            String want = "2.50 " + Items.DIAMOND.getDefaultInstance().getHoverName().getString();
+            if (!chat.contains(want) || chat.contains(net.kroia.banksystem.api.MoneyFormat.formatMoney(250L)) || chat.contains(" 250"))
+                return fail("expected '" + want + "' without money or raw count:\n" + chat);
+            return pass("flag amount 0, alert shows " + want);
+        }
+        return fail("no TRANSFER_PARKED flag for " + tid);
+    }
+
     /** Task #136: raw balances become item counts: money cents split into notes, items raw / ratio, the rest below one item returned. */
     private TestResult payoutRawToItems() {
         if (!ready()) return fail("live setup missing");
@@ -599,6 +637,63 @@ public class TransactionLedgerTests extends TestSuite {
         }
     }
 
+    /** BS-234: a share balance can't be raised; lowering it returns shares to the company or destroys them. */
+    private TestResult shareBalanceAdminEdit() {
+        if (!ready()) return fail("live setup missing");
+        CompanyManager cm = CompanyManager.get();
+        if (cm == null) return fail("no CompanyManager");
+        int companyNr = newAccount("LedgerTestShareCo", PLAYER);
+        Company company = companyNr == ServerBankAccount.INVALID_ACCOUNT_NUMBER ? null
+                : cm.createCompany("LedgerTestShares" + companyNr, companyNr, null, 100L).company;
+        ItemID share = null;
+        try {
+            if (company == null) return fail("company not created");
+            int id = company.getCompanyId();
+            share = allow(StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), id));
+            for (int i = 0; i < 10; i++) cm.stampShare(id);
+            IServerBank holder = manager.getBankAccount(accountNr).getOrCreateBank(share);
+            IServerBank own = manager.getBankAccount(companyNr).getOrCreateBank(share);
+            if (holder == null || own == null) return fail("no share bank");
+            holder.deposit(500L); // 5 shares
+            own.deposit(500L);
+
+            editShare(accountNr, share, 900L, UpdateBankAccountRequest.SHARE_RETURN_TO_COMPANY);
+            if (holder.getTotalBalance() != 500L) return fail("share increase applied: " + holder.getTotalBalance());
+            editShare(accountNr, share, 0L, UpdateBankAccountRequest.SHARE_NONE);
+            if (holder.getTotalBalance() != 500L) return fail("decrease without a choice applied");
+
+            editShare(accountNr, share, 300L, UpdateBankAccountRequest.SHARE_RETURN_TO_COMPANY);
+            if (holder.getTotalBalance() != 300L || own.getTotalBalance() != 700L)
+                return fail("return to company: holder " + holder.getTotalBalance() + ", company " + own.getTotalBalance());
+            TransactionLogRecord out = find(rows(accountNr), LedgerType.TRANSFER, share);
+            TransactionLogRecord in = find(rows(companyNr), LedgerType.TRANSFER, share);
+            if (out == null || in == null || out.amount() != -200L || in.amount() != 200L
+                    || !Integer.valueOf(id).equals(out.companyId()) || !ADMIN.equals(out.actorUuid()))
+                return fail("return rows " + out + " / " + in);
+
+            editShare(companyNr, share, 0L, UpdateBankAccountRequest.SHARE_RETURN_TO_COMPANY);
+            if (own.getTotalBalance() != 700L) return fail("company account returned shares to itself");
+            editShare(companyNr, share, 400L, UpdateBankAccountRequest.SHARE_DESTROY);
+            if (own.getTotalBalance() != 400L || company.getTotalSharesIssued() != 7L)
+                return fail("destroy: balance " + own.getTotalBalance() + ", issued " + company.getTotalSharesIssued());
+            TransactionLogRecord destroyed = find(rows(companyNr), LedgerType.ADMIN_REMOVE, share);
+            if (destroyed == null || destroyed.amount() != 300L || !Integer.valueOf(id).equals(destroyed.companyId()))
+                return fail("destroy row " + destroyed);
+            return pass("increase refused, return moves shares with TRANSFER rows, destroy lowers totalSharesIssued");
+        } finally {
+            if (share != null) manager.getBankAccount(accountNr).removeBank(share);
+            if (company != null) cm.deleteCompany(company.getCompanyId());
+            if (companyNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER) manager.deleteBankAccount(companyNr);
+        }
+    }
+
+    private void editShare(int account, ItemID share, long balance, int choice) {
+        List<UpdateBankAccountRequest.InputData.BankData> data = new ArrayList<>();
+        data.add(new UpdateBankAccountRequest.InputData.BankData(share, balance, true, false, false, false, choice));
+        new UpdateBankAccountRequest().handleOnMasterServer(
+                new UpdateBankAccountRequest.InputData(account, "", null, data, null), "", ADMIN).join();
+    }
+
     // ------------------------------------------------------------------ slave type codes
 
     private TestResult slaveCodeAllowList() {
@@ -641,11 +736,14 @@ public class TransactionLedgerTests extends TestSuite {
         if (up == null || up.amount() != 77L || !PLAYER.equals(up.actorUuid()) || !"upload test".equals(up.note()))
             return fail("tagged deposit row " + up);
 
-        // Raw call (StockMarket settlement): NO_LOG, no row.
+        // Raw call (NO_LOG): BS-254, ServerBank writes one RAW_CHANGE row with source UNKNOWN.
         int before = rows(accountNr).size();
         handler.handleOnMasterServer(net.kroia.banksystem.banking.bank.AsyncBank.InputData.of(
                 net.kroia.banksystem.banking.bank.AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 5L), "", null).join();
-        if (rows(accountNr).size() != before) return fail("raw deposit wrote a row");
+        List<TransactionLogRecord> afterRaw = rows(accountNr);
+        TransactionLogRecord raw = afterRaw.isEmpty() ? null : afterRaw.get(0);
+        if (afterRaw.size() != before + 1 || raw.type() != LedgerType.RAW_CHANGE || raw.amount() != 5L
+                || raw.source() != LedgerActor.Source.UNKNOWN) return fail("raw deposit row " + raw);
 
         // Disallowed code on a withdraw: operation runs, row is UNKNOWN_LEGACY with the note.
         long balance = money.getBalance();
@@ -657,7 +755,7 @@ public class TransactionLedgerTests extends TestSuite {
         TransactionLogRecord rejected = find(rows(accountNr), LedgerType.UNKNOWN_LEGACY);
         if (rejected == null || rejected.amount() != 10L || rejected.note() == null
                 || !rejected.note().startsWith("rejected code 8")) return fail("rejected row " + rejected);
-        return pass("tagged call logged, raw call silent, disallowed code logged as 0");
+        return pass("tagged call logged, raw call as RAW_CHANGE, disallowed code logged as 0");
     }
 
     private TestResult itemRequestRejectsDisallowedCode() {
@@ -738,6 +836,135 @@ public class TransactionLedgerTests extends TestSuite {
     // ------------------------------------------------------------------ Task #126 (B6) transfer status
 
     private static final String FAKE_SLAVE = "b126-test-slave";
+    private static final String ORIGIN_SLAVE = "b256-test-slave";
+
+    /**
+     * BS-256: requests that enter through the ARRS master entry point with a slave id write rows whose
+     * origin_server is that slave id (typed and raw AsyncBank calls, both transfer legs, item requests); the
+     * same calls made on the master write NULL.
+     */
+    private TestResult originServer() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        ItemID moneyId = MoneyItem.getItemID();
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(moneyId);
+        if (money == null || manager.getBankAccount(otherAccountNr).getOrCreateBank(moneyId) == null) return fail("no money bank");
+        boolean wasTrusted = manager.isSlaveServerTrusted(ORIGIN_SLAVE);
+        manager.trustSlaveServer(ORIGIN_SLAVE);
+        try {
+            long last = lastRowId(accountNr), lastOther = lastRowId(otherAccountNr);
+            AsyncBank.Request bankReq = AsyncBank.Request.instance;
+            viaMaster(bankReq, TransactionLedger.tagged(LedgerType.UPLOAD_DEPOSIT, PLAYER, null,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 40L)));
+            viaMaster(bankReq, AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 5L));
+            viaMaster(bankReq, AsyncBank.InputData.of(AsyncBank.FunctionType.TransferAsync, accountNr, moneyId,
+                    new AsyncBank.ParamGroup_long_int(3L, otherAccountNr)));
+            Map<ItemID, Long> items = new HashMap<>(Map.of(diamond, 2L));
+            viaMaster(new DepositItemsInBankRequest(),
+                    new DepositItemsInBankRequest.InputData(accountNr, PLAYER, items, LedgerType.DEPOSIT.code()));
+            viaMaster(new WithdrawItemsFromBankRequest(),
+                    new WithdrawItemsFromBankRequest.InputData(accountNr, PLAYER, items, LedgerType.DOWNLOAD_WITHDRAW.code()));
+            List<TransactionLogRecord> slaveRows = new ArrayList<>(since(accountNr, last));
+            slaveRows.addAll(since(otherAccountNr, lastOther));
+            List<LedgerType> want = List.of(LedgerType.UPLOAD_DEPOSIT, LedgerType.RAW_CHANGE, LedgerType.TRANSFER,
+                    LedgerType.DEPOSIT, LedgerType.DOWNLOAD_WITHDRAW);
+            for (LedgerType t : want)
+                if (find(slaveRows, t) == null) return fail("no " + t + " row from the slave requests: " + slaveRows);
+            if (slaveRows.stream().filter(x -> x.type() == LedgerType.TRANSFER).count() != 2) return fail("transfer legs " + slaveRows);
+            for (TransactionLogRecord row : slaveRows)
+                if (!ORIGIN_SLAVE.equals(row.originServer())) return fail("slave row without origin: " + row);
+
+            last = lastRowId(accountNr);
+            bankReq.handleOnMasterServer(TransactionLedger.tagged(LedgerType.UPLOAD_DEPOSIT, PLAYER, null,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 6L)), "", null).join();
+            money.deposit(1L);
+            List<TransactionLogRecord> masterRows = since(accountNr, last);
+            if (masterRows.size() != 2) return fail("master rows " + masterRows);
+            for (TransactionLogRecord row : masterRows)
+                if (row.originServer() != null) return fail("master row with origin: " + row);
+            return pass("slave rows carry " + ORIGIN_SLAVE + " (" + slaveRows.size() + " rows), master rows NULL");
+        } finally {
+            if (!wasTrusted) manager.untrustSlaveServer(ORIGIN_SLAVE);
+        }
+    }
+
+    /**
+     * BS-258: a block position set on the sender travels with a slave's AsyncBank call and item request and is stored
+     * (dimension, x, y, z); a master row written at a block gets it too; a call made without a block stores NULL; a
+     * {@link TransactionLedger.Scope} carries origin and position into a callback on another thread.
+     */
+    private TestResult blockPosition() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        ItemID moneyId = MoneyItem.getItemID();
+        IServerBank money = manager.getBankAccount(accountNr).getOrCreateBank(moneyId);
+        if (money == null) return fail("no money bank");
+        TransactionLedger.LedgerPos atm = new TransactionLedger.LedgerPos("minecraft:overworld", 12, 64, -7);
+        TransactionLedger.LedgerPos upload = new TransactionLedger.LedgerPos("minecraft:the_nether", -3, 70, 5);
+        boolean wasTrusted = manager.isSlaveServerTrusted(ORIGIN_SLAVE);
+        manager.trustSlaveServer(ORIGIN_SLAVE);
+        try {
+            long last = lastRowId(accountNr);
+            AsyncBank.Request bankReq = AsyncBank.Request.instance;
+            viaMaster(bankReq, TransactionLedger.withPos(upload, () -> TransactionLedger.tagged(LedgerType.UPLOAD_DEPOSIT, PLAYER, null,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 40L))));
+            viaMaster(new DepositItemsInBankRequest(), TransactionLedger.withPos(atm, () -> new DepositItemsInBankRequest.InputData(
+                    accountNr, PLAYER, new HashMap<>(Map.of(moneyId, 9L)), LedgerType.CONVERTER_DEPOSIT.code())));
+            viaMaster(bankReq, TransactionLedger.tagged(LedgerType.DEPOSIT, PLAYER, null,
+                    () -> AsyncBank.InputData.of(AsyncBank.FunctionType.DepositAsync, accountNr, moneyId, 3L)));
+            TransactionLedger.withPos(atm, () -> {
+                TransactionLedger.logRow(accountNr, LedgerType.WITHDRAW, moneyId, 1L, TransactionLedger.player(PLAYER), null, "b258 at block");
+                return null;
+            });
+            money.deposit(2L); // RAW_CHANGE, not at a block
+            TransactionLedger.Scope scope = TransactionLedger.withOrigin(ORIGIN_SLAVE,
+                    () -> TransactionLedger.withPos(upload, TransactionLedger::scope));
+            java.util.concurrent.CompletableFuture.runAsync(() -> scope.run(() -> {
+                TransactionLedger.logRow(accountNr, LedgerType.WITHDRAW, moneyId, 1L, TransactionLedger.player(PLAYER), null, "b258 later");
+                return null;
+            })).get(10, TimeUnit.SECONDS);
+
+            List<TransactionLogRecord> rows = since(accountNr, last);
+            TransactionLogRecord up = find(rows, LedgerType.UPLOAD_DEPOSIT), conv = find(rows, LedgerType.CONVERTER_DEPOSIT),
+                    plain = find(rows, LedgerType.DEPOSIT), raw = find(rows, LedgerType.RAW_CHANGE);
+            TransactionLogRecord atBlock = rows.stream().filter(x -> "b258 at block".equals(x.note())).findFirst().orElse(null);
+            TransactionLogRecord later = rows.stream().filter(x -> "b258 later".equals(x.note())).findFirst().orElse(null);
+            if (up == null || conv == null || plain == null || raw == null || atBlock == null || later == null)
+                return fail("rows missing: " + rows);
+            if (!upload.equals(up.pos()) || !ORIGIN_SLAVE.equals(up.originServer())) return fail("slave AsyncBank row " + up);
+            if (!atm.equals(conv.pos())) return fail("slave item request row " + conv);
+            if (plain.pos() != null) return fail("slave row without a block has a position: " + plain);
+            if (!atm.equals(atBlock.pos()) || atBlock.originServer() != null) return fail("master block row " + atBlock);
+            if (raw.pos() != null) return fail("raw bank call has a position: " + raw);
+            if (!upload.equals(later.pos()) || !ORIGIN_SLAVE.equals(later.originServer())) return fail("callback row " + later);
+            return pass("block rows carry their position over the wire and from the DB, other rows NULL, callbacks keep the scope");
+        } finally {
+            if (!wasTrusted) manager.untrustSlaveServer(ORIGIN_SLAVE);
+        }
+    }
+
+    /** Runs {@code input} through the ARRS master entry point as if {@link #ORIGIN_SLAVE} had forwarded it. */
+    private static <I, O> void viaMaster(net.kroia.modutilities.networking.client_server.arrs.GenericRequest<I, O> req, I input)
+            throws Exception {
+        RegistryFriendlyByteBuf in = UtilitiesPlatform.createRegistryFriendlyByteBufServerSide();
+        RegistryFriendlyByteBuf out = UtilitiesPlatform.createRegistryFriendlyByteBufServerSide();
+        if (in == null || out == null) throw new IllegalStateException("no server registry access");
+        try {
+            req.encodeInput(in, input);
+            req.decodeHandleEncodeOnMasterServer(in, out, ORIGIN_SLAVE, null).get(10, TimeUnit.SECONDS);
+        } finally {
+            if (in.refCnt() > 0) in.release();
+            if (out.refCnt() > 0) out.release();
+        }
+    }
+
+    private long lastRowId(int account) {
+        List<TransactionLogRecord> rows = rows(account);
+        return rows.isEmpty() ? 0L : rows.get(0).id();
+    }
+
+    private List<TransactionLogRecord> since(int account, long lastId) {
+        return rows(account).stream().filter(x -> x.id() > lastId).toList();
+    }
 
     @FunctionalInterface
     private interface Body { TestResult run() throws Exception; }
@@ -893,10 +1120,10 @@ public class TransactionLedgerTests extends TestSuite {
                 buf -> new AsyncBank.BankIdentifyAndDataPacket<>(buf.readInt(), ItemID.STREAM_CODEC.decode(buf),
                         ExtraCodecUtils.nullable(ByteBufCodecs.VAR_LONG).decode(buf), ByteBufCodecs.VAR_INT.decode(buf),
                         ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).decode(buf),
-                        ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf), null));
+                        ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf), null, null));
         r = compat("async bank", bankLegacy, AsyncBank.BankIdentifyAndDataPacket.streamCodec(ByteBufCodecs.VAR_LONG.cast()),
-                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", null),
-                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", tid));
+                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", null, null),
+                new AsyncBank.BankIdentifyAndDataPacket<>(7, money, 42L, LedgerType.DEPOSIT.code(), PLAYER, "n", tid, null));
         if (!r.passed()) return r;
 
         // an id that is not a canonical UUID goes out as null instead of throwing
@@ -1152,6 +1379,48 @@ public class TransactionLedgerTests extends TestSuite {
         }
     }
 
+    /** BS-267: an admin "reset locked balance" on an account with an open TRANSFER_PARKED flag warns that admin; the reset still runs. */
+    private TestResult resetLockWarnsParked() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        ItemID diamond = allow(Items.DIAMOND.getDefaultInstance());
+        IServerBank bank = manager.getBankAccount(otherAccountNr).getOrCreateBank(diamond);
+        bank.deposit(1_000L);
+        bank.lockAmount(100L);
+        String tid = TransferJournal.newTransferId();
+        AdminAudit.raise(otherAccountNr, SuspicionChecks.TRANSFER_PARKED, 2, 0, tid, "test: parked transfer");
+        List<String> sent = new java.util.concurrent.CopyOnWriteArrayList<>();
+        net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket.testSink = sent::add;
+        try {
+            List<UpdateBankAccountRequest.InputData.BankData> data = new ArrayList<>();
+            data.add(new UpdateBankAccountRequest.InputData.BankData(diamond, 0L, false, true, false, false));
+            new UpdateBankAccountRequest().handleOnMasterServer(new UpdateBankAccountRequest.InputData(otherAccountNr, "", null,
+                    data, null), "", ADMIN).join();
+            pumpUntil(() -> sent.stream().anyMatch(m -> m.contains(tid)), 5_000);
+        } finally {
+            net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket.testSink = null;
+        }
+        if (bank.getLockedBalance() != 0) return fail("reset did not run: locked " + bank.getLockedBalance());
+        return assertTrue("admin warned with the parked transfer id, got " + sent, sent.stream().anyMatch(m -> m.contains(tid)));
+    }
+
+    /** BS-267: notes not dropped whose refund account is gone: one REFUND_LOST row (ref = transfer id, amount = money), no refund. */
+    private TestResult dropRefundLost() throws Exception {
+        if (!ready()) return fail("live setup missing");
+        int gone = Integer.MAX_VALUE - 2675;
+        if (manager.getBankAccount(gone) != null) return fail("account " + gone + " exists");
+        touchedAccounts.add(gone);
+        ItemID note = ItemID.of(BankSystemItems.MONEY5.get().getDefaultInstance());
+        long worth = ((MoneyItem) BankSystemItems.MONEY5.get()).worth();
+        String tid = TransferJournal.newTransferId();
+        new WithdrawMoneyPacket(new HashMap<>(), gone).onDropResult(FAKE_SLAVE, PLAYER, gone, Map.of(note, 2L), tid, Map.of(note, 2L), null);
+        List<TransactionLogRecord> rows = ledger.getByRef(tid).get(10, TimeUnit.SECONDS);
+        TransactionLogRecord r = find(rows, LedgerType.REFUND_LOST);
+        if (rows.size() != 1 || r == null) return fail("expected one REFUND_LOST row, got " + rows);
+        if (r.accountNumber() != gone || r.itemId() != MoneyItem.getItemID().getShort() || r.amount() != 2 * worth)
+            return fail("row " + r);
+        return pass("REFUND_LOST " + r.amount() + " on gone account, ref = transfer id, no refund row");
+    }
+
     private boolean ready() {
         return manager != null && ledger != null && accountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER
                 && otherAccountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER;
@@ -1217,14 +1486,8 @@ public class TransactionLedgerTests extends TestSuite {
     }
 
     static Connection openMemoryDb() throws Exception {
-        Class<?> driverClass;
         try {
-            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-        } catch (ClassNotFoundException e) {
-            driverClass = TransactionLedgerTests.class.getClassLoader().loadClass("org.sqlite.JDBC");
-        }
-        try {
-            DriverManager.registerDriver(new DriverShim((Driver) driverClass.getDeclaredConstructor().newInstance()));
+            DriverManager.registerDriver(new DriverShim(DatabaseManager.newSqliteDriver()));
         } catch (Exception ignored) {}
         Connection c = DriverManager.getConnection("jdbc:sqlite::memory:");
         c.setAutoCommit(false);

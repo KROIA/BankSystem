@@ -91,6 +91,8 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     private TabElement tabs;
     /** Current Overview body; the only tab with an unsaved-edit state (description). */
     private net.kroia.banksystem.screen.uiElements.tabbody.OverviewTabBody overviewBody;
+    /** Current Market body; owns the StockMarket price chart that must be closed (BS-178). */
+    private net.kroia.banksystem.screen.uiElements.tabbody.MarketTabBody marketBody;
 
     /** Screen-open latch — every async continuation gates on this so callbacks after
      *  close are dropped. */
@@ -138,6 +140,7 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     public boolean canManageNow() { return canManage; }
     public boolean isFounderNow() { return isFounder; }
     public UUID callerUUID() { return callerUUID; }
+    public boolean isMarketBody(GuiElement body) { return body != null && body == marketBody; }
     public net.kroia.banksystem.api.bankmanager.IClientBankManager clientBankManager() { return getBankManager(); }
 
     /** Spec §0.7 — re-fetch authoritative info after a mutation; rebuilds the tab tree. */
@@ -228,6 +231,8 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
      */
     private void rebuildTabs() {
         int selectedIndex = tabs != null ? tabs.getSelectedTab() : 0;
+        if (marketBody != null) marketBody.closeChart(); // stop the old body's price stream
+        marketBody = null;
         removeAllElements();
         addElement(titleLabel);
         addElement(closeButton);
@@ -288,7 +293,8 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     }
 
     private GuiElement buildMarketBody() {
-        return new net.kroia.banksystem.screen.uiElements.tabbody.MarketTabBody(this);
+        marketBody = new net.kroia.banksystem.screen.uiElements.tabbody.MarketTabBody(this);
+        return marketBody;
     }
 
     private GuiElement buildStatisticsBody() {
@@ -316,6 +322,13 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
         super.onClose();
     }
 
+    /** Fires on close and whenever another screen (popup, SM trade screen) replaces this one. */
+    @Override
+    public void removed() {
+        if (marketBody != null) marketBody.closeChart(); // BS-178: no leaked price stream
+        super.removed();
+    }
+
     @Override
     protected void updateLayout(Gui gui) {
         if (titleLabel == null || closeButton == null) return;
@@ -331,5 +344,7 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
             if (bodyHeight < 40) bodyHeight = 40;
             tabs.setBounds(padding, bodyTop, width, bodyHeight);
         }
+        // init() runs this again when a popup returns here: reopen the chart removed() closed.
+        if (marketBody != null) marketBody.openChart();
     }
 }

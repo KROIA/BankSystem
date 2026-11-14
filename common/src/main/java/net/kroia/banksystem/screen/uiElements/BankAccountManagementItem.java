@@ -1,7 +1,9 @@
 package net.kroia.banksystem.screen.uiElements;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.bank.ServerBank;
+import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
@@ -25,6 +27,8 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     private static final Component BALANCE_LABEL_TOOLTIP = Component.translatable(PREFIX+"balance_label.tooltip");
     private static final Component LOCKED_LABEL_TOOLTIP = Component.translatable(PREFIX+"locked_label.tooltip");
     private static final Component TOTAL_LABEL_TOOLTIP = Component.translatable(PREFIX+"total_label.tooltip");
+    private static final String SHARE_BALANCE_REASON = PREFIX+"share_balance_reason";
+    private static final int RED_TEXT_COLOR = 0xFFE04040;
 
 
     private final int accountNumber;
@@ -49,6 +53,12 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     private boolean freeLockedBalance = false;
     private final boolean isAdminMode;
     private final boolean canManage;
+    /** BS-234: company of a stamped-share item, else null. Share balances may only go down. */
+    private final Integer shareCompanyId;
+    private long lastFree = 0;
+    private long lastLocked = 0;
+    private long lastTotal = 0;
+    private int defaultTextColor;
 
 
     public BankAccountManagementItem(ItemID itemID, int accountNumber, boolean isAdminMode, boolean canManage)
@@ -58,6 +68,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         this.canManage = canManage || isAdminMode;
         this.itemID = itemID;
         this.accountNumber = accountNumber;
+        this.shareCompanyId = StampedShareItem.getCompanyId(itemID.getStack());
         itemView = new ItemView(itemID.getStack());
         balanceLabel = new Label(BALANCE.getString());
         balanceValueLabel = new Label();
@@ -127,8 +138,13 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
             balanceValueTextBox = new TextBox();
             int itemFractionScaleFactor = getMarketManager().getItemFractionScaleFactor();
             balanceValueTextBox.setOnTextChanged(this::onBalanceTextBoxChanged);
-            balanceValueTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, (int)Math.log10((double) Long.MAX_VALUE /itemFractionScaleFactor),(int)Math.log10(itemFractionScaleFactor)));
-            balanceValueTextBox.setHoverTooltipSupplier(BALANCE_TEXTBOX_TOOLTIP::getString);
+            balanceValueTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, (int)Math.log10((double) Long.MAX_VALUE /itemFractionScaleFactor),
+                    shareCompanyId != null ? 0 : (int)Math.log10(itemFractionScaleFactor))); // BS-234: whole shares only
+            defaultTextColor = balanceValueTextBox.getTextColor();
+            balanceValueTextBox.setHoverTooltipSupplier(() -> shareOutOfRange()
+                    ? Component.translatable(SHARE_BALANCE_REASON, ServerBank.getFormattedAmountStatic(lastLocked),
+                            ServerBank.getFormattedAmountStatic(lastTotal)).getString()
+                    : BALANCE_TEXTBOX_TOOLTIP.getString());
             balanceValueTextBox.setHoverTooltipFontScale(0.8f);
             balanceValueTextBox.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
 
@@ -203,6 +219,29 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     {
         //long value = balanceValueTextBox.getInt();
         balanceChanged = true;
+        balanceValueTextBox.setTextColor(shareOutOfRange() ? RED_TEXT_COLOR : defaultTextColor);
+    }
+
+    /** BS-234: typed share balance outside [locked, current total] (the server refuses an increase). */
+    private boolean shareOutOfRange()
+    {
+        if (shareCompanyId == null) return false;
+        long typed = parseBalance();
+        return typed > lastTotal || typed < lastLocked;
+    }
+
+    @org.jetbrains.annotations.Nullable
+    public Integer getShareCompanyId()
+    {
+        return shareCompanyId;
+    }
+    public long getFreeBalance()
+    {
+        return lastFree;
+    }
+    public long getTotalBalance()
+    {
+        return lastTotal;
     }
     public boolean balanceHasChanged()
     {
@@ -226,7 +265,13 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
         return accountNumber;
     }
 
+    /** Typed balance; a share balance is clamped to [locked, current total] (BS-234). */
     public long getBalance()
+    {
+        long typed = parseBalance();
+        return shareCompanyId == null ? typed : Math.max(lastLocked, Math.min(lastTotal, typed));
+    }
+    private long parseBalance()
     {
         if(balanceValueTextBox.getText().isEmpty())
             return 0;
@@ -238,6 +283,7 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     }
     public void setBalanceLabel(long balance)
     {
+        lastFree = balance;
         balanceValueLabel.setText(ServerBank.getFormattedAmountStatic(balance));
     }
     public void setBalance(long balance)
@@ -246,13 +292,17 @@ public class BankAccountManagementItem extends BankSystemGuiElement {
     }
     public void setLockedBalance(long lockedBalance)
     {
+        lastLocked = lockedBalance;
         lockedBalanceValueLabel.setText(ServerBank.getFormattedAmountStatic(lockedBalance));
     }
     public void setTotalBalance(long totalBalance)
     {
+        lastTotal = totalBalance;
         totalBalanceValueLabel.setText(ServerBank.getFormattedAmountStatic(totalBalance));
         if(!balanceChanged && isAdminMode)
-            balanceValueTextBox.setText(ServerBank.getTextFieldString(totalBalance));
+            balanceValueTextBox.setText(shareCompanyId != null // whole shares, matches the integer-only regex
+                    ? String.valueOf(totalBalance / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR)
+                    : ServerBank.getTextFieldString(totalBalance));
     }
     private void onFreeLockedBalanceCheckBoxClicked(Boolean checked)
     {
