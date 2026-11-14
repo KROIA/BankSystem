@@ -177,7 +177,8 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
             if(itemBank != null)
             {
                 toWithdraw = Math.min(toWithdraw, itemBank.getBalance());
-                if(itemBank.withdraw(toWithdraw) == BankStatus.SUCCESS)
+                final long withdrawNow = toWithdraw;
+                if(TransactionLedger.withoutRawLog(() -> itemBank.withdraw(withdrawNow)) == BankStatus.SUCCESS) // BS-254: row below
                 {
                     withdrawnItems.put(entry.getKey(), toWithdraw);
                     logWithdrawal(input, ledger, itemBank, toWithdraw);
@@ -196,8 +197,9 @@ public class WithdrawItemsFromBankRequest extends BankSystemGenericRequest<Withd
                     .getCompanyIdForItemID(itemID);
             LedgerType type = companyId != null ? LedgerType.SHARE_TRADE : ledger.type();
             LedgerActor actor = TransactionLedger.slaveActor(input.executor);
-            TransactionLedger.write(TransactionLogRecord.of(input.bankAccount, type, itemID.getShort(), amount,
-                    actor, null, companyId, null, ledger.note(), bank.getTotalBalance()));
+            // BS-235: a share withdrawal is signed negative so SHARE_TRADE rows show their direction
+            TransactionLedger.write(TransactionLogRecord.of(input.bankAccount, type, itemID.getShort(),
+                    companyId != null ? -amount : amount, actor, null, companyId, null, ledger.note(), bank.getTotalBalance()));
         } catch (RuntimeException ignored) {
             // best-effort
         }

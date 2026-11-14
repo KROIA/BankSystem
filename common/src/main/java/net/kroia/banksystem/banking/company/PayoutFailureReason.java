@@ -15,7 +15,9 @@ public enum PayoutFailureReason {
     PAUSED,
     UNKNOWN,
     /** Task #117 — the company account is frozen. */
-    ACCOUNT_FROZEN;
+    ACCOUNT_FROZEN,
+    /** BS-235 — more shares are banked than were stamped; dividends wait for an admin. */
+    SHARES_UNDER_REVIEW;
 
     /** Map to the persisted history status. {@code TARGET_NOT_FOUND} keeps the legacy name. */
     public PayoutHistoryRecord.Status toStatus() {
@@ -27,6 +29,7 @@ public enum PayoutFailureReason {
             case PAUSED -> PayoutHistoryRecord.Status.PAUSED;
             case UNKNOWN -> PayoutHistoryRecord.Status.UNKNOWN;
             case ACCOUNT_FROZEN -> PayoutHistoryRecord.Status.ACCOUNT_FROZEN;
+            case SHARES_UNDER_REVIEW -> PayoutHistoryRecord.Status.PAUSED;
         };
     }
 }

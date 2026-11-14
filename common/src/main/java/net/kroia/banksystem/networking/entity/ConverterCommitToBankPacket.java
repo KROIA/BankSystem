@@ -13,6 +13,7 @@ import net.kroia.banksystem.networking.multi_server.DepositItemsInBankRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -93,11 +94,15 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
         long cached = ConverterCacheManager.get().getCache(playerUUID);
         if (cached <= 0) return;
 
-        if (BACKEND_INSTANCES.isSlaveServer) {
-            commitFromSlave(playerUUID, cached);
-        } else {
-            commitOnMaster(playerUUID, cached);
-        }
+        // BS-258: the ATM block as the row's position; on a slave it goes in the deposit request
+        net.kroia.banksystem.banking.ledger.TransactionLedger.withPos(net.kroia.banksystem.minecraft.block.custom.ATMBlock.openedAt(playerUUID), () -> {
+            if (BACKEND_INSTANCES.isSlaveServer) {
+                commitFromSlave(playerUUID, cached);
+            } else {
+                commitOnMaster(playerUUID, cached);
+            }
+            return null;
+        });
     }
 
     /**
@@ -132,7 +137,7 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
             debug("ConverterCommitToBankPacket: race — cache changed under commit for " + playerUUID);
             return;
         }
-        BankStatus status = moneyBank.deposit(amount);
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> moneyBank.deposit(amount)); // BS-254: row below
         if (status == BankStatus.SUCCESS) {
             net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(moneyBank, net.kroia.banksystem.api.ledger.LedgerType.CONVERTER_DEPOSIT, amount,
                     net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerUUID), null);
@@ -199,9 +204,7 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                         ConverterCacheManager.get().deposit(playerUUID, refund);
                         TransferJournal.step(journal.transferId(), TransferJournal.RETURNED,
                                 refund == amount ? null : Map.of(money, refund), null);
-                        ServerPlayerUtilities.printToClientConsole(playerUUID,
-                                "Converter deposit to bank refused by master; " + refund
-                                        + " cents returned to converter cache.");
+                        notifyRefused(playerUUID, refund);
                     };
                     net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
                     if (server != null) {
@@ -212,6 +215,21 @@ public class ConverterCommitToBankPacket extends BankSystemNetworkPacket {
                         applyRefund.run();
                     }
                 });
+    }
+
+    /**
+     * BS-273: the refusal line after a refund. An untrusted slave gets the red untrusted line (once, instead of the
+     * refund line); otherwise the refund line. Public for the in-game test.
+     *
+     * @return true if the untrusted line was sent
+     */
+    public static CompletableFuture<Boolean> notifyRefused(UUID playerUUID, long refund) {
+        return MultiServerUtils.notifyIfUntrustedSlave(playerUUID).thenApply(untrusted -> {
+            if (!untrusted)
+                ServerPlayerUtilities.printToClientConsole(playerUUID,
+                        "Converter deposit to bank refused by master; " + refund + " cents returned to converter cache.");
+            return untrusted;
+        });
     }
 
     @Override
