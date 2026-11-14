@@ -49,7 +49,7 @@ public final class StartupRefusalClient {
     }
 
     private static Screen createScreen(Minecraft mc, StartupRefusal refusal) {
-        Runnable back = () -> mc.setScreen(new SelectWorldScreen(new TitleScreen()));
+        Runnable back = () -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(new SelectWorldScreen(new TitleScreen()));
         Component title = Component.translatable("gui.banksystem.load_refused.title");
         MutableComponent message = Component.empty();
         String flag;

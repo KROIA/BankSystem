@@ -29,7 +29,8 @@ public abstract class GiveCommandMixin {
                                            CallbackInfoReturnable<Integer> cir) {
         try {
             if (cir.getReturnValue() <= 0 || count <= 0) return;
-            ItemStack stack = item.createItemStack(1, false);
+            ItemStack stack = item.createItemStack(1, false); // mc<=1.21.11
+            //ItemStack stack = item.createItemStack(1); // mc>=26.1
             Integer companyId = StampedShareItem.getCompanyId(stack);
             if (companyId != null) { // BS-235: shares that did not come from a stamper
                 for (ServerPlayer target : targets)
