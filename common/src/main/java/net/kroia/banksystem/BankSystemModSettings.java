@@ -11,7 +11,6 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
-import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.modutilities.setting.parser.CustomJsonParser;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -502,27 +501,33 @@ public final class BankSystemModSettings extends ModSettings {
 
     /**
      * Task #119: one-time move of the pre-2.2.0 keys (group {@code Placeholder} and
-     * {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION}) into {@link #INTEGRATIONS}.
-     * Reads the raw file because the old keys are no longer registered. Idempotent: a file
-     * that already has an {@code Integrations} group is left alone. The caller re-saves the
-     * file when this returns true, which drops the old keys.
+     * {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION}) into the {@code Integrations} group,
+     * done on the raw file because the old keys are no longer registered. BS-274: run by
+     * data-migration step 1 before the settings load. Idempotent: a file that already has an
+     * {@code Integrations} group, or none of the old keys, is left untouched. An unreadable
+     * file is left untouched too; the settings load gate refuses it without overwriting.
      *
-     * @return true if old values were copied into INTEGRATIONS
+     * @return true if the file was rewritten
      */
-    public boolean migrateIntegrations(Path file) {
+    public static boolean migrateIntegrations(Path file) throws java.io.IOException {
+        JsonObject root;
+        JsonObject moved;
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
-            if (root.has(INTEGRATIONS.getName())) return false;
-            JsonObject moved = root.has("Placeholder") ? root.getAsJsonObject("Placeholder").deepCopy() : new JsonObject();
+            root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+            if (root.has("Integrations")) return false;
+            moved = root.has("Placeholder") ? root.getAsJsonObject("Placeholder").deepCopy() : new JsonObject();
             JsonObject utilities = root.getAsJsonObject("Utilities");
             if (utilities != null && utilities.has("SYNC_ADMIN_FLAG_WITH_PERMISSION"))
-                moved.add("SYNC_ADMIN_FLAG_WITH_PERMISSION", utilities.get("SYNC_ADMIN_FLAG_WITH_PERMISSION"));
-            if (moved.size() == 0) return false;
-            new SettingsStore().fromJson(INTEGRATIONS, moved);
-            return true;
-        } catch (Exception e) {
-            return false; // unreadable file: the load gate already refused it
+                moved.add("SYNC_ADMIN_FLAG_WITH_PERMISSION", utilities.remove("SYNC_ADMIN_FLAG_WITH_PERMISSION"));
+        } catch (RuntimeException e) {
+            return false; // not a JSON object (or old groups of the wrong type)
         }
+        if (moved.size() == 0) return false;
+        root.remove("Placeholder");
+        root.add("Integrations", moved);
+        net.kroia.modutilities.persistence.DataPersistence.writeJsonAtomically(file,
+                new com.google.gson.GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(root));
+        return true;
     }
 
     /**

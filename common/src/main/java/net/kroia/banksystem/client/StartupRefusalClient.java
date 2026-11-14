@@ -49,7 +49,7 @@ public final class StartupRefusalClient {
     }
 
     private static Screen createScreen(Minecraft mc, StartupRefusal refusal) {
-        Runnable back = () -> mc.setScreen(new SelectWorldScreen(new TitleScreen()));
+        Runnable back = () -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(new SelectWorldScreen(new TitleScreen()));
         Component title = Component.translatable("gui.banksystem.load_refused.title");
         MutableComponent message = Component.empty();
         String flag;
@@ -65,14 +65,20 @@ public final class StartupRefusalClient {
                 flag = "CONFIRM_ITEMID_MERGE";
                 button = "gui.banksystem.load_refused.confirm_merge";
             }
+            case MIGRATION_FAILED -> { // BS-274: the data upgrade failed; name the backup zip
+                return new AlertScreen(back, title, refusal.lines().isEmpty()
+                        ? Component.translatable("gui.banksystem.load_refused.migration_failed_no_backup")
+                        : Component.translatable("gui.banksystem.load_refused.migration_failed", refusal.lines().get(0)));
+            }
             default -> {
                 return new AlertScreen(back, title, Component.translatable("gui.banksystem.load_refused.other"));
             }
         }
-        for (int i = 0; i < refusal.lines().size() && i < MAX_LINES; i++)
-            message.append("\n" + refusal.lines().get(i));
-        if (refusal.lines().size() > MAX_LINES)
-            message.append("\n...");
+        appendCapped(message, refusal.lines());
+        if (!refusal.pendingMerges().isEmpty()) { // BS-250
+            message.append("\n\n").append(Component.translatable("gui.banksystem.load_refused.missing_merges"));
+            appendCapped(message, refusal.pendingMerges());
+        }
         message.append("\n\n").append(Component.translatable(refusal.kind() == StartupRefusal.Kind.MISSING_MODS
                 ? "gui.banksystem.load_refused.missing_hint" : "gui.banksystem.load_refused.merge_hint"));
         return new ConfirmScreen(confirmed -> {
@@ -81,6 +87,13 @@ public final class StartupRefusalClient {
             else
                 back.run();
         }, title, message, Component.translatable(button), Component.translatable("gui.banksystem.load_refused.back"));
+    }
+
+    private static void appendCapped(MutableComponent message, java.util.List<String> lines) {
+        for (int i = 0; i < lines.size() && i < MAX_LINES; i++)
+            message.append("\n" + lines.get(i));
+        if (lines.size() > MAX_LINES)
+            message.append("\n... (+" + (lines.size() - MAX_LINES) + ")");
     }
 
     /** Sets {@code ServerBank.<flag> = true} in the world's settings.json, keeping everything else. */

@@ -22,9 +22,14 @@ Lifecycle:
 - **Rewritten regularly while the server runs**: BankSystem saves all its data (including this file) on its save interval (`SAVE_INTERVAL_SECONDS`, default every 5 seconds while players are online), whenever the world is saved (autosave, `/save-all`), and on server shutdown.
 
 > [!TIP]
-> **Prefer the in-game settings GUI.** BankSystem admins can run `/banksystem manage` to open the bankable-items management screen and, from there, click the **Mod Settings** button to open the editor for every value in this file — booleans, numbers, and the component lists. Edits made there go through the normal save cycle instead of being overwritten. Closing the editor with unapplied changes asks whether to **Save** or **Discard** them (**Esc** on that popup returns to the editor). This is the recommended way to change settings at runtime; the section below documents the file for reference and for cases where the GUI is not available (e.g. bootstrap edits before the first server start).
+> **Prefer the in-game settings GUI.** Server operators (permission level 2) who are also BankSystem admins can run `/banksystem manage` to open the bankable-items management screen and, from there, click the **Mod Settings** button to open the editor for every value in this file — booleans, numbers, and the component lists. Edits made there go through the normal save cycle instead of being overwritten. Closing the editor with unapplied changes asks whether to **Save** or **Discard** them (**Esc** on that popup returns to the editor). This is the recommended way to change settings at runtime; the section below documents the file for reference and for cases where the GUI is not available (e.g. bootstrap edits before the first server start).
 >
 > The **Mod Settings** button is only shown on the master server. On a slave server the button is hidden — configure settings on the master; slaves receive the relevant values (component lists, etc.) through the master's sync.
+
+<div align="center">
+    <img src="../images/settingsGUI.png" > 
+</div>
+<br>
 
 > [!WARNING]
 > Because the server rewrites `settings.json` on its save interval, **only edit the file directly while the world/server is stopped**. Edits made through the raw file while the server is running are silently overwritten. Use `/banksystem manage` → **Mod Settings** instead when the server is live.
@@ -146,6 +151,11 @@ A freshly created `settings.json` looks like this:
 
 Shown as **Suspicious activity** in the Mod Settings screen. Suspicious-activity flags ([Administration](Administration.md#suspicious-activity-flags)) and the [audit digest](Administration.md#audit-digest). Flags 6 and 7 are always on and have no settings here. Read live on the master server; slaves ignore this section. Money amounts are **whole dollars** (not cents).
 
+<div align="center">
+    <img src="../images/ModSettingsAudit.png" > 
+</div>
+<br>
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `LAUNDERING_FLAG_ENABLED` | boolean | `true` | Flag banknote deposits of money the depositor did not withdraw themselves. |
@@ -172,6 +182,11 @@ Shown as **Suspicious activity** in the Mod Settings screen. Suspicious-activity
 ## Integrations Section
 
 On/off switches for the optional integrations with other mods and services, plus the placeholder settings. In the **Mod Settings** screen every integration is a collapsible section: the check box in its header is the switch, a click on the header shows its settings. While a switch is off, the settings below it are greyed out.
+
+<div align="center">
+    <img src="../images/ModSettingsIntegrations.png" > 
+</div>
+<br>
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

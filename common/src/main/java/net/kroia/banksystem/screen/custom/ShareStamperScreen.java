@@ -6,6 +6,7 @@ import net.kroia.banksystem.minecraft.menu.custom.ShareStamperContainerMenu;
 import net.kroia.banksystem.networking.entity.SetStamperBindingRequest;
 import net.kroia.banksystem.networking.entity.StampSharesRequest;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemLogger;
 import net.kroia.banksystem.util.BankSystemGuiElement;
@@ -331,16 +332,20 @@ public class ShareStamperScreen extends BankSystemGuiContainerScreen<ShareStampe
     }
 
     /**
-     * Task v2.1.0 — unbind confirm uses the reusable {@link AskPopupScreen}
-     * (see {@code BankAccountManagementScreen.onDeleteAccountButtonClicked} for the
-     * canonical usage pattern). Note: opening a non-container screen releases the
-     * BE viewer lock via {@code stopOpen}; the SetStamperBindingRequest still
-     * arrives on server, executes, and the caller can re-open the stamper.
+     * Task v2.1.0 — unbind confirm uses the reusable {@link AskPopupScreen}.
+     * BS-252: swapping to the popup does not tell the server, so the stamper menu and its
+     * viewer lock stay open meanwhile. The popup's parent is this screen: No / Esc come back
+     * here with the lock still held; Yes sends the unbind, then closes this screen properly
+     * (close packet, the menu's removed() frees the lock).
      */
     private void openUnbindConfirm() {
         AskPopupScreen ask = new AskPopupScreen(
-                null,
-                () -> SetStamperBindingRequest.send(pos, 0),
+                this,
+                () -> {
+                    SetStamperBindingRequest.send(pos, 0);
+                    // Queued after the popup's switch back to this screen, so onClose closes the menu.
+                    BankSystemGuiScreen.runLater(this::onClose);
+                },
                 () -> {},
                 CONFIRM_TITLE.getString(),
                 CONFIRM_BODY.getString()

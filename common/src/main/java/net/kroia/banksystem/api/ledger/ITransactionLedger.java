@@ -12,8 +12,11 @@ import org.jetbrains.annotations.Nullable;
  * database worker. On a slave server, before startup or after shutdown the call does nothing:
  * call it on the master, where the value actually moves.
  * <p>
- * Raw {@code IServerBank} deposit/withdraw/lock calls do <b>not</b> write ledger rows. A mod
- * that moves value through them should describe the movement here.
+ * BS-254: every change of a bank's total balance writes a row where the balance changes. A raw
+ * {@code IServerBank} call (deposit, withdraw, setBalance, ...) writes a {@link LedgerType#RAW_CHANGE} row
+ * (source {@code UNKNOWN}). A mod that describes its movements here itself makes the bank calls inside
+ * {@link #callerLogs}, so one movement is not logged twice. Lock and unlock only move value between free
+ * and locked and write no row.
  * <p>
  * Rows written here are treated like BankSystem's own: they fire
  * {@code IBankSystemEvents.getTransactionLoggedEvent()} and run through the admin-audit and suspicion checks.
@@ -41,4 +44,13 @@ public interface ITransactionLedger {
      */
     void log(int accountNumber, LedgerType type, ItemID item, long amount, LedgerActor actor,
              @Nullable String ref, @Nullable String note);
+
+    /**
+     * BS-254: runs {@code body} on this thread without the automatic {@link LedgerType#RAW_CHANGE} rows, for a
+     * caller that writes its own rows for the bank calls in it (e.g. trade settlement logged with
+     * {@link #logTrade}). Transfers still write their TRANSFER pair. Master only; nests.
+     *
+     * @return what {@code body} returned
+     */
+    <T> T callerLogs(java.util.function.Supplier<T> body);
 }
