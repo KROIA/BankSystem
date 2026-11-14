@@ -368,7 +368,7 @@ When the player re-adds your mod and the server restarts, existing bindings resu
 
 ## 10. Testing your adapter
 
-The BankSystem in-game test suite covers the Task #33 SPI end-to-end. Mirror it. The seven scenarios in `common/src/main/java/net/kroia/banksystem/testing/tests/ExternalCurrencyBindingTests.java` are the canonical smoke suite for any adapter:
+The BankSystem in-game test suite covers the currency-provider SPI end-to-end. Mirror it. The seven scenarios in `common/src/main/java/net/kroia/banksystem/testing/tests/ExternalCurrencyBindingTests.java` are the canonical smoke suite for any adapter:
 
 1. **Round-trip.** Bind an account, deposit through BankSystem, withdraw through BankSystem, verify the external balance moves and the BankSystem read agrees.
 2. **Locked-balance protocol.** `lockAmount` and `unlockAmount` do NOT touch external. `withdrawLocked` DOES. Confirm your mod's balance is unchanged after a lock/unlock cycle.
@@ -598,7 +598,7 @@ That is a complete, compilable adapter modulo the `MyMoneyApi` / `MyAccount` typ
   - `common/src/main/java/net/kroia/banksystem/testing/tests/ExternalCurrencyBindingTests.java` — the seven-scenario smoke suite.
 - **Persistence layout** (curious readers only — adapter authors never touch this): `common/src/main/java/net/kroia/banksystem/banking/binding/BankAccountBindings.java`.
 - **BankSystem API entry point**: `common/src/main/java/net/kroia/banksystem/api/BankSystemAPI.java`. The two methods you care about are `registerCurrencyProvider` and `getCurrencyProvider(id)`.
-- **Reference adapter (Numismatics)**: shipping in BankSystem v2.0.5 alongside the SPI (Task #34). Reading its source is the fastest way to see a real-world provider that advertises every feature bit.
+- **Reference adapter (Numismatics)**: shipping in BankSystem v2.0.5 alongside the SPI. Reading its source is the fastest way to see a real-world provider that advertises every feature bit.
 
 ### Server-side switches and unbinding (since 2.2.0)
 

@@ -89,7 +89,12 @@ public class AuditScreen extends BankSystemGuiScreen {
     private final ListView listView;
 
     public AuditScreen(int accountNumber) {
-        super(TITLE);
+        this(null, accountNumber);
+    }
+
+    /** BS-229: closing returns to {@code parent} (e.g. the account management screen). */
+    public AuditScreen(net.minecraft.client.gui.screens.Screen parent, int accountNumber) {
+        super(TITLE, parent);
         this.accountNumber = accountNumber;
         titleLabel = new Label(TITLE.getString() + " #" + accountNumber);
 

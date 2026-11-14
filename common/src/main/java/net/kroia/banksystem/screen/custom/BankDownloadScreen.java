@@ -11,8 +11,8 @@ import net.kroia.banksystem.networking.entity.UpdateBankDownloadBlockEntityPacke
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.util.BankSystemGuiContainerScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
+import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiTexture;
 import net.kroia.modutilities.gui.client.ContainerView;
@@ -418,14 +418,10 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
     private static class SettingsMenu extends BankSystemGuiElement {
         private static final int CONNECT_HINT_COLOR = 0xFFE8711C;  // orange: no bank connected
         private static final int CONNECT_FLASH_COLOR = 0xFFFFC04D; // bright orange: flash phase
-        private static final int UNSAVED_COLOR = 0xFFD99A26;       // amber: Save button while there are unsaved edits
         private static final long FLASH_DURATION_MS = 1500;
         private static final long FLASH_PHASE_MS = 150;
 
         private final Button connectDisconnectButton;
-        private final int defaultBackgroundColor;
-        private final int defaultHoverColor;
-        private final int defaultPressedColor;
         private long flashEndMs = 0;
         private final Button applyButton;
         private final ItemsList itemView;
@@ -438,9 +434,6 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
             this.parent = parent;
             this.accountNr = accountNr;
             connectDisconnectButton = new Button((accountNr>0?TEXT.DISCONNECT_BUTTON.getString():TEXT.CONNECT_BUTTON.getString()), this::onSelectBankAccountButtonClicked);
-            defaultBackgroundColor = connectDisconnectButton.getBackgroundColor();
-            defaultHoverColor = connectDisconnectButton.getHoverColor();
-            defaultPressedColor = connectDisconnectButton.getPressedColor();
             itemView = new ItemsList(parent);
             applyButton = new Button(TEXT.SAVE_BUTTON.getString(), parent::applySettigns);
 
@@ -488,19 +481,12 @@ public class BankDownloadScreen extends BankSystemGuiContainerScreen<BankDownloa
 
         @Override
         protected void render() {
-            setButtonColor(applyButton, parent.hasUnsavedChanges() ? UNSAVED_COLOR : 0);
+            BankSystemGuiScreen.setButtonColor(applyButton, parent.hasUnsavedChanges() ? BankSystemGuiScreen.UNSAVED_COLOR : 0);
             // Orange while no bank is connected, flashing after a blocked action.
             long now = System.currentTimeMillis();
             int connectColor = accountNr > 0 ? 0
                     : (now < flashEndMs && (now / FLASH_PHASE_MS) % 2 == 0) ? CONNECT_FLASH_COLOR : CONNECT_HINT_COLOR;
-            setButtonColor(connectDisconnectButton, connectColor);
-        }
-        /** color 0 = default button colors */
-        private void setButtonColor(Button button, int color)
-        {
-            button.setBackgroundColor(color == 0 ? defaultBackgroundColor : color);
-            button.setHoverColor(color == 0 ? defaultHoverColor : ColorUtilities.setBrightness(color, 0.8f));
-            button.setPressedColor(color == 0 ? defaultPressedColor : ColorUtilities.setBrightness(color, 0.6f));
+            BankSystemGuiScreen.setButtonColor(connectDisconnectButton, connectColor);
         }
 
         @Override

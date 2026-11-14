@@ -12,6 +12,7 @@ import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
 import java.util.Map;
+import java.util.Set;
 
 public interface IBankSystemEvents {
 
@@ -55,6 +56,18 @@ public interface IBankSystemEvents {
      * @return the ItemIDs-merged event.
      */
     DataEvent<Map<ItemID, ItemID>> getItemIDsMergedEvent();
+
+    /**
+     * Emitted on the <b>master server</b> once per start in which the admin confirmed removing
+     * the ItemIDs of missing mods ({@code CONFIRM_ITEMID_REMOVE_MISSING}). BankSystem has
+     * already dropped their balances from every bank account and deleted the IDs (their numbers
+     * are never reused). Dependent mods should delete their own state keyed by these IDs
+     * (markets, orders, ...). Payload: <b>unmodifiable</b> set of the removed ItemIDs.
+     * Dispatched on the server thread right after {@link #getBanksystemSetupCompleteSignal()}.
+     *
+     * @return the ItemIDs-removed event.
+     */
+    DataEvent<Set<ItemID>> getItemIDsRemovedEvent();
 
     /**
      * Signal gets emitted when bank data is saved to a file.

@@ -13,10 +13,12 @@ import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket;
 import net.kroia.banksystem.networking.multi_server.DropItemsInPlayerInventoryRequest;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -67,7 +69,10 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
-        handle(sender.getUUID(), null);
+        TransactionLedger.withPos(net.kroia.banksystem.minecraft.block.custom.ATMBlock.openedAt(sender.getUUID()), () -> { // BS-258
+            handle(sender.getUUID(), null);
+            return null;
+        });
         /*ISyncServerBankManager bankManager = getSyncBankManager();
         ISyncServerBankAccount account = bankManager.getBankAccount(currentSelectedAccountNumber);
         if(account == null)
@@ -149,9 +154,22 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
     }
 
+    /**
+     * BS-272: the master's untrusted-slave refusal below goes to a player who is not on the master, so the slave
+     * tells them itself. The packet is forwarded as before.
+     */
+    @Override
+    protected void routeToMaster(dev.architectury.networking.NetworkManager.PacketContext context) {
+        super.routeToMaster(context);
+        MultiServerUtils.notifyIfUntrustedSlave(context.getPlayer().getUUID());
+    }
+
     @Override
     protected void handleOnMaster(ForwardPacketContext context) {
-        handle(context.senderPlayerUUID, context.senderServerID);
+        TransactionLedger.withOrigin(context.senderServerID, () -> { // BS-256
+            handle(context.senderPlayerUUID, context.senderServerID);
+            return null;
+        });
     }
     public void handle(UUID player, @Nullable String slaveID)
     {
@@ -162,6 +180,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if(slaveID != null && !slaveID.isEmpty() && !bankManager.isSlaveServerTrusted(slaveID))
         {
             warn("The slave server: '" + slaveID + "' tried to withdraw money, which is not allowed for an untrusted slave server!");
+            // Stays master-local on purpose: the slave shows its own untrusted line (routeToMaster, BS-272), so the player sees it once.
             ServerPlayerUtilities.printToClientConsole(player, "[BankSystem] Your server '" + slaveID + "' is not trusted by the bank master. "
                     + "Contact a bank admin to grant trust for cross-server bank operations.");
             return;
@@ -173,7 +192,8 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
 
         if(!account.hasPermission(player, BankPermission.WITHDRAW))
         {
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
+            // BS-273: through the slave-bound message packet, so a player on a slave sees it too
+            ClientConsoleMessagePacket.sendMessageFromMaster(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
             return;
         }
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(finalCurrentSelectedAccountNumber, LedgerType.WITHDRAW, player)) // Task #117
@@ -222,12 +242,12 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 User user = bankManager.getUserByUUID(player);
                 if(user == null) continue;
                 String userName = user.getName();
-                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), userName));
+                ClientConsoleMessagePacket.sendMessageFromMaster(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), userName)); // BS-273
                 continue;
             }
 
             // Withdraw the requested amount of banknotes
-            if(moneyBank.withdraw(totalValue) == BankStatus.SUCCESS)
+            if(TransactionLedger.withoutRawLog(() -> moneyBank.withdraw(totalValue)) == BankStatus.SUCCESS) // BS-254: row below
             {
                 requestedBankNotes.put(itemID, requestedAmount);
                 // Task #44 (v2.1.0) — Transaction Ledger. Money withdrawals are logged
@@ -268,7 +288,10 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                              @Nullable Map<ItemID, Long> notDropped, @Nullable Throwable ex)
     {
         if(ex == null) {
-            putRemainingItemsBack(bankaccountNr, player, notDropped, transferId);
+            TransactionLedger.withOrigin(slaveID, () -> { // BS-256: the refund row belongs to the slave's request
+                putRemainingItemsBack(bankaccountNr, player, notDropped, transferId);
+                return null;
+            });
             return;
         }
         String details = "DROP to slave " + slaveID + " outcome unknown, not refunded: " + items;
@@ -280,23 +303,28 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
     {
         if(items.isEmpty())
             return;
-        ISyncServerBankAccount redepositAccount = getSyncBankManager().getBankAccount(bankaccountNr);
-        if(redepositAccount == null) {
-            error("WithdrawMoneyPacket: Invalid bank account ID: " + bankaccountNr + " Items are lost now: "+items);
-            return;
-        }
-        ISyncServerBank redepositMoneyBank = redepositAccount.getBank(MoneyItem.getItemID());
-        if(redepositMoneyBank == null) {
-            error("WithdrawMoneyPacket: no money bank account with ID: " + bankaccountNr+" Items are lost now: "+items);
-            return; // No money bank found for the player
-        }
-
         long toDepositMoney = moneyValue(items);
-        if (toDepositMoney > 0 && redepositMoneyBank.deposit(toDepositMoney) == BankStatus.SUCCESS) {
-            // Task #109: separate refund row; the WITHDRAW row above stays as written.
-            TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
-                    TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);
+        if (toDepositMoney <= 0)
+            return;
+        ISyncServerBankAccount redepositAccount = getSyncBankManager().getBankAccount(bankaccountNr);
+        ISyncServerBank redepositMoneyBank = redepositAccount == null ? null : redepositAccount.getBank(MoneyItem.getItemID());
+        String lost;
+        if (redepositAccount == null) lost = "account gone";
+        else if (redepositMoneyBank == null) lost = "no money bank";
+        else {
+            BankStatus status = TransactionLedger.withoutRawLog(() -> redepositMoneyBank.deposit(toDepositMoney));
+            if (status == BankStatus.SUCCESS) {
+                // Task #109: separate refund row; the WITHDRAW row above stays as written.
+                TransactionLedger.logBank(redepositMoneyBank, LedgerType.WITHDRAW_REFUND, toDepositMoney,
+                        TransactionLedger.player(player), "banknotes not handed out: " + items, transferId);
+                return;
+            }
+            lost = "refund deposit refused: " + status;
         }
+        // BS-267: balance-neutral marker with the transfer id, so the loss is in the ledger and not only in the log
+        error("WithdrawMoneyPacket: refund of " + items + " to account " + bankaccountNr + " failed (" + lost + "); the value is lost (transfer " + transferId + ")");
+        TransactionLedger.logRow(bankaccountNr, LedgerType.REFUND_LOST, MoneyItem.getItemID(), toDepositMoney,
+                TransactionLedger.player(player), null, "banknotes not handed out, refund lost (" + lost + "): " + items, transferId);
     }
 
     /** Money value (raw units) of a banknote map; entries that would overflow are skipped. */
