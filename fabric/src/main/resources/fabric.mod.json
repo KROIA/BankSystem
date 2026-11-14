@@ -23,6 +23,9 @@
       "net.kroia.banksystem.minecraft.compat.BankSystemJeiPlugin"
     ]
   },
+  "mixins": [
+    "banksystem.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.18.5",
     "minecraft": "${minecraft_version}",

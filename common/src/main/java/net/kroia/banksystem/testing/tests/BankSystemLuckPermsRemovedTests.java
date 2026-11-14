@@ -170,10 +170,11 @@ public class BankSystemLuckPermsRemovedTests extends TestSuite {
         if (p == null)
             return pass("flag fallback ok (no online player, node checks not compared)");
         for (String node : NODES) {
-            boolean expected = PermissionCompat.hasPermission(p, BankSystemPermissions.FALLBACK_LEVEL);
-            if (expected != PermissionCompat.hasPermission(p, node, BankSystemPermissions.FALLBACK_LEVEL))
+            int level = BankSystemPermissions.fallbackLevel(node); // BS-196: flag-gated nodes fall back to level 0
+            boolean expected = PermissionCompat.hasPermission(p, level);
+            if (expected != PermissionCompat.hasPermission(p, node, level))
                 return TestResult.fail("", node + " equals the op-level check", String.valueOf(expected), String.valueOf(!expected));
-            if (expected != PermissionCompat.hasPermission(p.createCommandSourceStack(), node, BankSystemPermissions.FALLBACK_LEVEL))
+            if (expected != PermissionCompat.hasPermission(p.createCommandSourceStack(), node, level))
                 return TestResult.fail("", node + " (source) equals the op-level check", String.valueOf(expected), String.valueOf(!expected));
         }
         return pass("flag and op-level fallback ok");

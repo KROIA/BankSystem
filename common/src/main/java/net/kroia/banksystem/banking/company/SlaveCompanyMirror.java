@@ -77,6 +77,11 @@ public final class SlaveCompanyMirror {
                 prev.bankAccountNr(), prev.founderNames(), prev.holderCount()));
     }
 
+    /** One company's entry, or null when the mirror does not know it. */
+    public static S2CCompanyVisualBulkPacket.Entry get(int companyId) {
+        return ENTRIES.get(companyId);
+    }
+
     /** Snapshot for the join-time bulk send. */
     public static List<S2CCompanyVisualBulkPacket.Entry> snapshot() {
         return new ArrayList<>(ENTRIES.values());

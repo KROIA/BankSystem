@@ -117,6 +117,18 @@ public final class DividendHistoryStore {
         }
     }
 
+    /** BS-255 — consistent copy of the file ({@code VACUUM INTO}) on the store's thread, after every earlier insert. */
+    public CompletableFuture<Void> snapshotTo(Path target) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                if (connection == null || connection.isClosed()) throw new SQLException("dividend history store is not open");
+                net.kroia.banksystem.data.DatabaseManager.vacuumInto(connection, target);
+            } catch (SQLException e) {
+                throw new CompletionException(e);
+            }
+        }, executor);
+    }
+
     public void close() {
         executor.shutdown();
         try { executor.awaitTermination(5, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
