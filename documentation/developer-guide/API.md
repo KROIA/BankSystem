@@ -21,7 +21,7 @@ The `BankSystemAPI` interface provides access to all subsystems:
 | `getServerBankManager()` | `IBankManager` | Server-side bank manager (sync + async access) |
 | `getClientBankManager()` | `IClientBankManager` | Client-side bank manager |
 | `getEvents()` | `IBankSystemEvents` | Event/signal subscriptions |
-| `getDataHandler()` | `IBankSystemDataHandler` | Save/load operations |
+| `getDataHandler()` | `IBankSystemDataHandler` | Save and load BankSystem's data on this server (`saveAll`/`loadAll`, `save_bank`/`load_bank`, `save_globalSettings`/`load_globalSettings`; each returns `true` on success). Call on the server thread. BankSystem saves on its own timer and on shutdown, so add-ons rarely need it |
 | `isSlave()` | `boolean` | Whether this server is a slave in multi-server mode |
 | `setItemPriceProvider(ItemPriceProvider)` / `getItemPriceProvider()` | `void` / `ItemPriceProvider` *(nullable)* | Supply market prices for total-wealth tracking — see [Item Price Provider API](ItemPriceProviderAPI.md) |
 | `getLedger()` | `ITransactionLedger` | Write transaction-ledger rows (generic `log` and StockMarket `logTrade`; `callerLogs` for bank calls you log yourself); master only, a no-op on slave servers — see [Transaction Ledger](TransactionLedger.md) (since 2.2.0) |
@@ -33,8 +33,8 @@ The `BankSystemAPI` interface provides access to all subsystems:
 | `getCurrencyProvider(String providerId)` | `ExternalCurrencyProvider` *(nullable)* | One provider by id; `null` if none is registered or it is switched off in the Integrations settings |
 | `getPayoutManager()` | `IPayoutManager` | Company payout schedules (create / update / pause / delete / history) |
 | `getDividendPayer()` | `IDividendPayer` | One-shot dividend runs to every share holder |
-| `getVisualLookup()` | `IBankSystemVisualLookup` | Client-side share-visual lookup per `ItemID` (never null; each query returns `null` on a dedicated server) |
-| `getShareIconRenderer()` | `IShareIconRenderer` *(nullable)* | Paints a company's share badge; `null` on dedicated servers |
+| `getVisualLookup()` | `IBankSystemVisualLookup` | Client-side share-visual lookup per `ItemID` (never null; each query returns `null` on a dedicated server). Call from the client (render) thread — see [Share Visuals](#share-visuals-client) |
+| `getShareIconRenderer()` | `IShareIconRenderer` *(nullable)* | Paints a company's share badge; `null` on dedicated servers. Client render thread only |
 
 > Payout and dividend operations are **master-only**. On a slave, `getPayoutManager()` and `getDividendPayer()` return fail-closed shims (`NOT_MASTER`). There is no public async variant yet: call them from code that runs on the master. See [Company Payouts and Dividends](#company-payouts-and-dividends).
 >
@@ -315,6 +315,19 @@ Use `withdrawLockedPreferedAsync` over `withdrawLockedAsync` because it graceful
 | `hasBankAsync(ItemID itemID)` → `Boolean` | Check if an item bank exists |
 | `hasAnyBankAsync()` → `Boolean` | Check if the account has any banks |
 
+### Watching an Account for Changes (master)
+
+```java
+// ISyncServerBankAccount
+void subscribeBankChanges(Consumer<BankAccountData> callback);
+void unsubscribeBankChanges(Consumer<BankAccountData> callback);
+// ISyncServerBankManager: the same by account number (no-op if the account does not exist)
+void subscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
+void unsubscribeBankChanges(int accountNr, Consumer<BankAccountData> callback);
+```
+
+After the account changed, `callback` gets a snapshot of the account on the server thread, at most once per tick. Subscribing the same instance twice has no effect; unsubscribe with the same instance. Subscriptions are not saved: subscribe again after a restart.
+
 ### IBankSystemEvents
 
 Subscribe to events for reactive integration via `api.getEvents()`:
@@ -331,6 +344,7 @@ Subscribe to events for reactive integration via `api.getEvents()`:
 | `getSettingsLoadedFromFileSignal()` → `Signal` | Fires after settings are loaded |
 | `getBanksystemSetupCompleteSignal()` → `Signal` | Fires when the bank system is ready to use |
 | `getItemIDsMergedEvent()` → `DataEvent<Map<ItemID,ItemID>>` | Fires after an ItemID merge (alias → canonical) |
+| `getItemIDsRemovedEvent()` → `DataEvent<Set<ItemID>>` | Master: fires once per start in which an admin removed the items of missing mods; payload = the removed ItemIDs (since 2.2.0) |
 | `getMasterServerSlaveConnected()` → `Signal` | Fires when a slave connects to the master |
 | `getMasterServerSlaveDisconnected()` → `DataEvent<String>` | Fires when a slave disconnects (payload: slaveID) |
 | `getSlaveConnectionAcceptedSignal()` → `Signal` | Slave side: this server's handshake with its master completed |
@@ -344,6 +358,39 @@ Subscribe to events for reactive integration via `api.getEvents()`:
 | `removeListeners()` → `void` | Unsubscribe all listeners |
 
 Threading, which JVM each one fires on, and full payload contracts: [Events & Signals](EventsAndSignals.md).
+
+## Client Side (`IClientBankManager`)
+
+`api.getClientBankManager()` reads and changes bank data of the server the player is connected to. Every `*Async` / `request*` call sends a request to that server, which may forward it to the master. The server checks access (since 2.2.0): account data goes to account members and BankSystem admins. A refused read completes with `null` or an empty list, a refused write with `false`. A request without an answer fails the future after the request's timeout (see [When an async call fails](#when-an-async-call-fails)).
+
+| Method | Description |
+|--------|-------------|
+| `getBankManagerDataAsync()` → `BankManagerData` | Users and accounts; full data for admins, names only for other players |
+| `getBankAccountDataAsync(int accountNumber)` → `BankAccountData` *(nullable)* | One account; `null` if it does not exist or the player may not read it |
+| `getPersonalBankAccountDataAsync(UUID userUUID)` → `BankAccountData` *(nullable)* | The personal account of a user; `null` if missing or not readable |
+| `getBankAccountsDataAsync(UUID userUUID)` → `List<BankAccountData>` | Accounts the user is a member of, filtered to the ones the player may read |
+| `getItemInfoDataAsync(ItemID itemID)` → `ItemInfoData` | Bank-wide info about one item (totals, holders) |
+| `allowItemIDAsync(ItemID)` / `disallowItemIDAsync(ItemID)` → `Boolean` | Admin only. Disallowing clears every holder's balance of that item (no refund) |
+| `deleteBankAccountAsync(int accountNumber)` → `Boolean` | Admin or MANAGE permission |
+| `isServerTrustedAsync()` → `Boolean` | `true` unless this server is a slave the master does not trust, whose writes the master refuses (since 2.2.0) |
+| `requestUpdateBankAccount(UpdateBankAccountRequest.InputData)` → `BankAccountData` *(nullable)* | Name, icon, members, permissions (MANAGE needed); `null` if refused |
+| `requestRemoveEmptyBanks(int accountNumber)` → `List<ItemID>` | Removes the account's empty banks; returns the removed items |
+| `requestBankTerminalData(BlockPos pos)` → `BankTerminalBlockDataRequest.Output` | Data of the Bank Terminal block at `pos` |
+| `requestAllowdItems()` → `List<ItemID>` | Every item allowed for banking |
+| `requestBalanceHistory(int accountNumber[, long fromMs, long toMs, int maxPoints])` → `List<BalanceHistoryRecord>` | Balance history, at most `maxPoints` samples per item series; members and admins only |
+| `getUserCustomData()` / `updateUserCustomData(CompoundTag)` | The player's own UI preferences stored on the server |
+| `getItemFractionScaleFactorAsync()` → `Integer` | Asks the server for its raw units per item (money: 100) and caches it |
+| `getItemFractionScaleFactor()` / `getItemFractionDigitsCount()` | The cached value (a default until the server answered) and its decimal digits |
+| `convertToRawAmount(double)` / `convertToRealAmount(long)` | Convert with the cached scale factor |
+
+### Is this slave trusted?
+
+The master refuses writes that come through an untrusted slave. To check from code:
+
+- on a client: `getClientBankManager().isServerTrustedAsync()`;
+- on a server: `getServerBankManager().getAsync().isSlaveServerTrustedAsync("")`. An empty id (since 2.2.0) asks about the server the request comes through: `true` on the master and on a single server, the master's trust list on a slave. A non-empty id asks about that slave.
+
+On a slave that is not connected to the master, the server call completes with `false` at once. To react to trust changes on the master, see [`getTrustChangedSignal()`](EventsAndSignals.md#gettrustchangedsignal--master-side).
 
 ## Money Formatting (`MoneyFormat`)
 
@@ -426,6 +473,37 @@ db.close(); // on server stop: drains the queue for up to 2 s
 - Opened on the first write. A corrupt file is renamed `.corrupt-<ms>` and recreated; any other open failure disables the instance for the session (`isDisabled()`). Nothing throws to callers.
 - The file runs in SQLite WAL mode (`synchronous=NORMAL`, 10 s busy timeout), so readers never block the writer. On disk it is three files (`.db`, `-wal`, `-shm`); `close()` merges the WAL into the `.db`. Delete or copy them only together, or after the server has stopped.
 
+## Audit Export (`AuditExport`)
+
+`/banksystem backup export [name]` (since 2.2.0) writes one package with everything an external audit tool reads: the folder `<world>/audit_exports/<yyyyMMdd-HHmmss>[-name]/` and a `.zip` of it next to it. Inside, paths mirror the world's `data/` folder (`data/<YourMod>/...`). An add-on adds its own files with `net.kroia.banksystem.api.audit.AuditExport`:
+
+```java
+// once at mod init, on master and slave servers alike
+AuditExport.register("mymod", ctx -> {
+    Path data = server.getWorldPath(LevelResource.ROOT).resolve("data/MyMod");
+    ctx.copyFile(data.resolve("settings.json"), "data/MyMod/settings.json");
+    ctx.copyDir(data.resolve("journal"), "data/MyMod/journal");
+    // consistent database copy, written on your own DB thread
+    ctx.addDatabase("data/MyMod/mymod.db", target -> myDb.submit(() -> myDb.vacuumInto(target)));
+});
+```
+
+| Member | Description |
+|---|---|
+| `static void register(String modId, Consumer<Context> participant)` | `modId` is also your key in the manifest. Registering the same id again replaces the earlier participant |
+| `Context.packageRoot()` → `Path` | Absolute root folder of the package |
+| `Context.isSlave()` → `boolean` | `true` on a slave server |
+| `Context.copyFile(Path src, String relPath)` | Copies one file now to `packageRoot/relPath` (`/` separators). A missing `src` (or one that cannot be copied) is skipped and listed as `missing` |
+| `Context.copyDir(Path src, String relPath)` | Copies a folder recursively, like `copyFile` |
+| `Context.addDatabase(String relPath, Function<Path, CompletableFuture<Void>> writeConsistentCopy)` | BankSystem passes the target file (parent folders created). Write a consistent copy there on your database's own thread (e.g. SQLite `VACUUM INTO`) and complete the future |
+
+- Every export calls each participant **on the server thread**, so file copies cannot race your own saves (as long as you save on the server thread too). The `Context` is valid only during that call.
+- A participant that throws is recorded as an `error` in the manifest and logged; the export goes on.
+- BankSystem waits for all database copies off the server thread, for at most 5 minutes. A failed or late future fails the whole export, and the incomplete folder is left in place.
+- A `relPath` that points outside the package is refused with an `IllegalArgumentException`.
+
+`manifest.json` at the package root (format `1`) holds `format`, `created_utc`, `server_uid`, `role` (`master`, `slave` or `single`), `minecraft_version`, `loader`, `mods` (mod id → version, including every participant) and `participants`: per mod id a `files` list of `{path, method, size, sha256}`, where `method` is `file_copy`, `vacuum_into` or `missing` (no size or checksum), plus `error` if the participant threw.
+
 ## Company Payouts and Dividends
 
 Both interfaces are **master-only**; on a slave they are shims that refuse everything with `NOT_MASTER` (reads give an empty list or future).
@@ -448,6 +526,7 @@ Both interfaces are **master-only**; on a slave they are shims that refuse every
 - `amount` is in raw units (`> 0`); `intervalTicks` has a floor of 20 (1 s).
 - `PayoutSchedule.Mode`: `FIXED_PAYOUT`, `DIVIDEND`, `ONE_TIME` (runs once at the scheduled time, then removes itself).
 - `currencyItem`: short `ItemID` of the paid item; `0` = money.
+- While a company's share excess alert is open, its `DIVIDEND`-mode schedules are skipped and recorded as `PAUSED`; the schedule stays (since 2.2.0).
 
 Every evaluation fires `getPayoutExecutedEvent()` — see [Events & Signals](EventsAndSignals.md#getpayoutexecutedevent) for the status values.
 
@@ -473,6 +552,15 @@ All or nothing: the run pays every holder or changes nothing. `amountPerShare` i
 | `INTERNAL` | Internal error (bank manager or source account missing) |
 | `CURRENCY_ITEM_MISSING` | The company account has no bank for `currencyItem` |
 | `ACCOUNT_FROZEN` | The company account is frozen (since 2.2.0) |
+| `SHARES_UNDER_REVIEW` | More of the company's shares are banked than were stamped. Dividends are paused until an admin acknowledges the share excess alert (since 2.2.0) |
+
+## Share Visuals (client)
+
+`IBankSystemVisualLookup.getShareVisuals(ItemID)` returns a `ShareVisuals` for a stamped share: `bgSymbolId()` / `bgTint()` (background layer), `fgSymbolId()` / `fgTint()` (foreground layer), `displayName()`, `description()`, `totalSharesIssued()` and `maxSupply()`. Lookups are cache-backed and never block; on a cache miss they return `null` and fetch in the background, so query again on the next frame.
+
+`IShareIconRenderer.renderInto(gfx, x, y, w, h, itemId)` paints the share badge. Call it on the client render thread only; a share whose visuals are not cached yet is drawn with placeholder visuals, so keep drawing every frame.
+
+> **Removed in 2.2.0:** the 6-argument `ShareVisuals` constructor and the `iconPresetId()` and `tint()` accessors. Use the 8-argument constructor and `fgSymbolId()` / `bgTint()` instead.
 
 ## API Package Structure
 
@@ -523,6 +611,8 @@ api/
 │   └── TradeLogEntry.java          — StockMarket trade slice (+ TradeSide, TradeRowKind)
 ├── diagnostics/
 │   └── INoteFlowLog.java           — Money items created/destroyed outside the bank (getNoteFlowLog())
+├── audit/
+│   └── AuditExport.java            — Add files to the /banksystem backup export package
 ├── event/
 │   ├── TrustChangeInfo.java        — Payload of getTrustChangedSignal()
 │   ├── PayoutExecutedInfo.java     — Payload of getPayoutExecutedEvent()

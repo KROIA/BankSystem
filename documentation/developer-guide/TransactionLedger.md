@@ -65,11 +65,11 @@ ledger.logTrade(...);
 
 `callerLogs` covers the current thread only and does not stop the TRANSFER pair of a transfer.
 
-Package: `net.kroia.banksystem.api.ledger` (`ITransactionLedger`, `LedgerType`, `LedgerActor`, `TradeLogEntry`, `TradeSide`, `TradeRowKind`).
+Package: `net.kroia.banksystem.api.ledger` (`ITransactionLedger`, `LedgerType`, `LedgerActor`, `TradeLogEntry`, `TradeSide`, `TradeRowKind`). `TradeSide.type()` gives the row type (`BUY` → TRADE_BUY, `SELL` → TRADE_SELL). `TradeRowKind`: `PERIODIC` (interval flush of an open order), `SHUTDOWN` (flush on server stop), `CLOSE` (the order filled or was cancelled).
 
 ## Type codes
 
-Codes are stored in `type_code` and are **append-only**: a code is never renumbered or reused. `LedgerType.fromCode` maps an unknown code to `UNKNOWN_LEGACY`.
+Codes are stored in `type_code` and are **append-only**: a code is never renumbered or reused. `LedgerType.code()` returns a type's code; `LedgerType.fromCode(int)` maps a code back and returns `UNKNOWN_LEGACY` for an unknown one (never `null`).
 
 | Code | Type | Written when |
 |---:|---|---|
@@ -178,4 +178,4 @@ The ledger hooks (codes 1, 2, 4) run from `TransactionLedger.write` and `Transac
 
 ## Upgrading old databases
 
-On start-up, the missing columns and indexes are added. Old rows get a type code from their `kind` text. `TRANSFER_OUT` rows become TRANSFER with a negated amount, and `TRANSFER_IN` rows become TRANSFER with a positive amount. The update only touches rows that are still at code 0, so running it again never negates a row twice. Old rows that cannot be mapped stay at code 0 and are still readable.
+On start-up, the missing columns and indexes are added. Old rows get a type code from their `kind` text (`LedgerType.fromLegacyKind(String)`, which returns `UNKNOWN_LEGACY` for anything it cannot map). `TRANSFER_OUT` rows become TRANSFER with a negated amount, and `TRANSFER_IN` rows become TRANSFER with a positive amount. The update only touches rows that are still at code 0, so running it again never negates a row twice. Old rows that cannot be mapped stay at code 0 and are still readable.
