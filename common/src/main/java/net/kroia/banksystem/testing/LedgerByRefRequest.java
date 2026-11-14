@@ -23,13 +23,15 @@ public class LedgerByRefRequest extends BankSystemGenericRequest<String, List<Le
 
     public static final LedgerByRefRequest INSTANCE = new LedgerByRefRequest();
 
-    public record Row(String ref, int account, LedgerType type, short itemId, long amount) {
+    /** {@code origin}: the slave id of the row's origin server (BS-256), "" for the master. */
+    public record Row(String ref, int account, LedgerType type, short itemId, long amount, String origin) {
         static final StreamCodec<RegistryFriendlyByteBuf, Row> CODEC = StreamCodec.composite(
                 ByteBufCodecs.STRING_UTF8, Row::ref,
                 ByteBufCodecs.VAR_INT, Row::account,
                 ByteBufCodecs.VAR_INT.map(LedgerType::fromCode, LedgerType::code), Row::type,
                 ByteBufCodecs.SHORT, Row::itemId,
                 ByteBufCodecs.VAR_LONG, Row::amount,
+                ByteBufCodecs.STRING_UTF8, Row::origin,
                 Row::new);
     }
 
@@ -48,9 +50,28 @@ public class LedgerByRefRequest extends BankSystemGenericRequest<String, List<Le
         TransactionLogManager log = BankSystemModBackend.getTransactionLogManager();
         if (playerSender != null || slaveID == null || slaveID.isEmpty() || isFromUntrustedSlave(slaveID) || log == null)
             return CompletableFuture.completedFuture(List.of());
+        if (ref.startsWith(FLAGS)) return flags(ref.substring(FLAGS.length()));
         return log.getByRef(ref).thenApply(rows -> {
             List<Row> out = new ArrayList<>();
-            for (var r : rows) out.add(new Row(r.ref(), r.accountNumber(), r.type(), r.itemId(), r.amount()));
+            for (var r : rows) out.add(new Row(r.ref(), r.accountNumber(), r.type(), r.itemId(), r.amount(),
+                    r.originServer() == null ? "" : r.originServer()));
+            return out;
+        });
+    }
+
+    /**
+     * BS-267: input {@code "flags:<ref>"} returns the master's SuspicionFlag rows with that ref instead, as rows with
+     * type UNKNOWN_LEGACY, itemId = flag type, amount = flag amount, origin = "flag".
+     */
+    public static final String FLAGS = "flags:";
+
+    private static CompletableFuture<List<Row>> flags(String ref) {
+        var mgr = BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER;
+        if (mgr == null) return CompletableFuture.completedFuture(List.of());
+        return mgr.getRecent(-1, 0, 0).thenApply(all -> {
+            List<Row> out = new ArrayList<>();
+            for (var f : all) if (ref.equals(f.ref()))
+                out.add(new Row(ref, f.accountNumber(), LedgerType.UNKNOWN_LEGACY, (short) f.flagType(), f.amount(), "flag"));
             return out;
         });
     }

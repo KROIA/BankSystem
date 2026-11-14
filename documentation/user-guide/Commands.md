@@ -2,7 +2,7 @@
 
 What the columns mean:
 
-- **Admin only** — the command needs a permission node (listed in the description). Without a permission mod such as LuckPerms, each node falls back to operator level 2; `/banksystem discord` needs level 3. The server console always passes. All nodes are listed in the [main README](../../README.md#permissions-luckperms).
+- **Admin only** — the command needs a permission node (listed in the description). Without a permission mod such as LuckPerms, each node falls back to operator level 2; `/banksystem discord` needs level 3. Exception: `symbols`, `restorebinding` and `shares` are decided by the BankSystem admin flag (`/banksystem op`), not by operator level. The server console always passes. All nodes are listed in the [main README](../../README.md#permissions-luckperms).
 - **BS Admin only** — the command needs the [BankSystem admin flag](Administration.md#banksystem-admin-role), set with `/banksystem op`. Minecraft operator status alone is not enough.
 
 On a slave server that the master does not trust, only `/money` and `/money circulation` work; see [Multi-Server Setup](MultiserverSetup.md#what-an-untrusted-slave-can-do).
@@ -32,6 +32,7 @@ On a slave server that the master does not trust, only `/money` and `/money circ
 | `/banksystem backup resume` | Resumes database writes after a pause (master only). Node `banksystem.admin.command.backup` | X | |
 | `/banksystem backup status` | Shows whether database writes are currently paused (master only). Node `banksystem.admin.command.backup` | X | |
 | `/banksystem backup snapshot <path>` | Writes a consistent database snapshot to the given path (master only). Node `banksystem.admin.command.backup` | X | |
+| `/banksystem backup export [name]` | Writes a support package (BankSystem data, consistent database copies and a file list) to `<world>/audit_exports/`, as a folder and a `.zip`. Node `banksystem.admin.command.backup` | X | |
 | `/banksystem symbols list` | Lists every share symbol in the server's symbol library (master only). Node `banksystem.admin.command.symbols` (all `symbols` commands) | X | |
 | `/banksystem symbols add <id>` | Imports a PNG from the server inbox folder as a new share symbol (master only) | X | |
 | `/banksystem symbols remove <id>` | Deletes a share symbol; remaining ids are compacted automatically (master only) | X | |
@@ -73,8 +74,9 @@ On a slave server that the master does not trust, only `/money` and `/money circ
 | `/company create <name> <maxSupply>` | Founds a company with a bound bank account, with you as founder. `maxSupply` is the share cap, between 1 and 1,000,000,000. Limited by `MAX_COMPANIES_PER_PLAYER` and needs a free bank-account slot ([details](Companies.md#founding-a-company)) | | |
 | `/company info <companyName>` | Prints company metadata to chat — founders, max supply, issued shares and description | | |
 | `/company manage <companyName>` | Opens the Company Management screen (requires MANAGE on the company's account) | | |
+| `/company shares acknowledge <companyName>` | Accepts a [share excess](Administration.md#share-integrity) of that company and resumes its dividends. Needs MANAGE on the company's account, the founder role or the BankSystem admin flag; also works from the master's console | | |
 
-Company names are case-insensitive, and tab-completion is scoped to your rights: `info` suggests every company on the server, `manage` only those where you hold MANAGE.
+Company names are case-insensitive, and tab-completion is scoped to your rights: `info` suggests every company on the server, `manage` and `shares acknowledge` only those where you hold MANAGE or are a founder (BankSystem admins get every company for `shares acknowledge`).
 
 Everything else is done in the game world rather than in chat:
 

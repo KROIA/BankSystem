@@ -61,13 +61,7 @@ public class BackupCommandTests extends TestSuite {
     @Override
     public void setup() {
         try {
-            Class<?> driverClass;
-            try {
-                driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                driverClass = BackupCommandTests.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+            Driver driver = DatabaseManager.newSqliteDriver();
             try {
                 DriverManager.registerDriver(new DriverShim(driver));
             } catch (Exception ignored) { }
