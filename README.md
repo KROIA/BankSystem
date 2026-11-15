@@ -321,6 +321,28 @@ Nodes only apply to players online on the server that runs the check; the consol
 - With multiple servers: set the option on the master. A slave server that also has it on passes LuckPerms changes of its players on to the master, but only if the master trusts that slave (`/banksystem trust`) and has the option on itself. Untrusted slaves never change the flag.
 - Without LuckPerms the setting does nothing: the flag only changes through `/banksystem op` and `deop`, and the node `banksystem.admin` falls back to operator level 2.
 
+**LuckPerms builds.** LuckPerms is not required. If you use it, these are the LuckPerms builds tested with each Minecraft version.
+Use a LuckPerms build made for your Minecraft and loader version: a build for another version can crash the server at start.
+
+| Minecraft | LuckPerms (Fabric) | LuckPerms (NeoForge) |
+|---|---|---|
+| 1.21.1  | 5.4.140 | 5.4.149 or newer (older builds kick joining players) |
+| 1.21.2  | 5.4.145 | 5.4.149 |
+| 1.21.3  | 5.4.145 | 5.4.149 |
+| 1.21.4  | 5.4.150 | 5.4.158 |
+| 1.21.5  | 5.5.4   | not available (see below) |
+| 1.21.6  | 5.5.10  | 5.5.10 |
+| 1.21.7  | 5.5.10  | 5.5.10 |
+| 1.21.8  | 5.5.10  | 5.5.10 |
+| 1.21.9  | 5.5.17  | 5.5.17 |
+| 1.21.10 | 5.5.17  | 5.5.17 |
+| 1.21.11 | 5.5.21  | 5.5.21 |
+| 26.1.2  | 5.5.85  | 5.5.85 |
+| 26.2    | 5.5.85  | 5.5.85 |
+| 26.3    | 5.5.85  | 5.5.87 |
+
+**NeoForge 1.21.5:** no published LuckPerms build starts on NeoForge 21.5.101. LuckPerms 5.4.158 and 5.5.0 crash at server start, also without BankSystem. Run that server without LuckPerms; permission checks then use the normal permission levels.
+
 Account data is private: players see only the accounts they belong to, and only BankSystem admins see everyone's accounts. On a slave server that the master does not trust yet, placeholders (including leaderboards) and display blocks show no account data until an admin trusts the slave with `/banksystem trust`. Player-name tab completion still lists names there. On such a slave, BankSystem admins also do not get admin mode in `/banksystem manage` and `/bank manage` until the slave is trusted.
 
 Company statistics follow the same rule. Shareholders who are not members of the company account see only the number of shares issued and the number of holders. Account members also see the balance, cashflow and payouts, but the top-shareholder list shows only share amounts, not the shareholders' accounts. Only BankSystem admins see which accounts hold the shares. Total money and item circulation stays public, because it is a sum over all accounts.
