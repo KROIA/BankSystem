@@ -387,8 +387,6 @@
   "gui.banksystem.mod_settings_screen.setting.Utilities.SAVE_INTERVAL_SECONDS.tooltip": "How often the BankSystem data is automatically saved\nto disk, in seconds.\nLower values shrink the window in which a server crash\ncan duplicate withdrawn items.",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES": "Balance snapshot interval (minutes)",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES.tooltip": "How often a balance-history snapshot of all accounts\nis recorded, in minutes.\n0 disables snapshots.",
-  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM": "Max snapshot records per item (deprecated)",
-  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.tooltip": "Deprecated as of v2.0.7.\nThe tiered retention model supersedes this flat cap.\nValue is preserved for compatibility but is no longer applied;\nset to 0 to silence the boot warning.",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES": "Balance snapshot heartbeat (minutes)",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES.tooltip": "Minutes between forced writes when the balance hasn't changed.\nEnsures the chart can still draw\na continuous line for idle accounts.\n0 = disable heartbeat (only balance changes are recorded).",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_HISTORY_RETENTION_SWEEP_MINUTES": "History retention sweep (minutes)",

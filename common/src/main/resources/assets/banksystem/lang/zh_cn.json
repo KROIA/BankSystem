@@ -387,8 +387,6 @@
   "gui.banksystem.mod_settings_screen.setting.Utilities.SAVE_INTERVAL_SECONDS.tooltip": "BankSystem 数据自动保存到磁盘的间隔（秒）。\n数值越低，服务器崩溃导致已取出物品被复制的时间窗口越小。",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES": "余额快照间隔（分钟）",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES.tooltip": "所有账户余额历史快照的记录间隔（分钟）。\n0 表示禁用快照。",
-  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM": "每个物品的最大快照记录数（已弃用）",
-  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.tooltip": "自 v2.0.7 起已弃用。\n分级保留模型已取代此扁平上限。\n为兼容性保留但不再生效；设为 0 可关闭启动警告。",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES": "余额快照心跳（分钟）",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES.tooltip": "在余额未变化时强制写入的间隔（分钟）。\n可保证空闲账户的历史曲线仍能连续绘制。\n0 = 关闭心跳（仅在余额变化时记录）。",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_HISTORY_RETENTION_SWEEP_MINUTES": "历史保留清理间隔（分钟）",

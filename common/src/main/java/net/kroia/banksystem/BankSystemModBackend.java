@@ -524,18 +524,6 @@ public class BankSystemModBackend implements BankSystemAPI {
                 }
             });
 
-            // Task #41 (v2.0.7): one-shot deprecation WARN for the old flat-cap setting.
-            // Fires only when the user still has a non-zero cap on disk — the tiered
-            // retention model has fully superseded this cap. Placed inside onServerStart
-            // so it runs exactly once per boot (not on every snapshot tick).
-            if (INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get() > 0) {
-                INSTANCES.LOGGER.warn("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM is deprecated as of "
-                        + "v2.0.7 — the tiered retention model supersedes the flat cap. This "
-                        + "setting is now ignored. Set it to 0 in settings.json to silence this "
-                        + "warning; the sweep cadence is controlled by "
-                        + "BALANCE_HISTORY_RETENTION_SWEEP_MINUTES.");
-            }
-
             TickEvent.SERVER_POST.register(ON_SERVER_TICK);
             BankSystemDiscord.register(); // Task #119: every start, even with the feed off, so the config file exists
 
