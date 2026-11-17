@@ -76,6 +76,11 @@ public class BankSystemTestCategories {
             "banksystem", "gui", "Screens driven on the client: layout, input, screenshots",
             TestCategory.ServerType.BOTH, true);
 
+    /** TK-5 — world suites (TestKit TestArea: placed blocks, hoppers). */
+    public static final TestCategory WORLD = new TestCategory(
+            "banksystem", "world", "Placed blocks in a test area: hopper item flow",
+            TestCategory.ServerType.BOTH, true);
+
     /** BS-269 — generated audit fixture story steps (opt-in: runs only when named by --only). */
     public static final TestCategory FIXTURE = new TestCategory(
             "banksystem", "fixture", "Audit fixture story steps (opt-in, trusted slave)",
