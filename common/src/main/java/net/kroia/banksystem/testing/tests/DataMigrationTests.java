@@ -8,6 +8,7 @@ import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemDataMigration;
+import net.kroia.banksystem.util.BankSystemLogger;
 import net.kroia.modutilities.persistence.DataMigration;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
@@ -53,6 +54,12 @@ public class DataMigrationTests extends TestSuite {
         addTest("removes_obsolete_snapshot_cap_setting", this::removesObsoleteSetting);
     }
 
+    /** The mod backend sets LOGGER only when the mod starts; the offline JUnit run (:common:test) never starts it. */
+    private static BankSystemLogger log() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        return i.LOGGER != null ? i.LOGGER : new BankSystemLogger(i);
+    }
+
     private TestResult upgradesOldSave() {
         Path root = null;
         try {
@@ -71,7 +78,7 @@ public class DataMigrationTests extends TestSuite {
             Path db = root.resolve(DatabaseManager.DATABASE_PATH).resolve(DatabaseManager.FILE_NAME);
             createOldDatabase(db);
 
-            BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
+            BankSystemDataMigration.migrate(root, log());
 
             check(markerVersion(root) == 2, "marker is " + markerVersion(root) + ", expected 2");
             Path backupDir = root.resolve(BankSystemDataMigration.BACKUP_DIR);
@@ -125,7 +132,7 @@ public class DataMigrationTests extends TestSuite {
 
             // Second start: already at version 2, nothing runs and no new backup.
             String settingsOnce = Files.readString(data.resolve("settings.json"));
-            BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
+            BankSystemDataMigration.migrate(root, log());
             check(backups(backupDir).size() == 1, "second run made another backup: " + backups(backupDir));
             check(markerVersion(root) == 2, "marker changed on the second run");
             check(settingsOnce.equals(Files.readString(data.resolve("settings.json"))), "second run rewrote settings.json");
@@ -146,7 +153,7 @@ public class DataMigrationTests extends TestSuite {
             write(root.resolve(BankSystemDataMigration.MARKER), marker);
             write(root.resolve("Finance").resolve("BankSystem").resolve("Meta_data.nbt"), "old-meta");
             try {
-                BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
+                BankSystemDataMigration.migrate(root, log());
                 return fail("no DataVersionTooNewException for data version 99");
             } catch (DataMigration.DataVersionTooNewException expected) {
                 // the refusal under test
@@ -167,7 +174,7 @@ public class DataMigrationTests extends TestSuite {
         Path root = null;
         try {
             root = Files.createTempDirectory("banksystem-bs274-fresh");
-            BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
+            BankSystemDataMigration.migrate(root, log());
             check(markerVersion(root) == 2, "fresh marker is " + markerVersion(root));
             check(!Files.exists(root.resolve(BankSystemDataMigration.BACKUP_DIR)), "backup folder made for a fresh world");
             return pass("fresh world: marker 2, no backup");
@@ -187,7 +194,7 @@ public class DataMigrationTests extends TestSuite {
             write(root.resolve(BankSystemDataMigration.MARKER), "{\"dataVersion\": 1, \"modVersion\": \"2.2.0\"}");
             write(settingsFile, "{\"Utilities\":{\"SAVE_INTERVAL_SECONDS\":9,\"BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM\":1440}}");
 
-            BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
+            BankSystemDataMigration.migrate(root, log());
 
             check(markerVersion(root) == 2, "marker is " + markerVersion(root) + ", expected 2");
             JsonObject utilities = JsonParser.parseString(Files.readString(settingsFile)).getAsJsonObject().getAsJsonObject("Utilities");
