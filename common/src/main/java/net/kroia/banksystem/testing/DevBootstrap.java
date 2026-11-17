@@ -32,6 +32,9 @@ public final class DevBootstrap {
         AsynchronousRequestResponseSystem.register(net.kroia.banksystem.testing.fixture.FixtureStepRequest.INSTANCE); // BS-269: fixture master steps
         if (TestRegistry.ENABLE_TESTS) {
             BankSystemTestRegistration.register();
+            // TK-3/TK-4: GUI suite on the client only, so a dedicated server never loads its client classes
+            if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT)
+                TestRegistry.register(new net.kroia.banksystem.testing.tests.AccountSelectionGuiTests());
         }
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) ->
                 TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", "banksystem",
