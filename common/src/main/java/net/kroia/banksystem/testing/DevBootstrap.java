@@ -6,9 +6,9 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
-import net.kroia.modutilities.testing.autotest.AutoTest;
-import net.kroia.modutilities.testing.TestCommandRegistration;
-import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.testkit.autotest.AutoTest;
+import net.kroia.testkit.TestCommandRegistration;
+import net.kroia.testkit.TestRegistry;
 
 /**
  * The only way release code reaches dev-only code (unit tests, test commands).

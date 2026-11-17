@@ -1,6 +1,6 @@
 package net.kroia.banksystem.testing;
 
-import net.kroia.modutilities.testing.TestCategory;
+import net.kroia.testkit.TestCategory;
 
 public class BankSystemTestCategories {
 

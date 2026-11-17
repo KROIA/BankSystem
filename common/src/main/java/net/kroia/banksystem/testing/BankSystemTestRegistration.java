@@ -1,6 +1,6 @@
 package net.kroia.banksystem.testing;
 
-import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.testkit.TestRegistry;
 import net.kroia.banksystem.testing.tests.AdminFlagSyncTests;
 import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;

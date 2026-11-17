@@ -4,9 +4,9 @@ import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.AdminFlagSync;
 import net.kroia.banksystem.util.AdminFlagSync.DeopFollowUp;
 import net.kroia.banksystem.util.AdminFlagSync.ListenerAction;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.util.List;
 import java.util.Optional;
