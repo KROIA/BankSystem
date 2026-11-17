@@ -1395,7 +1395,7 @@ public class TransactionLedgerTests extends TestSuite {
             data.add(new UpdateBankAccountRequest.InputData.BankData(diamond, 0L, false, true, false, false));
             new UpdateBankAccountRequest().handleOnMasterServer(new UpdateBankAccountRequest.InputData(otherAccountNr, "", null,
                     data, null), "", ADMIN).join();
-            pumpUntil(() -> sent.stream().anyMatch(m -> m.contains(tid)), 5_000);
+            await(UpdateBankAccountRequest.lastParkedWarning, 30_000); // the warning is async (DB worker, then a server task)
         } finally {
             net.kroia.banksystem.networking.multi_server.ClientConsoleMessagePacket.testSink = null;
         }
