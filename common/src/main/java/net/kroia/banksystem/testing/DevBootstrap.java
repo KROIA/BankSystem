@@ -21,7 +21,10 @@ import net.kroia.testkit.TestRegistry;
 public final class DevBootstrap {
     private DevBootstrap() {}
 
-    /** Set by the matrix's {@code *-trusted} cells: the slave ID this master trusts before any test runs. */
+    /**
+     * Set by the matrix's {@code *-trusted} and {@code slave2} cells: the slave ID(s) this master trusts before any
+     * test runs, comma-separated.
+     */
     private static final String TRUSTED_SLAVE = System.getProperty("modutilities.autotest.trustedSlave");
     private static boolean trustApplied;
 
@@ -54,7 +57,11 @@ public final class DevBootstrap {
         if (instances.SERVER_BANK_MANAGER == null) return;
         trustApplied = true;
         if (BankSystemMod.getAPI().isSlave()) return;
-        instances.SERVER_BANK_MANAGER.getSync().trustSlaveServer(TRUSTED_SLAVE);
-        instances.LOGGER.info("[AutoTest] master trusts slave '" + TRUSTED_SLAVE + "' (modutilities.autotest.trustedSlave)");
+        for (String id : TRUSTED_SLAVE.split(",")) {
+            id = id.trim();
+            if (id.isEmpty()) continue;
+            instances.SERVER_BANK_MANAGER.getSync().trustSlaveServer(id);
+            instances.LOGGER.info("[AutoTest] master trusts slave '" + id + "' (modutilities.autotest.trustedSlave)");
+        }
     }
 }
