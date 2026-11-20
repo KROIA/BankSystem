@@ -7,6 +7,7 @@ import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
+import net.kroia.testkit.autotest.AutoTest;
 import net.kroia.testkit.gui.Gui;
 import net.kroia.testkit.gui.GuiNode;
 import net.kroia.testkit.gui.Layout;
@@ -25,7 +26,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * a click on a shown account row selects that account and closes the screen, and a documentation screenshot is
  * written. Skips on an untrusted slave only: the master refuses its reads, so the list is empty there by design.
  * On a trusted slave the list comes from the master; TestKit starts client GUI suites there only after the master's
- * server suites (TK-9), so the master is free to answer.
+ * server suites (TK-9), so the master is free to answer. Also skips in the slave-masterdown cell
+ * ({@link AutoTest#isMasterDown()}), where the master is killed on purpose; a link that breaks by accident in any other
+ * slave cell still errors.
  * Needs the ModUtilities GuiLocator (the screen is built from MU GuiElements). Register on the client only.
  */
 public class AccountSelectionGuiTests extends TestSuite {
@@ -35,6 +38,7 @@ public class AccountSelectionGuiTests extends TestSuite {
     /** Bound for the trust question a slave asks the master. */
     private static final int TRUST_SECONDS = 15;
     private static final String UNTRUSTED = "untrusted slave: the master refuses its account reads, empty list expected";
+    private static final String MASTER_DOWN = "slave-masterdown cell: the master is down on purpose, no account list";
     private static final String NO_ROWS = "no shown account rows within " + LIST_TICKS + " ticks";
 
     private final AtomicInteger selected = new AtomicInteger(-1);
@@ -95,6 +99,7 @@ public class AccountSelectionGuiTests extends TestSuite {
 
     /** No element outside the screen, no overlapping siblings, no clipped text at 1920x1080, GUI scale 2 and 3. */
     private TestResult layout() {
+        if (AutoTest.isMasterDown()) return skip(MASTER_DOWN);
         if (onUntrustedSlave()) return skip(UNTRUSTED);
         if (openWithAccounts().isEmpty()) return fail(NO_ROWS);
         List<Layout.Problem> scale2 = Gui.layoutProblems(1920, 1080, 2);
@@ -105,6 +110,7 @@ public class AccountSelectionGuiTests extends TestSuite {
     }
 
     private TestResult screenshot() {
+        if (AutoTest.isMasterDown()) return skip(MASTER_DOWN);
         if (onUntrustedSlave()) return skip(UNTRUSTED);
         if (openWithAccounts().isEmpty()) return fail(NO_ROWS);
         Path file = Screenshots.take("banksystem/bank_account_selection.png");
@@ -112,6 +118,7 @@ public class AccountSelectionGuiTests extends TestSuite {
     }
 
     private TestResult clickAccount() {
+        if (AutoTest.isMasterDown()) return skip(MASTER_DOWN);
         if (onUntrustedSlave()) return skip(UNTRUSTED);
         List<GuiNode> rows = openWithAccounts();
         if (rows.isEmpty()) return fail(NO_ROWS);
