@@ -326,6 +326,11 @@ public class BankSystemModBackend implements BankSystemAPI {
      * release code must compile without it.
      */
     private static void initDevFeatures() {
+        // The dev code uses the dev-only TestKit mod; without it DevBootstrap fails with NoClassDefFoundError.
+        if (!dev.architectury.platform.Platform.isModLoaded("testkit")) {
+            INSTANCES.LOGGER.warn("Dev features are enabled but the TestKit mod is not loaded; tests are off");
+            return;
+        }
         try {
             Class.forName(BankSystemMod.DEV_BOOTSTRAP).getMethod("init").invoke(null);
         } catch (ReflectiveOperationException e) {
