@@ -44,6 +44,8 @@ import java.util.function.Supplier;
 public class TransferStatusTests extends TestSuite {
 
     private ItemID A, B; // created after the bootstrap in setup()
+    /** The live store before this suite: some tests wipe it like a restart; teardown puts it back. */
+    private Results liveBefore;
 
     @Override
     public TestCategory getCategory() {
@@ -78,6 +80,18 @@ public class TransferStatusTests extends TestSuite {
         Bootstrap.bootStrap();
         A = new ItemID((short) 1, null);
         B = new ItemID((short) 2, null);
+        liveBefore = TransferStatusRequest.RESULTS.snapshot_forTesting();
+    }
+
+    /**
+     * Puts the live store back. Otherwise the wiped horizon makes a slave's refused transfer in the next 5 s answer
+     * UNKNOWN instead of NOT_APPLIED (spslave TransferJournalTests converter_commit_credits_money_bank).
+     */
+    // ponytail: assumes the suite runs in one go on the server thread, so no real transfer is stored mid-suite and
+    // lost by the restore. Merge instead of replace if suites ever run off-thread.
+    @Override
+    public void teardown() {
+        if (liveBefore != null) TransferStatusRequest.RESULTS.restore_forTesting(liveBefore);
     }
 
     private static Results.Entry entry(long at, boolean applied, Map<ItemID, Long> rem) {
