@@ -235,6 +235,14 @@ public class ItemIDMissingModTests extends TestSuite {
                         if (!r.passed()) return r;
                         r = assertTrue("message lists '" + NS2 + ": 1 item(s)': " + msg, msg.contains(NS2 + ": 1 item(s)"));
                         if (!r.passed()) return r;
+                        // The refusal names every item it would remove, also in the log message.
+                        String gone = "#" + missingItem + " " + NS + ":gone (" + NS + ")";
+                        r = assertEquals("missing items", 4, refused.missingItems.size());
+                        if (!r.passed()) return r;
+                        r = assertTrue("missing items list '" + gone + "': " + refused.missingItems, refused.missingItems.contains(gone));
+                        if (!r.passed()) return r;
+                        r = assertTrue("message lists '" + gone + "': " + msg, msg.contains(gone));
+                        if (!r.passed()) return r;
                         // BS-250: the refusal also names the merge the next successful load would apply.
                         String merge = "#" + dupPaper + " -> #" + base + " (" + net.kroia.modutilities.ItemUtilities.getItemIDStr(Items.PAPER) + ")";
                         r = assertEquals("pending merges", List.of(merge), refused.pendingMerges);

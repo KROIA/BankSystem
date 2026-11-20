@@ -603,8 +603,10 @@ public class BankSystemModBackend implements BankSystemAPI {
      * {@code lines}: missing namespaces with counts, or merge groups. {@code pendingMerges}: for
      * missing mods, the merges the next successful load would apply (BS-250). {@code worldDir}: the
      * world folder, for the screen's one-shot confirm button and for reopening the world.
+     * {@code missingItems}: for missing mods, every item that removing would drop.
      */
-    public record StartupRefusal(Kind kind, int count, List<String> lines, List<String> pendingMerges, Path worldDir) {
+    public record StartupRefusal(Kind kind, int count, List<String> lines, List<String> pendingMerges,
+                                 List<String> missingItems, Path worldDir) {
         /** MIGRATION_FAILED: {@code lines} holds the backup zip path, empty when none was made (BS-274). */
         public enum Kind { MISSING_MODS, MERGE, MIGRATION_FAILED, OTHER }
     }
@@ -642,11 +644,13 @@ public class BankSystemModBackend implements BankSystemAPI {
         int count = 0;
         List<String> lines = new ArrayList<>();
         List<String> pendingMerges = List.of();
+        List<String> missingItems = List.of();
         if (e instanceof ItemIDMissingModsException missing) {
             kind = StartupRefusal.Kind.MISSING_MODS;
             count = missing.missingCount;
             missing.missingNamespaces.forEach((ns, n) -> lines.add(ns + " (" + n + ")"));
             pendingMerges = missing.pendingMerges;
+            missingItems = missing.missingItems;
         } else if (e instanceof ItemIDMergeAbortedException merge) {
             kind = StartupRefusal.Kind.MERGE;
             count = merge.summary.size();
@@ -656,7 +660,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             if (failed.backupZip != null)
                 lines.add(failed.backupZip.toAbsolutePath().normalize().toString());
         }
-        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines), pendingMerges,
+        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines), pendingMerges, missingItems,
                 server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize());
         server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
         //server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2
