@@ -4,6 +4,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.modutilities.gui.ScreenNotice;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -29,8 +30,10 @@ public class MultiServerUtils {
         if(checkConnectionToMaster())
             return true;
         ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
-        if(player != null)
+        if(player != null) {
             player.sendSystemMessage(getNoMasterMessage());
+            ScreenNotice.send(player, getNoMasterMessage()); // MU-168
+        }
         return false;
     }
 
@@ -64,8 +67,10 @@ public class MultiServerUtils {
             Runnable reply = () -> {
                 boolean untrusted = failure == null && !Boolean.TRUE.equals(trusted);
                 ServerPlayer online = ServerPlayerUtilities.getOnlinePlayer(player);
-                if(untrusted && online != null)
+                if(untrusted && online != null) {
                     online.sendSystemMessage(getUntrustedSlaveMessage());
+                    ScreenNotice.send(online, getUntrustedSlaveMessage()); // MU-168: chat is hidden behind an open GUI
+                }
                 sent.complete(untrusted);
             };
             MinecraftServer server = UtilitiesPlatform.getServer();

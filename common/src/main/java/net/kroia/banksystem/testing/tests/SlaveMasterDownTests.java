@@ -40,10 +40,10 @@ import net.kroia.modutilities.networking.client_server.arrs.RequestNotSentExcept
 import net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException;
 import net.kroia.modutilities.testing.SimulatedMasterHang;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
-import net.kroia.modutilities.testing.autotest.AutoTest;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
+import net.kroia.testkit.autotest.AutoTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;

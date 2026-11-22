@@ -4,7 +4,11 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.modutilities.gui.ScreenNotice;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -24,6 +28,7 @@ public class ClientConsoleMessagePacket extends BankSystemNetworkPacket {
     public static final StreamCodec<RegistryFriendlyByteBuf, ClientConsoleMessagePacket> STREAM_CODEC = StreamCodec.composite(
             ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), p -> p.receivingPlayer,
             ByteBufCodecs.STRING_UTF8, p -> p.message,
+            ByteBufCodecs.BOOL, p -> p.notice,
             ClientConsoleMessagePacket::new
     );
     @Override
@@ -34,7 +39,21 @@ public class ClientConsoleMessagePacket extends BankSystemNetworkPacket {
 
     public static void sendMessageFromMaster(UUID targetPlayer, String message)
     {
-        ClientConsoleMessagePacket packet = new ClientConsoleMessagePacket(targetPlayer, message);
+        sendMessageFromMaster(targetPlayer, message, false);
+    }
+
+    /**
+     * MU-168: a refusal of a GUI action. Besides the chat line, the target player also gets it as a ScreenNotice over
+     * the open screen, where the chat is hidden. Only for a known target player; broadcasts stay chat-only.
+     */
+    public static void sendRefusalFromMaster(UUID targetPlayer, String message)
+    {
+        sendMessageFromMaster(targetPlayer, message, true);
+    }
+
+    private static void sendMessageFromMaster(UUID targetPlayer, String message, boolean notice)
+    {
+        ClientConsoleMessagePacket packet = new ClientConsoleMessagePacket(targetPlayer, message, notice);
         packet.broadcastToSlaves();
         packet.handle(); // Print to players that are on this server
     }
@@ -54,19 +73,21 @@ public class ClientConsoleMessagePacket extends BankSystemNetworkPacket {
      */
     public static void sendMessageFromMasterToSlave(String slaveID, String message)
     {
-        ClientConsoleMessagePacket packet = new ClientConsoleMessagePacket(null, message);
+        ClientConsoleMessagePacket packet = new ClientConsoleMessagePacket(null, message, false);
         packet.sendToSlave(slaveID);
     }
 
 
     private final @Nullable UUID receivingPlayer;
     private final String message;
+    /** MU-168: also show the message as a ScreenNotice to {@link #receivingPlayer}. */
+    private final boolean notice;
 
 
-    public ClientConsoleMessagePacket(@Nullable UUID receivingPlayer, String message) {
+    public ClientConsoleMessagePacket(@Nullable UUID receivingPlayer, String message, boolean notice) {
         this.receivingPlayer = receivingPlayer;
         this.message = message;
-
+        this.notice = notice;
     }
 
     @Override
@@ -93,6 +114,9 @@ public class ClientConsoleMessagePacket extends BankSystemNetworkPacket {
         else
         {
             ServerPlayerUtilities.printToClientConsole(receivingPlayer, message);
+            ServerPlayer online = notice ? ServerPlayerUtilities.getOnlinePlayer(receivingPlayer) : null;
+            if (online != null)
+                ScreenNotice.send(online, Component.literal(ChatFormatting.stripFormatting(message)));
         }
     }
 }

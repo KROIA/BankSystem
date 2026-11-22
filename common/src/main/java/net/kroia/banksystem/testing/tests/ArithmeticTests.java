@@ -5,9 +5,9 @@ import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.api.MoneyFormat;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 /**
  * Tests for arithmetic/conversion utilities used throughout the bank system.

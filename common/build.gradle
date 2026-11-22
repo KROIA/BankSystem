@@ -12,6 +12,10 @@ repositories {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/common/build/libs"
     }
     maven { url 'https://jitpack.io' }
+    // TestKit (dev-only test framework mod, TK-1), built locally
+    flatDir {
+        dir "../../../MC_TestKit/mc_${minecraft_version}_MC_TestKit/common/build/libs"
+    }
 
     //mavenLocal()
 
@@ -50,13 +54,23 @@ dependencies {
         exclude group: "org.slf4j"
     }
 
-    // Offline unit tests (Task #130): ModUtilities' OfflineTests runs the TestSuites with needsGame() == false as JUnit tests.
+    // Offline unit tests (Task #130): TestKit's OfflineTests runs the TestSuites with needsGame() == false as JUnit tests.
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
 }
 
+// TestKit (dev-only test framework mod, TK-1): the testing package compiles against it. Dev builds need its jar; release
+// builds use it only for the JUnit run and skip that run without the jar (e.g. on JitPack). Never shipped.
+if ((rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean() ||
+        file("../../../MC_TestKit/mc_${minecraft_version}_MC_TestKit/common/build/libs/testkit-common-${rootProject.testkit_version}.jar").exists()) {
+    dependencies {
+        //modCompileOnly "net.kroia:testkit-common:${rootProject.testkit_version}" // mc<=1.21.11
+        compileOnly "net.kroia:testkit-common:${rootProject.testkit_version}:dev" // mc>=26.1 (common jar carries the dev classifier on 26.1)
+    }
+}
+
 // `gradlew :common:test` runs the TestSuites that need no game (TestSuite.needsGame() == false), see OfflineTestsTest.
-// ModUtilities is modCompileOnly: the tests compile against it via compileOnly and run with Loom's remapped jar
+// ModUtilities and TestKit are modCompileOnly: the tests compile against it via compileOnly and run with Loom's remapped jar
 // (modCompileClasspathMainMapped is Loom-internal and created in afterEvaluate; Loom 1.7 has no modTest* configurations).
 configurations.testCompileOnly.extendsFrom configurations.compileOnly
 //afterEvaluate { configurations.testRuntimeClasspath.extendsFrom configurations.modCompileClasspathMainMapped } // Loom creates it late // mc<=1.21.11
@@ -68,13 +82,13 @@ if (!(rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean()) {
         srcDir 'src/main/java'
         include 'net/kroia/banksystem/testing/**'
     }
-    // A ModUtilities release jar has no testing package: skip the offline tests instead of failing the release build.
-    def muHasTesting = {
+    // Without the TestKit jar (e.g. on JitPack) skip the offline tests instead of failing the release build.
+    def hasTestKit = {
         sourceSets.test.compileClasspath.files.any { f -> f.name.endsWith('.jar') &&
-                new java.util.zip.ZipFile(f).withCloseable { it.getEntry('net/kroia/modutilities/testing/OfflineTests.class') != null } }
+                new java.util.zip.ZipFile(f).withCloseable { it.getEntry('net/kroia/testkit/OfflineTests.class') != null } }
     }.memoize()
-    compileTestJava.onlyIf('ModUtilities jar has its testing package (dev build)') { muHasTesting() }
-    test.onlyIf('ModUtilities jar has its testing package (dev build)') { muHasTesting() }
+    compileTestJava.onlyIf('TestKit jar is on the classpath') { hasTestKit() }
+    test.onlyIf('TestKit jar is on the classpath') { hasTestKit() }
     // Test detection loads every class in the test output, now including the suites; the LuckPerms suites' nested
     // classes need the compileOnly LuckPerms API. Only scan the JUnit classes (suites are named *Tests).
     test.include '**/*Test.class'

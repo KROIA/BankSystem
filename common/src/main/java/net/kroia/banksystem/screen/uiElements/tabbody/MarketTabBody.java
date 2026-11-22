@@ -126,6 +126,16 @@ public class MarketTabBody extends TabBody {
                 .thenAccept(code -> onClientThread(() -> {
                     marketOpen = code != null && code == AsyncCompanyManager.MARKET_OPEN_YES;
                     pauseResumeButton.setText(marketOpen ? tr("pause_trading") : tr("resume_trading"));
+                    if (!marketOpen) refreshCloseReason();
+                }));
+    }
+
+    /** BS-282 — shows why the market was closed (e.g. share duplication) in the status line. */
+    private void refreshCloseReason() {
+        AsyncCompanyManager.getMarketCloseReasonAsync(screen.getCompanyId())
+                .thenAccept(reason -> onClientThread(() -> {
+                    if (state == MarketState.HAS_MARKET && !marketOpen && !reason.isEmpty())
+                        statusLabel.setText(Component.translatable(reason).getString());
                 }));
     }
 
