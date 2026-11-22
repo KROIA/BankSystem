@@ -31,6 +31,9 @@ public final class StockMarketBridge {
     private static Method   mCloseMarket;
     private static Method   mSetMarketOpen;
     private static Method   mIsMarketOpen;
+    /** BS-282: SM-354 reason overloads; null on an older StockMarket. */
+    private static Method   mSetMarketOpenReason;
+    private static Method   mGetCloseReason;
     private static Method   mResultStatus;
     private static Method   mResultReason;
     private static Constructor<?> ctorMarketConfig;
@@ -79,6 +82,8 @@ public final class StockMarketBridge {
             mResultStatus    = resultCls.getMethod("status");
             mResultReason    = resultCls.getMethod("reason");
             ctorMarketConfig = cfgCls.getConstructor(boolean.class, float.class, float.class, boolean.class);
+            mSetMarketOpenReason = optionalMethod(integCls, "setMarketOpen", ItemID.class, boolean.class, String.class);
+            mGetCloseReason      = optionalMethod(integCls, "getMarketCloseReason", ItemID.class);
 
             available = true;
             return true;
@@ -89,6 +94,15 @@ public final class StockMarketBridge {
             note(t, "init");
             return false;
         }
+    }
+
+    private static Method optionalMethod(Class<?> cls, String name, Class<?>... params) {
+        try { return cls.getMethod(name, params); } catch (NoSuchMethodException e) { return null; }
+    }
+
+    /** BS-282: true when the loaded StockMarket supports close reasons (SM-354). */
+    public static boolean hasCloseReasonApi() {
+        return initReflection() && mSetMarketOpenReason != null && mGetCloseReason != null;
     }
 
     private static Object getIntegration() {
@@ -185,12 +199,21 @@ public final class StockMarketBridge {
      * "SM unavailable" — the underlying API treats no-market as a no-op.
      */
     public static boolean setMarketOpen(ItemID subject, boolean open) {
+        return setMarketOpen(subject, open, null);
+    }
+
+    /**
+     * BS-282: like {@link #setMarketOpen(ItemID, boolean)} with a close reason (a BankSystem translation key,
+     * null = plain maintenance). Falls back to the 2-arg call on a StockMarket without reasons.
+     */
+    public static boolean setMarketOpen(ItemID subject, boolean open, String reasonKey) {
         if (subject == null) return false;
         if (!initReflection()) return false;
         Object integ = getIntegration();
         if (integ == null) return false;
         try {
-            mSetMarketOpen.invoke(integ, subject, open);
+            if (mSetMarketOpenReason != null) mSetMarketOpenReason.invoke(integ, subject, open, reasonKey);
+            else mSetMarketOpen.invoke(integ, subject, open);
             return true;
         } catch (NoClassDefFoundError e) {
             note(e, "setMarketOpen");
@@ -225,6 +248,20 @@ public final class StockMarketBridge {
         } catch (Throwable t) {
             note(t, "isMarketOpen");
             return MarketOpen.UNAVAILABLE;
+        }
+    }
+
+    /** BS-282: why the market is closed (a translation key), or null when open / plain pause / unsupported. */
+    public static String getMarketCloseReason(ItemID subject) {
+        if (subject == null || !initReflection() || mGetCloseReason == null) return null;
+        Object integ = getIntegration();
+        if (integ == null) return null;
+        try {
+            Object r = mGetCloseReason.invoke(integ, subject);
+            return r == null ? null : r.toString();
+        } catch (Throwable t) {
+            note(t, "getMarketCloseReason");
+            return null;
         }
     }
 }
