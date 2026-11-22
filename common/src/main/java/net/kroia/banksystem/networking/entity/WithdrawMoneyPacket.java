@@ -193,7 +193,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         if(!account.hasPermission(player, BankPermission.WITHDRAW))
         {
             // BS-273: through the slave-bound message packet, so a player on a slave sees it too
-            ClientConsoleMessagePacket.sendMessageFromMaster(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
+            ClientConsoleMessagePacket.sendRefusalFromMaster(player, BankSystemTextMessages.getNoBankPermissionMessage(account.getAccountName(), BankPermission.WITHDRAW));
             return;
         }
         if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(finalCurrentSelectedAccountNumber, LedgerType.WITHDRAW, player)) // Task #117
@@ -242,7 +242,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
                 User user = bankManager.getUserByUUID(player);
                 if(user == null) continue;
                 String userName = user.getName();
-                ClientConsoleMessagePacket.sendMessageFromMaster(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), userName)); // BS-273
+                ClientConsoleMessagePacket.sendRefusalFromMaster(player, BankSystemTextMessages.getNotEnoughInAccountMessage(MoneyItem.getMoneyItemName(), userName)); // BS-273
                 continue;
             }
 

@@ -6,9 +6,9 @@ import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.networking.general.ModSettingsRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.modutilities.setting.SettingsStore;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -95,7 +95,6 @@ public class ModSettingsTests extends TestSuite {
         BankSystemModSettings source = new BankSystemModSettings();
         source.UTILITIES.SAVE_INTERVAL_SECONDS.set(7L);
         source.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(15L);
-        source.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(500L);
         source.UTILITIES.LOGGING_ENABLE_DEBUG.set(true);
         source.UTILITIES.LOGGING_ENABLE_INFO.set(false);
         source.PLAYER.STARTING_BALANCE.set(12345L);
@@ -117,8 +116,6 @@ public class ModSettingsTests extends TestSuite {
         TestResult r = assertEquals("SAVE_INTERVAL_SECONDS survives round-trip", 7L, (long) target.UTILITIES.SAVE_INTERVAL_SECONDS.get());
         if (!r.passed()) return r;
         r = assertEquals("BALANCE_SNAPSHOT_INTERVAL_MINUTES survives round-trip", 15L, (long) target.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get());
-        if (!r.passed()) return r;
-        r = assertEquals("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM survives round-trip", 500L, (long) target.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get());
         if (!r.passed()) return r;
         r = assertTrue("LOGGING_ENABLE_DEBUG survives round-trip", target.UTILITIES.LOGGING_ENABLE_DEBUG.get());
         if (!r.passed()) return r;
@@ -154,7 +151,6 @@ public class ModSettingsTests extends TestSuite {
         BankSystemModSettings settings = new BankSystemModSettings();
         settings.UTILITIES.SAVE_INTERVAL_SECONDS.set(0L);
         settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(-5L);
-        settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(-1L);
         settings.PLAYER.STARTING_BALANCE.set(-100L);
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(-20);
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(0);
@@ -169,9 +165,6 @@ public class ModSettingsTests extends TestSuite {
         if (!r.passed()) return r;
         r = assertEquals("snapshot interval clamped to minimum (0 = disabled)",
                 ModSettingsRequest.MIN_SNAPSHOT_INTERVAL_MINUTES, (long) settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get());
-        if (!r.passed()) return r;
-        r = assertEquals("snapshot record cap clamped to minimum (0 = unlimited)",
-                ModSettingsRequest.MIN_SNAPSHOT_MAX_RECORDS, (long) settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get());
         if (!r.passed()) return r;
         r = assertEquals("negative starting balance clamped to 0",
                 ModSettingsRequest.MIN_STARTING_BALANCE, (long) settings.PLAYER.STARTING_BALANCE.get());
@@ -201,7 +194,6 @@ public class ModSettingsTests extends TestSuite {
         BankSystemModSettings settings = new BankSystemModSettings();
         settings.UTILITIES.SAVE_INTERVAL_SECONDS.set(Long.MAX_VALUE);
         settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(Long.MAX_VALUE);
-        settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(Long.MAX_VALUE);
         settings.PLAYER.STARTING_BALANCE.set(Long.MAX_VALUE);
         settings.BANK.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(Integer.MAX_VALUE);
         settings.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.set(Integer.MAX_VALUE);
@@ -216,9 +208,6 @@ public class ModSettingsTests extends TestSuite {
         if (!r.passed()) return r;
         r = assertEquals("snapshot interval clamped to maximum",
                 ModSettingsRequest.MAX_SNAPSHOT_INTERVAL_MINUTES, (long) settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get());
-        if (!r.passed()) return r;
-        r = assertEquals("snapshot record cap clamped to maximum",
-                ModSettingsRequest.MAX_SNAPSHOT_MAX_RECORDS, (long) settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get());
         if (!r.passed()) return r;
         r = assertEquals("starting balance clamped to maximum",
                 ModSettingsRequest.MAX_STARTING_BALANCE, (long) settings.PLAYER.STARTING_BALANCE.get());

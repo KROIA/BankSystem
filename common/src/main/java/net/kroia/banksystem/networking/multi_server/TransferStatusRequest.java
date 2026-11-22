@@ -113,6 +113,21 @@ public class TransferStatusRequest extends BankSystemGenericRequest<TransferStat
         public synchronized int size() {
             return map.size();
         }
+
+        /** Test only: a copy of the store (entries + horizon), put back with {@link #restore_forTesting}. */
+        public synchronized Results snapshot_forTesting() {
+            Results copy = new Results();
+            copy.map.putAll(map);
+            copy.horizonMs = horizonMs;
+            return copy;
+        }
+
+        /** Test only: replaces the store with a {@link #snapshot_forTesting} copy. */
+        public synchronized void restore_forTesting(Results copy) {
+            map.clear();
+            map.putAll(copy.map);
+            horizonMs = copy.horizonMs;
+        }
     }
 
     public static final Results RESULTS = new Results();

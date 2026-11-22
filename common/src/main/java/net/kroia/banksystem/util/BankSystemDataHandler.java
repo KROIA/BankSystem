@@ -291,7 +291,8 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
         // CONFIRM_ITEMID_MERGE flag to compare the stored effective set against the current one.
         Path settingsFilePath = getGlobalSettingsFilePath();
         if(!fileExists(settingsFilePath)) {
-            warn("ServerBank settings file not found, creating default settings file.");
+            // BS-271: a new world has no settings file yet; that is normal, not a warning
+            info("No settings file yet, creating settings.json with the default settings.");
             // No settings file on disk → genuinely fresh: creating the default file is the
             // one save that must be allowed before a successful load.
             settingsLoadState = LoadState.FRESH;

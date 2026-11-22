@@ -81,15 +81,6 @@ public final class BankSystemModSettings extends ModSettings {
         public final Setting<Long> SAVE_INTERVAL_SECONDS = registerSetting("SAVE_INTERVAL_SECONDS",5L, Long.class); // 5 seconds
         public final Setting<Long> BALANCE_SNAPSHOT_INTERVAL_MINUTES = registerSetting("BALANCE_SNAPSHOT_INTERVAL_MINUTES",1L, Long.class); // 1 minute; combined with sample-on-change dedup this is now safe for production.
         /**
-         * @deprecated Task #41 (v2.0.7): the tiered retention model supersedes this flat cap.
-         * The value is preserved on disk so existing settings.json files load unchanged, but
-         * the backend no longer reads it — retention is now driven by
-         * {@link #BALANCE_HISTORY_RETENTION_SWEEP_MINUTES}. A one-shot boot WARN fires when
-         * this is left at a non-zero value.
-         */
-        @Deprecated
-        public final Setting<Long> BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM = registerSetting("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM", 1440L, Long.class);
-        /**
          * Task #41 (v2.0.7). Minutes between forced writes when balance hasn't changed.
          * Ensures the chart can still draw a continuous line for idle accounts. 0 = disable
          * heartbeat (only balance changes are recorded — chart lines still connect across
@@ -525,6 +516,27 @@ public final class BankSystemModSettings extends ModSettings {
         if (moved.size() == 0) return false;
         root.remove("Placeholder");
         root.add("Integrations", moved);
+        net.kroia.modutilities.persistence.DataPersistence.writeJsonAtomically(file,
+                new com.google.gson.GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(root));
+        return true;
+    }
+
+    /**
+     * BS-278: drops {@code Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM} (no effect since 2.0.7, removed in 2.2.0)
+     * from the raw file. Run by data-migration step 2 before the settings load. Idempotent; a file without the key,
+     * or one that is not a JSON object, is left untouched.
+     *
+     * @return true if the file was rewritten
+     */
+    public static boolean removeObsoleteSettings(Path file) throws java.io.IOException {
+        JsonObject root;
+        try {
+            root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+            JsonObject utilities = root.getAsJsonObject("Utilities");
+            if (utilities == null || utilities.remove("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM") == null) return false;
+        } catch (RuntimeException e) {
+            return false; // not a JSON object (or Utilities of the wrong type)
+        }
         net.kroia.modutilities.persistence.DataPersistence.writeJsonAtomically(file,
                 new com.google.gson.GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(root));
         return true;

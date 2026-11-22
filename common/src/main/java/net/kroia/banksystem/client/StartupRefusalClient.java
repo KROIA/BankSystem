@@ -81,12 +81,26 @@ public final class StartupRefusalClient {
         }
         message.append("\n\n").append(Component.translatable(refusal.kind() == StartupRefusal.Kind.MISSING_MODS
                 ? "gui.banksystem.load_refused.missing_hint" : "gui.banksystem.load_refused.merge_hint"));
-        return new ConfirmScreen(confirmed -> {
+        it.unimi.dsi.fastutil.booleans.BooleanConsumer callback = confirmed -> {
             if (confirmed && setFlag(refusal.worldDir(), flag))
                 mc.createWorldOpenFlows().openWorld(refusal.worldDir().getFileName().toString(), back);
             else
                 back.run();
-        }, title, message, Component.translatable(button), Component.translatable("gui.banksystem.load_refused.back"));
+        };
+        Component backLabel = Component.translatable("gui.banksystem.load_refused.back");
+        if (refusal.missingItems().isEmpty())
+            return new ConfirmScreen(callback, title, message, Component.translatable(button), backLabel);
+        return new ConfirmScreen(callback, title, message, Component.translatable(button), backLabel) {
+            @Override
+            protected void addButtons(int y) {
+                y = Math.min(y, height - 48); // room for the second row
+                super.addButtons(y);
+                addRenderableWidget(net.minecraft.client.gui.components.Button.builder(
+                        Component.translatable("gui.banksystem.load_refused.show_items", refusal.missingItems().size()),
+                        b -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(new MissingItemsScreen(this, refusal.missingItems())))
+                        .bounds(width / 2 - 155, y + 24, 310, 20).build());
+            }
+        };
     }
 
     private static void appendCapped(MutableComponent message, java.util.List<String> lines) {
