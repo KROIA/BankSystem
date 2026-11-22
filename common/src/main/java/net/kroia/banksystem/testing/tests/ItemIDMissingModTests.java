@@ -9,9 +9,9 @@ import net.kroia.banksystem.util.ItemIDMissingModsException;
 import net.kroia.banksystem.util.ItemStackNbt;
 import net.kroia.modutilities.NbtCompat;
 import net.kroia.modutilities.UtilitiesPlatform;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -234,6 +234,14 @@ public class ItemIDMissingModTests extends TestSuite {
                         r = assertTrue("message lists '" + NS + ": 3 item(s)': " + msg, msg.contains(NS + ": 3 item(s)"));
                         if (!r.passed()) return r;
                         r = assertTrue("message lists '" + NS2 + ": 1 item(s)': " + msg, msg.contains(NS2 + ": 1 item(s)"));
+                        if (!r.passed()) return r;
+                        // The refusal names every item it would remove, also in the log message.
+                        String gone = "#" + missingItem + " " + NS + ":gone (" + NS + ")";
+                        r = assertEquals("missing items", 4, refused.missingItems.size());
+                        if (!r.passed()) return r;
+                        r = assertTrue("missing items list '" + gone + "': " + refused.missingItems, refused.missingItems.contains(gone));
+                        if (!r.passed()) return r;
+                        r = assertTrue("message lists '" + gone + "': " + msg, msg.contains(gone));
                         if (!r.passed()) return r;
                         // BS-250: the refusal also names the merge the next successful load would apply.
                         String merge = "#" + dupPaper + " -> #" + base + " (" + net.kroia.modutilities.ItemUtilities.getItemIDStr(Items.PAPER) + ")";

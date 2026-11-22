@@ -1,6 +1,6 @@
 package net.kroia.banksystem.testing;
 
-import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.testkit.TestRegistry;
 import net.kroia.banksystem.testing.tests.AdminFlagSyncTests;
 import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
@@ -135,6 +135,8 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.DownloadLockFailureTests()); // Issue #87
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyReadAsyncTests()); // Issue #93
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PortCheckTests()); // BS-210
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.UploadHopperWorldTests()); // TK-5 (scenario side)
+        // TK-3/TK-4 GUI suite: registered by DevBootstrap on the client only (no loader in the offline JUnit run)
         // Task #108 — admin flag sync against a real LuckPerms, then "LuckPerms removed" phase 1/2.
         // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminFlagSyncLuckPermsTests());

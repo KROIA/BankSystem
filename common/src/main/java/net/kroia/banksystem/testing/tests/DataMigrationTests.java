@@ -8,10 +8,11 @@ import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemDataMigration;
+import net.kroia.banksystem.util.BankSystemLogger;
 import net.kroia.modutilities.persistence.DataMigration;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,8 +31,8 @@ import java.util.zip.ZipFile;
 
 /**
  * BS-274 / BS-276 — {@link BankSystemDataMigration} on synthetic world folders (own temp dirs, no live data):
- * a pre-2.2.0 save is backed up and upgraded once, a newer data version is refused untouched, and a fresh
- * world only gets the marker.
+ * a pre-2.2.0 save is backed up and upgraded once, a newer data version is refused untouched, a fresh
+ * world only gets the marker, and step 2 drops the obsolete snapshot cap setting (BS-278).
  */
 public class DataMigrationTests extends TestSuite {
 
@@ -50,6 +51,13 @@ public class DataMigrationTests extends TestSuite {
         addTest("upgrades_pre_2_2_0_save_once", this::upgradesOldSave);
         addTest("newer_data_version_refused_untouched", this::newerVersionRefused);
         addTest("fresh_world_writes_marker_only", this::freshWorld);
+        addTest("removes_obsolete_snapshot_cap_setting", this::removesObsoleteSetting);
+    }
+
+    /** The mod backend sets LOGGER only when the mod starts; the offline JUnit run (:common:test) never starts it. */
+    private static BankSystemLogger log() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        return i.LOGGER != null ? i.LOGGER : new BankSystemLogger(i);
     }
 
     private TestResult upgradesOldSave() {
@@ -70,9 +78,9 @@ public class DataMigrationTests extends TestSuite {
             Path db = root.resolve(DatabaseManager.DATABASE_PATH).resolve(DatabaseManager.FILE_NAME);
             createOldDatabase(db);
 
-            BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
+            BankSystemDataMigration.migrate(root, log());
 
-            check(markerVersion(root) == 1, "marker is " + markerVersion(root) + ", expected 1");
+            check(markerVersion(root) == 2, "marker is " + markerVersion(root) + ", expected 2");
             Path backupDir = root.resolve(BankSystemDataMigration.BACKUP_DIR);
             // The zips must sit outside every data path, or the next migration would zip them again.
             for (Path dataPath : List.of(data, root.resolve("Finance").resolve("BankSystem"), root.resolve("banksystem")))
@@ -122,11 +130,11 @@ public class DataMigrationTests extends TestSuite {
                 }
             }
 
-            // Second start: already at version 1, nothing runs and no new backup.
+            // Second start: already at version 2, nothing runs and no new backup.
             String settingsOnce = Files.readString(data.resolve("settings.json"));
-            BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
+            BankSystemDataMigration.migrate(root, log());
             check(backups(backupDir).size() == 1, "second run made another backup: " + backups(backupDir));
-            check(markerVersion(root) == 1, "marker changed on the second run");
+            check(markerVersion(root) == 2, "marker changed on the second run");
             check(settingsOnce.equals(Files.readString(data.resolve("settings.json"))), "second run rewrote settings.json");
             return pass("pre-2.2.0 save backed up and upgraded; second run is a no-op");
         } catch (Exception e) {
@@ -145,7 +153,7 @@ public class DataMigrationTests extends TestSuite {
             write(root.resolve(BankSystemDataMigration.MARKER), marker);
             write(root.resolve("Finance").resolve("BankSystem").resolve("Meta_data.nbt"), "old-meta");
             try {
-                BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
+                BankSystemDataMigration.migrate(root, log());
                 return fail("no DataVersionTooNewException for data version 99");
             } catch (DataMigration.DataVersionTooNewException expected) {
                 // the refusal under test
@@ -166,10 +174,34 @@ public class DataMigrationTests extends TestSuite {
         Path root = null;
         try {
             root = Files.createTempDirectory("banksystem-bs274-fresh");
-            BankSystemDataMigration.migrate(root, BankSystemModBackend.getInstances_forTesting().LOGGER);
-            check(markerVersion(root) == 1, "fresh marker is " + markerVersion(root));
+            BankSystemDataMigration.migrate(root, log());
+            check(markerVersion(root) == 2, "fresh marker is " + markerVersion(root));
             check(!Files.exists(root.resolve(BankSystemDataMigration.BACKUP_DIR)), "backup folder made for a fresh world");
-            return pass("fresh world: marker 1, no backup");
+            return pass("fresh world: marker 2, no backup");
+        } catch (Exception e) {
+            return fail(e.toString());
+        } finally {
+            delete(root);
+        }
+    }
+
+    /** BS-278: step 2 drops Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM from a data-version-1 save, keeps the rest. */
+    private TestResult removesObsoleteSetting() {
+        Path root = null;
+        try {
+            root = Files.createTempDirectory("banksystem-bs278");
+            Path settingsFile = root.resolve(BankSystemDataHandler.BASE_PATH).resolve("settings.json");
+            write(root.resolve(BankSystemDataMigration.MARKER), "{\"dataVersion\": 1, \"modVersion\": \"2.2.0\"}");
+            write(settingsFile, "{\"Utilities\":{\"SAVE_INTERVAL_SECONDS\":9,\"BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM\":1440}}");
+
+            BankSystemDataMigration.migrate(root, log());
+
+            check(markerVersion(root) == 2, "marker is " + markerVersion(root) + ", expected 2");
+            JsonObject utilities = JsonParser.parseString(Files.readString(settingsFile)).getAsJsonObject().getAsJsonObject("Utilities");
+            check(!utilities.has("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM"), "obsolete key still present: " + utilities);
+            check(utilities.has("SAVE_INTERVAL_SECONDS") && utilities.get("SAVE_INTERVAL_SECONDS").getAsInt() == 9,
+                    "SAVE_INTERVAL_SECONDS lost: " + utilities);
+            return pass("obsolete snapshot cap removed, other settings kept, marker 2");
         } catch (Exception e) {
             return fail(e.toString());
         } finally {

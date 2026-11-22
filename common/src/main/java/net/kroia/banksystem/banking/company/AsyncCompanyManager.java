@@ -151,7 +151,9 @@ public final class AsyncCompanyManager {
         // BS-262 (v2.2.0) — slave Share Stamper: MANAGE check (read-only, also for untrusted slaves;
         // the admin flag never counts from one) and one stamp/redeem on the master (trusted slaves only).
         STAMPER_GATE,
-        STAMPER_APPLY
+        STAMPER_APPLY,
+        // BS-282 (v2.2.0) — read-only: why the company's share market is closed (translation key, "" = none).
+        GET_MARKET_CLOSE_REASON
     }
 
     /** Task #1 (v2.1.0) — SM bridge result codes for OPEN_SHARE_MARKET output. */
@@ -1223,6 +1225,7 @@ public final class AsyncCompanyManager {
         put(FunctionType.ACKNOWLEDGE_SHARE_EXCESS,  new AsyncFunctionDataCodecs(DissolveInput.STREAM_CODEC,         ShareAcknowledgeOutput.STREAM_CODEC));
         put(FunctionType.STAMPER_GATE,              new AsyncFunctionDataCodecs(CloseShareMarketInput.STREAM_CODEC, ByteBufCodecs.VAR_INT.cast()));
         put(FunctionType.STAMPER_APPLY,             new AsyncFunctionDataCodecs(StamperApplyInput.STREAM_CODEC,     ByteBufCodecs.VAR_INT.cast()));
+        put(FunctionType.GET_MARKET_CLOSE_REASON,   new AsyncFunctionDataCodecs(GetShareVisualsInput.STREAM_CODEC,   ByteBufCodecs.STRING_UTF8.cast()));
     }};
 
     // ------------------------------------------------------------------
@@ -1369,6 +1372,7 @@ public final class AsyncCompanyManager {
                 case MARKET_EXISTS_FOR_COMPANY -> handleMarketExistsForCompany(input.decodeParams(), cm);
                 case SET_MARKET_OPEN           -> handleSetMarketOpen(input.decodeParams(), bm, cm);
                 case IS_MARKET_OPEN            -> handleIsMarketOpen(input.decodeParams(), cm);
+                case GET_MARKET_CLOSE_REASON   -> handleGetMarketCloseReason(input.decodeParams());
                 case UNBIND_STAMPER            -> handleUnbindStamper(input.decodeParams(), bm, cm);
                 case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> {
                     ListPlayerAccountsInput in = input.decodeParams();
@@ -1418,7 +1422,7 @@ public final class AsyncCompanyManager {
                 case GET_COMPANY_INFO, GET_COMPANY_INFO_BY_ID, GET_COMPANY_INFO_BY_ACCOUNT,
                      LIST_COMPANIES_FOR_CALLER, GET_COMPANY_STATS, COUNT_HOLDERS_FOR_COMPANY,
                      LIST_ALL_COMPANY_VISUALS, GET_SHARE_VISUALS, MARKET_EXISTS_FOR_COMPANY,
-                     IS_MARKET_OPEN, LIST_STAMPER_BINDINGS, LIST_SCHEDULES, GET_HISTORY,
+                     IS_MARKET_OPEN, GET_MARKET_CLOSE_REASON, LIST_STAMPER_BINDINGS, LIST_SCHEDULES, GET_HISTORY,
                      GET_FAILURE_COUNT_24H, LIST_DIVIDEND_HISTORY, LIST_ACCOUNT_ITEM_BALANCES,
                      LIST_PLAYER_ACCOUNTS_WITH_FILTER, IS_NAME_TAKEN,
                      GET_SYMBOL_MANIFEST, PULL_SYMBOL_BYTES -> true;
@@ -1445,7 +1449,7 @@ public final class AsyncCompanyManager {
                      GET_FAILURE_COUNT_24H, GET_SHARE_VISUALS,
                      LIST_STAMPER_BINDINGS, GET_COMPANY_INFO_BY_ID,
                      COUNT_HOLDERS_FOR_COMPANY, LIST_ALL_COMPANY_VISUALS,
-                     MARKET_EXISTS_FOR_COMPANY, IS_MARKET_OPEN,
+                     MARKET_EXISTS_FOR_COMPANY, IS_MARKET_OPEN, GET_MARKET_CLOSE_REASON,
                      LIST_PLAYER_ACCOUNTS_WITH_FILTER, LIST_ACCOUNT_ITEM_BALANCES,
                      LIST_DIVIDEND_HISTORY, GET_COMPANY_STATS,
                      // Task #54 (v2.1.0) — read-only symbol store queries.
@@ -1679,6 +1683,7 @@ public final class AsyncCompanyManager {
             case MARKET_EXISTS_FOR_COMPANY -> OutputData.of(function, MarketExistsOutput.UNAVAILABLE);
             case SET_MARKET_OPEN           -> OutputData.of(function, new SetMarketOpenOutput(SM_STATUS_UNAVAILABLE));
             case IS_MARKET_OPEN            -> OutputData.of(function, Integer.valueOf(MARKET_OPEN_UNAV));
+            case GET_MARKET_CLOSE_REASON   -> OutputData.of(function, "");
             case UNBIND_STAMPER            -> OutputData.of(function, new UnbindStamperOutput(CODE_INTERNAL));
             case LIST_PLAYER_ACCOUNTS_WITH_FILTER -> OutputData.of(function, ListPlayerAccountsOutput.EMPTY);
             case LIST_ACCOUNT_ITEM_BALANCES -> OutputData.of(function, ListItemBalancesOutput.EMPTY);
@@ -1793,6 +1798,14 @@ public final class AsyncCompanyManager {
             case UNAVAILABLE -> MARKET_OPEN_UNAV;
         };
         return OutputData.of(FunctionType.IS_MARKET_OPEN, Integer.valueOf(code));
+    }
+
+    /** BS-282 — close reason of the company's share market; "" when open, plainly paused or unknown. */
+    private static OutputData handleGetMarketCloseReason(GetShareVisualsInput in) {
+        net.kroia.banksystem.util.ItemID share = resolveShareItemID(in.companyId());
+        String reason = share == null ? null : runOnServerThreadSync(() ->
+                net.kroia.banksystem.integration.stockmarket.StockMarketBridge.getMarketCloseReason(share));
+        return OutputData.of(FunctionType.GET_MARKET_CLOSE_REASON, reason == null ? "" : reason);
     }
 
     private static OutputData handleMarketExistsForCompany(GetShareVisualsInput in, CompanyManager cm) {
@@ -2818,6 +2831,17 @@ public final class AsyncCompanyManager {
         dispatchInput(input).thenAccept(o -> {
             Integer v = o == null ? null : o.decodeResult();
             f.complete(v == null ? MARKET_OPEN_UNAV : v);
+        });
+        return f;
+    }
+
+    /** BS-282 — why the company's share market is closed (translation key); "" = no reason. Never null. */
+    public static CompletableFuture<String> getMarketCloseReasonAsync(int companyId) {
+        InputData input = InputData.of(FunctionType.GET_MARKET_CLOSE_REASON, new GetShareVisualsInput(companyId));
+        CompletableFuture<String> f = new CompletableFuture<>();
+        dispatchInput(input).thenAccept(o -> {
+            String v = o == null ? null : o.decodeResult();
+            f.complete(v == null ? "" : v);
         });
         return f;
     }

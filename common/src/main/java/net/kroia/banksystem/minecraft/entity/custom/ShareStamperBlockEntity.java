@@ -429,9 +429,11 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     /** Slave: refusal message for a STAMPER_GATE answer. */
     private static void gateRefused(net.minecraft.server.level.ServerPlayer player, @Nullable Integer code, int companyId) {
-        player.sendSystemMessage(code != null && code == net.kroia.banksystem.banking.company.AsyncCompanyManager.CODE_UNTRUSTED_SLAVE
+        Component msg = code != null && code == net.kroia.banksystem.banking.company.AsyncCompanyManager.CODE_UNTRUSTED_SLAVE
                 ? Component.translatable("gui.banksystem.share_stamper.untrusted_slave")
-                : Component.translatable("gui.banksystem.share_stamper.no_permission", companyName(companyId)));
+                : Component.translatable("gui.banksystem.share_stamper.no_permission", companyName(companyId));
+        player.sendSystemMessage(msg);
+        net.kroia.modutilities.gui.ScreenNotice.send(player, msg); // MU-168: chat is hidden behind an open GUI
     }
 
     /** Slave: opens the stamper menu once the master confirms the player may manage the bound company. */

@@ -1,6 +1,6 @@
 package net.kroia.banksystem.testing;
 
-import net.kroia.modutilities.testing.OfflineTests;
+import net.kroia.testkit.OfflineTests;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 
