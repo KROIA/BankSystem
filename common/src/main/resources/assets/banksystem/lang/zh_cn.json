@@ -387,8 +387,6 @@
   "gui.banksystem.mod_settings_screen.setting.Utilities.SAVE_INTERVAL_SECONDS.tooltip": "BankSystem 数据自动保存到磁盘的间隔（秒）。\n数值越低，服务器崩溃导致已取出物品被复制的时间窗口越小。",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES": "余额快照间隔（分钟）",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES.tooltip": "所有账户余额历史快照的记录间隔（分钟）。\n0 表示禁用快照。",
-  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM": "每个物品的最大快照记录数（已弃用）",
-  "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.tooltip": "自 v2.0.7 起已弃用。\n分级保留模型已取代此扁平上限。\n为兼容性保留但不再生效；设为 0 可关闭启动警告。",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES": "余额快照心跳（分钟）",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_SNAPSHOT_HEARTBEAT_MINUTES.tooltip": "在余额未变化时强制写入的间隔（分钟）。\n可保证空闲账户的历史曲线仍能连续绘制。\n0 = 关闭心跳（仅在余额变化时记录）。",
   "gui.banksystem.mod_settings_screen.setting.Utilities.BALANCE_HISTORY_RETENTION_SWEEP_MINUTES": "历史保留清理间隔（分钟）",
@@ -433,6 +431,8 @@
   "gui.banksystem.load_refused.remove_missing": "移除缺失物品并加载",
   "gui.banksystem.load_refused.confirm_merge": "确认合并并加载",
   "gui.banksystem.load_refused.back": "返回",
+  "gui.banksystem.load_refused.show_items": "显示将被移除的 %s 个物品",
+  "gui.banksystem.load_refused.items_title": "将被移除的物品（%s）",
   "gui.banksystem.mod_settings_screen.setting.ServerBank.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL": "下载方块更新间隔（tick）",
   "gui.banksystem.mod_settings_screen.setting.ServerBank.BANK_DOWNLOAD_BLOCK_UPDATE_TICK_INTERVAL.tooltip": "银行下载方块操作的间隔（tick，20 tick = 1 秒）。\n仅作用于此服务器上的方块；\n从服务器使用自己的本地 settings.json。",
   "gui.banksystem.mod_settings_screen.setting.ServerBank.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL": "上传方块更新间隔（tick）",
@@ -765,5 +765,7 @@
   "gui.banksystem.mod_settings_screen.setting.Audit.DAILY_DIGEST_ENABLED": "每日审计摘要",
   "gui.banksystem.mod_settings_screen.setting.Audit.DAILY_DIGEST_ENABLED.tooltip": "每天将前一天的 Markdown 摘要\n写入审计文件夹。",
   "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N": "摘要：最大收益者",
-  "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N.tooltip": "现金最大收益者列表中的账户数。"
+  "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N.tooltip": "现金最大收益者列表中的账户数。",
+  "banksystem.market_closed.share_duplication": "已关闭：检测到股份复制（存入银行的股份多于已盖章的股份）。公司管理员必须重新开放市场。",
+  "banksystem.market_closed.share_duplication.notify": "公司 %s 的股票市场已关闭：存入银行的股份多于已盖章的股份（可能存在股份复制）。公司管理员可以在公司的市场标签页中重新开放。"
 }

@@ -71,11 +71,6 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
     /** Maximum balance-snapshot interval in minutes (1 week). */
     public static final long MAX_SNAPSHOT_INTERVAL_MINUTES = 10_080L;
 
-    /** Minimum snapshot record cap per item; 0 = unlimited (DB can grow very large). */
-    public static final long MIN_SNAPSHOT_MAX_RECORDS = 0L;
-    /** Maximum snapshot record cap per item (sanity guard). */
-    public static final long MAX_SNAPSHOT_MAX_RECORDS = 10_000_000L;
-
     /** Minimum starting balance for new players (negative balances are not allowed). */
     public static final long MIN_STARTING_BALANCE = 0L;
     /** Maximum starting balance for new players (sanity guard, in money cents). */
@@ -312,7 +307,6 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
      * <ul>
      *   <li>{@code Utilities.SAVE_INTERVAL_SECONDS} ∈ [1, 86,400]</li>
      *   <li>{@code Utilities.BALANCE_SNAPSHOT_INTERVAL_MINUTES} ∈ [0, 10,080] (0 = disabled)</li>
-     *   <li>{@code Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM} ∈ [0, 10,000,000] (0 = unlimited)</li>
      *   <li>{@code Player.STARTING_BALANCE} ∈ [0, 10^12]</li>
      *   <li>{@code ServerBank.*_TICK_INTERVAL} ∈ [1, 1200]</li>
      *   <li>{@code ServerBank.ADDITIONAL_VOLATILE_COMPONENTS} /
@@ -335,8 +329,6 @@ public class ModSettingsRequest extends BankSystemGenericRequest<ModSettingsRequ
                 clamp(settings.UTILITIES.SAVE_INTERVAL_SECONDS.get(), MIN_SAVE_INTERVAL_SECONDS, MAX_SAVE_INTERVAL_SECONDS));
         settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.set(
                 clamp(settings.UTILITIES.BALANCE_SNAPSHOT_INTERVAL_MINUTES.get(), MIN_SNAPSHOT_INTERVAL_MINUTES, MAX_SNAPSHOT_INTERVAL_MINUTES));
-        settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.set(
-                clamp(settings.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get(), MIN_SNAPSHOT_MAX_RECORDS, MAX_SNAPSHOT_MAX_RECORDS));
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_INFO);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_WARNING);
         sanitizeBoolean(settings.UTILITIES.LOGGING_ENABLE_ERROR);
