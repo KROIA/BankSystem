@@ -326,6 +326,11 @@ public class BankSystemModBackend implements BankSystemAPI {
      * release code must compile without it.
      */
     private static void initDevFeatures() {
+        // The dev code uses the dev-only TestKit mod; without it DevBootstrap fails with NoClassDefFoundError.
+        if (!dev.architectury.platform.Platform.isModLoaded("testkit")) {
+            INSTANCES.LOGGER.warn("Dev features are enabled but the TestKit mod is not loaded; tests are off");
+            return;
+        }
         try {
             Class.forName(BankSystemMod.DEV_BOOTSTRAP).getMethod("init").invoke(null);
         } catch (ReflectiveOperationException e) {
@@ -524,18 +529,6 @@ public class BankSystemModBackend implements BankSystemAPI {
                 }
             });
 
-            // Task #41 (v2.0.7): one-shot deprecation WARN for the old flat-cap setting.
-            // Fires only when the user still has a non-zero cap on disk — the tiered
-            // retention model has fully superseded this cap. Placed inside onServerStart
-            // so it runs exactly once per boot (not on every snapshot tick).
-            if (INSTANCES.SERVER_SETTINGS.UTILITIES.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM.get() > 0) {
-                INSTANCES.LOGGER.warn("BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM is deprecated as of "
-                        + "v2.0.7 — the tiered retention model supersedes the flat cap. This "
-                        + "setting is now ignored. Set it to 0 in settings.json to silence this "
-                        + "warning; the sweep cadence is controlled by "
-                        + "BALANCE_HISTORY_RETENTION_SWEEP_MINUTES.");
-            }
-
             TickEvent.SERVER_POST.register(ON_SERVER_TICK);
             BankSystemDiscord.register(); // Task #119: every start, even with the feed off, so the config file exists
 
@@ -610,8 +603,10 @@ public class BankSystemModBackend implements BankSystemAPI {
      * {@code lines}: missing namespaces with counts, or merge groups. {@code pendingMerges}: for
      * missing mods, the merges the next successful load would apply (BS-250). {@code worldDir}: the
      * world folder, for the screen's one-shot confirm button and for reopening the world.
+     * {@code missingItems}: for missing mods, every item that removing would drop.
      */
-    public record StartupRefusal(Kind kind, int count, List<String> lines, List<String> pendingMerges, Path worldDir) {
+    public record StartupRefusal(Kind kind, int count, List<String> lines, List<String> pendingMerges,
+                                 List<String> missingItems, Path worldDir) {
         /** MIGRATION_FAILED: {@code lines} holds the backup zip path, empty when none was made (BS-274). */
         public enum Kind { MISSING_MODS, MERGE, MIGRATION_FAILED, OTHER }
     }
@@ -649,11 +644,13 @@ public class BankSystemModBackend implements BankSystemAPI {
         int count = 0;
         List<String> lines = new ArrayList<>();
         List<String> pendingMerges = List.of();
+        List<String> missingItems = List.of();
         if (e instanceof ItemIDMissingModsException missing) {
             kind = StartupRefusal.Kind.MISSING_MODS;
             count = missing.missingCount;
             missing.missingNamespaces.forEach((ns, n) -> lines.add(ns + " (" + n + ")"));
             pendingMerges = missing.pendingMerges;
+            missingItems = missing.missingItems;
         } else if (e instanceof ItemIDMergeAbortedException merge) {
             kind = StartupRefusal.Kind.MERGE;
             count = merge.summary.size();
@@ -663,7 +660,7 @@ public class BankSystemModBackend implements BankSystemAPI {
             if (failed.backupZip != null)
                 lines.add(failed.backupZip.toAbsolutePath().normalize().toString());
         }
-        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines), pendingMerges,
+        singleplayerRefusal = new StartupRefusal(kind, count, List.copyOf(lines), pendingMerges, missingItems,
                 server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize());
         //server.tell(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc<=1.21.1
         server.schedule(new net.minecraft.server.TickTask(server.getTickCount(), () -> server.halt(false))); // mc>=1.21.2
@@ -747,6 +744,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         // Sync the ClientSettings snapshot (isMasterServer flag) to the joining
         // client — used to gate master-only UI such as the "Mod Settings" button.
         PlayerJoinSyncPacket.send(player);
+        net.kroia.banksystem.banking.company.ShareIntegrity.onPlayerJoin(player); // BS-282
         /*
         INSTANCES.SERVER_BANK_MANAGER.createUser(
                 player,

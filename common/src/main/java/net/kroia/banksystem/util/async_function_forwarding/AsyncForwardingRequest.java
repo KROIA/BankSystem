@@ -110,7 +110,7 @@ public abstract class AsyncForwardingRequest<
                             "This action is not allowed. Contact a bank admin to grant trust for cross-server bank operations.";
                     if (playerSender != null) {
                         // Player UUID was propagated (e.g. client-initiated request); target them specifically.
-                        ClientConsoleMessagePacket.sendMessageFromMaster(playerSender, userMsg);
+                        ClientConsoleMessagePacket.sendRefusalFromMaster(playerSender, userMsg);
                     } else {
                         // Player UUID not propagated (slave-initiated server-side request via ARRS which
                         // drops the UUID). Fall back to broadcasting to all players on the offending slave.

@@ -19,9 +19,9 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.event.DataEvent;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
@@ -581,7 +581,12 @@ public class ItemIDMergeGuardTests extends TestSuite {
 
             return pass("applied merge purges alias balance-history rows and preserves canonical rows");
         } catch (Exception e) {
-            return fail("balance-history purge test threw: " + e.getMessage());
+            // BS-277: one run failed with a message-less exception; keep class, first frame and the full stack
+            BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
+            if (instances != null) instances.LOGGER.error("balance-history purge test threw", e);
+            StackTraceElement[] st = e.getStackTrace();
+            return fail("balance-history purge test threw: " + e.getClass().getName() + " — " + e.getMessage()
+                    + (st.length > 0 ? " at " + st[0] : " (no stack, JVM fast-throw?)"));
         } finally {
             // Cleanup: remove any residual history rows for the synthetic account (belt-and-
             // suspenders — the merge path should already have cleaned alias-keyed rows, but

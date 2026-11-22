@@ -5,9 +5,9 @@ import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.banking.company.SlaveCompanyMirror;
 import net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 import java.util.List;

@@ -6,9 +6,9 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
-import net.kroia.modutilities.testing.autotest.AutoTest;
-import net.kroia.modutilities.testing.TestCommandRegistration;
-import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.testkit.autotest.AutoTest;
+import net.kroia.testkit.TestCommandRegistration;
+import net.kroia.testkit.TestRegistry;
 
 /**
  * The only way release code reaches dev-only code (unit tests, test commands).
@@ -21,7 +21,10 @@ import net.kroia.modutilities.testing.TestRegistry;
 public final class DevBootstrap {
     private DevBootstrap() {}
 
-    /** Set by the matrix's {@code *-trusted} cells: the slave ID this master trusts before any test runs. */
+    /**
+     * Set by the matrix's {@code *-trusted} and {@code slave2} cells: the slave ID(s) this master trusts before any
+     * test runs, comma-separated.
+     */
     private static final String TRUSTED_SLAVE = System.getProperty("modutilities.autotest.trustedSlave");
     private static boolean trustApplied;
 
@@ -32,6 +35,9 @@ public final class DevBootstrap {
         AsynchronousRequestResponseSystem.register(net.kroia.banksystem.testing.fixture.FixtureStepRequest.INSTANCE); // BS-269: fixture master steps
         if (TestRegistry.ENABLE_TESTS) {
             BankSystemTestRegistration.register();
+            // TK-3/TK-4: GUI suite on the client only, so a dedicated server never loads its client classes
+            if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT)
+                TestRegistry.register(new net.kroia.banksystem.testing.tests.AccountSelectionGuiTests());
         }
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) ->
                 TestCommandRegistration.register(dispatcher, "banksystem", "BankSystem", "banksystem",
@@ -51,7 +57,11 @@ public final class DevBootstrap {
         if (instances.SERVER_BANK_MANAGER == null) return;
         trustApplied = true;
         if (BankSystemMod.getAPI().isSlave()) return;
-        instances.SERVER_BANK_MANAGER.getSync().trustSlaveServer(TRUSTED_SLAVE);
-        instances.LOGGER.info("[AutoTest] master trusts slave '" + TRUSTED_SLAVE + "' (modutilities.autotest.trustedSlave)");
+        for (String id : TRUSTED_SLAVE.split(",")) {
+            id = id.trim();
+            if (id.isEmpty()) continue;
+            instances.SERVER_BANK_MANAGER.getSync().trustSlaveServer(id);
+            instances.LOGGER.info("[AutoTest] master trusts slave '" + id + "' (modutilities.autotest.trustedSlave)");
+        }
     }
 }
