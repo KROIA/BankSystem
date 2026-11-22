@@ -85,7 +85,7 @@ public class AccountSelectionGuiTests extends TestSuite {
     private List<GuiNode> openWithAccounts() {
         selected.set(-1);
         UUID player = Gui.onClient(() -> Minecraft.getInstance().player.getUUID());
-        Gui.onClient(() -> Minecraft.getInstance().setScreen(new BankAccountSelectionScreen(null, player, selected::set)));
+        Gui.onClient(() -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(new BankAccountSelectionScreen(null, player, selected::set)));
         Gui.waitForScreen(BankAccountSelectionScreen.class, 20);
         // polled from the test thread: findAll hops to the client itself, so it cannot run inside Gui.waitUntil
         for (int i = 0; i < LIST_TICKS && accountRows().isEmpty(); i++) Gui.waitTicks(1);
@@ -125,7 +125,7 @@ public class AccountSelectionGuiTests extends TestSuite {
         GuiNode row = rows.get(0);
         int expected = Gui.onClient(() -> ((BankAccountSelectionScreen.AccountButton) row.handle()).getAccountData().accountNumber);
         Gui.click(row);
-        if (!Gui.waitUntil(() -> !(Minecraft.getInstance().screen instanceof BankAccountSelectionScreen), 20))
+        if (!Gui.waitUntil(() -> !(net.kroia.modutilities.gui.client.ClientCompat.screen() instanceof BankAccountSelectionScreen), 20))
             return fail("screen still open after clicking " + row);
         return assertEquals(expected, selected.get());
     }
