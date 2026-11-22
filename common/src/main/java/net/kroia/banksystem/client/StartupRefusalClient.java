@@ -92,13 +92,19 @@ public final class StartupRefusalClient {
             return new ConfirmScreen(callback, title, message, Component.translatable(button), backLabel);
         return new ConfirmScreen(callback, title, message, Component.translatable(button), backLabel) {
             @Override
-            protected void addButtons(int y) {
-                y = Math.min(y, height - 48); // room for the second row
-                super.addButtons(y);
-                addRenderableWidget(net.minecraft.client.gui.components.Button.builder(
+            //protected void addButtons(int y) { // mc<=1.21.5
+                //y = Math.min(y, height - 48); // second row below the yes/no buttons // mc<=1.21.5
+                //super.addButtons(y); // mc<=1.21.5
+                //addRenderableWidget(showItems().bounds(width / 2 - 155, y + 24, 310, 20).build()); // mc<=1.21.5
+            protected void addButtons(net.minecraft.client.gui.layouts.LinearLayout buttonRow) { // mc>=1.21.6
+                super.addButtons(buttonRow); // mc>=1.21.6
+                layout.addChild(showItems().width(310).build()); // second row, laid out by init() // mc>=1.21.6
+            }
+
+            private net.minecraft.client.gui.components.Button.Builder showItems() {
+                return net.minecraft.client.gui.components.Button.builder(
                         Component.translatable("gui.banksystem.load_refused.show_items", refusal.missingItems().size()),
-                        b -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(new MissingItemsScreen(this, refusal.missingItems())))
-                        .bounds(width / 2 - 155, y + 24, 310, 20).build());
+                        b -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(new MissingItemsScreen(this, refusal.missingItems())));
             }
         };
     }
