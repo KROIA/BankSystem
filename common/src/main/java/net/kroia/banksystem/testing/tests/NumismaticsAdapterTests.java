@@ -22,9 +22,9 @@ import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.setting.Setting;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.core.registries.BuiltInRegistries;
 //import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
 import net.minecraft.resources.Identifier; // mc>=1.21.11
