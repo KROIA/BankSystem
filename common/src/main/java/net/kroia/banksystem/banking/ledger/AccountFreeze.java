@@ -75,7 +75,7 @@ public final class AccountFreeze {
         Long last = LAST_NOTIFY.put(player, now);
         if (last != null && now - last < 1000) return; // one terminal sweep = many bank calls
         try {
-            ClientConsoleMessagePacket.sendMessageFromMaster(player, BankSystemTextMessages.getAccountFrozenMessage(accountNumber));
+            ClientConsoleMessagePacket.sendRefusalFromMaster(player, BankSystemTextMessages.getAccountFrozenMessage(accountNumber));
         } catch (RuntimeException ignored) {
             // best-effort
         }

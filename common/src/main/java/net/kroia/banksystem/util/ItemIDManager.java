@@ -3515,6 +3515,10 @@ public class ItemIDManager implements ServerSaveable {
                 dev.architectury.platform.Platform::isModLoaded);
         StringBuilder list = new StringBuilder();
         byNamespace.forEach((ns, n) -> list.append("\n  ").append(ns).append(": ").append(n).append(" item(s)"));
+        List<String> items = describeMissingItems(unresolvedEntries, dev.architectury.platform.Platform::isModLoaded);
+        list.append("\nItems:");
+        for (String item : items)
+            list.append("\n  ").append(item);
         boolean confirmed = BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_SETTINGS != null
                 && Boolean.TRUE.equals(BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REMOVE_MISSING.get());
         if (!confirmed) {
@@ -3545,12 +3549,12 @@ public class ItemIDManager implements ServerSaveable {
                     + "\n  2) remove these items once: set \"CONFIRM_ITEMID_REMOVE_MISSING\": true in the \"ServerBank\" group of"
                     + "\n     <world>/data/BankSystem/settings.json and start again. Their balances are removed from every bank"
                     + "\n     account (the BankSystem data folder is backed up first); the flag resets itself.",
-                    unresolvedEntries.size(), byNamespace, merges);
+                    unresolvedEntries.size(), byNamespace, merges, items);
         }
         BankSystemDataHandler dataHandler = BACKEND_INSTANCES.SERVER_DATA_HANDLER;
         if (dataHandler != null && !dataHandler.backupDataFolder("remove-missing"))
             throw new ItemIDMissingModsException("[ItemIDManager] CONFIRM_ITEMID_REMOVE_MISSING is true, but the backup of the "
-                    + "BankSystem data folder failed, so nothing was removed. Missing:" + list, unresolvedEntries.size(), byNamespace, List.of());
+                    + "BankSystem data folder failed, so nothing was removed. Missing:" + list, unresolvedEntries.size(), byNamespace, List.of(), items);
         lastRemovedMissing = Set.copyOf(unresolvedEntries.keySet());
         unresolvedEntries.clear();
         BACKEND_INSTANCES.SERVER_SETTINGS.BANK.CONFIRM_ITEMID_REMOVE_MISSING.set(false);
@@ -3620,6 +3624,25 @@ public class ItemIDManager implements ServerSaveable {
                 counts.merge(ns, 1, Integer::sum);
         }
         return counts;
+    }
+
+    /**
+     * One line per saved entry of a missing mod, sorted by ID, e.g. {@code "#12 create:brass_ingot (create)"}:
+     * the saved item and the missing mods it needs (an installed item can carry data of a removed mod).
+     */
+    public static List<String> describeMissingItems(Map<ItemID, CompoundTag> entries,
+                                                    java.util.function.Predicate<String> isLoaded) {
+        List<Map.Entry<ItemID, CompoundTag>> sorted = new ArrayList<>(entries.entrySet());
+        sorted.sort(Comparator.comparingInt(e -> e.getKey().getShort()));
+        List<String> lines = new ArrayList<>(sorted.size());
+        for (Map.Entry<ItemID, CompoundTag> e : sorted) {
+            Set<String> found = new TreeSet<>();
+            collectForeignNamespaces(e.getValue(), isLoaded, found);
+            String item = NbtCompat.getString(NbtCompat.getCompound(e.getValue(), "itemStack"), "id");
+            lines.add("#" + e.getKey().getShort() + " " + (item.isEmpty() ? "?" : item)
+                    + " (" + (found.isEmpty() ? "unknown" : String.join(", ", found)) + ")");
+        }
+        return lines;
     }
 
     private static void collectForeignNamespaces(Tag tag, java.util.function.Predicate<String> isLoaded, Set<String> out) {

@@ -9,10 +9,10 @@ import net.kroia.banksystem.testing.fixture.FixtureKey;
 import net.kroia.banksystem.testing.fixture.FixtureStepRequest;
 import net.kroia.banksystem.testing.fixture.FixtureSteps;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestRegistry;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestRegistry;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.io.IOException;
 import java.nio.file.Files;
