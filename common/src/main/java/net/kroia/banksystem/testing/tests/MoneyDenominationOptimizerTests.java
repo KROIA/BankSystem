@@ -6,9 +6,9 @@ import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MoneyDenominationOptimizer;
 import net.kroia.banksystem.util.MoneyDenominationOptimizer.SplitResult;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
