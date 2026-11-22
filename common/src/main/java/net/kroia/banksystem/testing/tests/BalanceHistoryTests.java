@@ -8,9 +8,9 @@ import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.networking.general.BalanceHistoryRequest;
 import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.sql.Connection;
 import java.sql.Driver;

@@ -9,6 +9,7 @@ import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.banking.ledger.AdminAudit;
 import net.kroia.banksystem.banking.ledger.SuspicionChecks;
 import net.kroia.banksystem.data.DatabaseManager;
+import net.kroia.banksystem.integration.stockmarket.StockMarketBridge;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.kroia.banksystem.util.ItemID;
@@ -119,7 +120,56 @@ public final class ShareIntegrity {
         if (c == null || bm == null) return;
         long banked = bankedRaw(bm, companyId) / SCALE;
         long since = c.getShareConsistentTs();
-        if (apply(cm, c, banked, System.currentTimeMillis())) raise(c, banked, since);
+        if (apply(cm, c, banked, System.currentTimeMillis())) {
+            raise(c, banked, since);
+            closeMarkets(cm, c);
+        }
+    }
+
+    /** BS-282: StockMarket close reason (translation key) for a share duplication. */
+    public static final String CLOSE_REASON = "banksystem.market_closed.share_duplication";
+
+    /**
+     * BS-282: closes trading on every share market of the company with {@link #CLOSE_REASON} and tells its
+     * online admins. Never reopened automatically: only the Market tab (company admin or BankSystem admin).
+     * Server thread, master. No-op without StockMarket.
+     */
+    static void closeMarkets(CompanyManager cm, Company c) {
+        try {
+            boolean any = false;
+            for (ItemID id : CompanyStatsQuery.shareItemIds(c.getCompanyId())) {
+                if (StockMarketBridge.isMarketOpen(id) == StockMarketBridge.MarketOpen.UNAVAILABLE) continue;
+                any |= StockMarketBridge.setMarketOpen(id, false, CLOSE_REASON); // also tags a paused market
+            }
+            net.minecraft.server.MinecraftServer server = dev.architectury.utils.GameInstance.getServer();
+            if (!any || server == null) return;
+            // ponytail: players on slave servers only see the reason in the Market tab, no chat line
+            for (net.minecraft.server.level.ServerPlayer p : server.getPlayerList().getPlayers())
+                if (cm.listCompaniesManagedBy(p.getUUID()).contains(c)) notifyClosed(p, c);
+        } catch (RuntimeException e) {
+            warn("closing share markets failed: " + e);
+        }
+    }
+
+    /** BS-282: on join, remind company admins of a market still closed for share duplication. Server thread. */
+    public static void onPlayerJoin(net.minecraft.server.level.ServerPlayer player) {
+        try {
+            CompanyManager cm = CompanyManager.get();
+            if (!master() || cm == null || !StockMarketBridge.hasCloseReasonApi()) return;
+            for (Company c : cm.listCompaniesManagedBy(player.getUUID()))
+                for (ItemID id : CompanyStatsQuery.shareItemIds(c.getCompanyId()))
+                    if (CLOSE_REASON.equals(StockMarketBridge.getMarketCloseReason(id))) {
+                        notifyClosed(player, c);
+                        break;
+                    }
+        } catch (RuntimeException e) {
+            warn("join market reminder failed: " + e);
+        }
+    }
+
+    private static void notifyClosed(net.minecraft.server.level.ServerPlayer p, Company c) {
+        p.sendSystemMessage(net.minecraft.network.chat.Component.translatable("banksystem.market_closed.share_duplication.notify", c.getName())
+                .withStyle(net.minecraft.ChatFormatting.RED));
     }
 
     /** @return free + locked raw balance of every share ItemID of the company over all accounts. */

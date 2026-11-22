@@ -50,7 +50,6 @@ A freshly created `settings.json` looks like this:
   "Utilities": {
     "SAVE_INTERVAL_SECONDS": 5,
     "BALANCE_SNAPSHOT_INTERVAL_MINUTES": 1,
-    "BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM": 1440,
     "BALANCE_SNAPSHOT_HEARTBEAT_MINUTES": 60,
     "BALANCE_HISTORY_RETENTION_SWEEP_MINUTES": 60,
     "LOGGING_ENABLE_INFO": true,
@@ -115,7 +114,6 @@ A freshly created `settings.json` looks like this:
 |-----|------|---------|-------------|
 | `SAVE_INTERVAL_SECONDS` | number | `5` | Interval in **seconds** at which BankSystem auto-saves all its data (bank accounts, item registry, and this settings file). Valid range `1`–`86400`; out-of-range values are clamped. Saves only run while at least one player is online, plus one final save after the last player leaves. <br>**Renamed in v2.1.0** (was `SAVE_INTERVAL_MINUTES`). A file still carrying the old key falls back to the 5-second default — if you ran a custom interval, set it again in seconds. The shorter window closes an item-duplication gap where a crash between a withdrawal and the next save left the items in both the bank and the player's inventory. |
 | `BALANCE_SNAPSHOT_INTERVAL_MINUTES` | number | `1` | Interval in minutes between balance snapshots. Snapshots feed the **Balance History** chart of the [Bank Terminal](Usage.md#balance-history-chart) and the [Bank Display block](Usage.md#bank-display). A row is only written when the balance actually changed since the last one (see `BALANCE_SNAPSHOT_HEARTBEAT_MINUTES`). One snapshot is also taken at server start. Range `0`–`10080`; set to `0` to disable periodic snapshots. |
-| `BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM` | number | `1440` | **Deprecated since v2.0.7 and no longer enforced** — the tiered retention plan below replaced it. The key is kept so existing files load unchanged; a non-zero value logs a one-shot warning at server start. |
 | `BALANCE_SNAPSHOT_HEARTBEAT_MINUTES` | number | `60` | Maximum minutes between forced snapshot rows for an idle account, so long-untouched series still have data points to draw. `0` disables the heartbeat — only real balance changes are recorded (chart lines still connect across the gaps). |
 | `BALANCE_HISTORY_RETENTION_SWEEP_MINUTES` | number | `60` | How often the balance-history downsample/prune sweep runs. One sweep also runs synchronously at server start, so histories written by v2.0.6 or earlier are compacted on the first boot after upgrading. Higher values mean less database work but a larger file between sweeps. `0` disables retention entirely — **the history database then grows without bound.** <br>The sweep keeps full resolution for the last 24 hours, one row per 15 minutes from 24 hours to 7 days, one row per hour from 7 to 30 days, one row per day from 30 days to a year, and deletes everything older than a year. |
 | `LOGGING_ENABLE_INFO` | boolean | `true` | Enables BankSystem's info-level log messages. |
