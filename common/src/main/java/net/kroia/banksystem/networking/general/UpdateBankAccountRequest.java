@@ -519,18 +519,27 @@ public class UpdateBankAccountRequest extends BankSystemGenericRequest<UpdateBan
     private static void warnParkedTransfers(UUID admin, int accountNumber) {
         var flags = BACKEND_INSTANCES.SUSPICION_FLAG_MANAGER;
         if (flags == null || admin == null) return;
-        flags.getRecent(accountNumber, 0, 0).thenAccept(rows -> {
+        lastParkedWarning = flags.getRecent(accountNumber, 0, 0).thenCompose(rows -> {
             List<String> ids = rows.stream().filter(f -> f.flagType() == SuspicionChecks.TRANSFER_PARKED && !f.acknowledged())
                     .map(f -> String.valueOf(f.ref())).toList();
-            if (ids.isEmpty()) return;
+            if (ids.isEmpty()) return java.util.concurrent.CompletableFuture.<Void>completedFuture(null);
             String msg = BankSystemTextMessages.getResetLockParkedMessage(accountNumber, ids.size(),
                     String.join(", ", ids.subList(0, Math.min(5, ids.size()))) + (ids.size() > 5 ? ", ..." : ""));
             net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
-            Runnable send = () -> ClientConsoleMessagePacket.sendMessageFromMaster(admin, msg);
+            java.util.concurrent.CompletableFuture<Void> sent = new java.util.concurrent.CompletableFuture<>();
+            Runnable send = () -> {
+                try { ClientConsoleMessagePacket.sendMessageFromMaster(admin, msg); }
+                finally { sent.complete(null); }
+            };
             if (srv != null) srv.execute(send);
             else send.run();
+            return sent;
         }).exceptionally(t -> null);
     }
+
+    /** Test seam: completes once the last {@link #warnParkedTransfers} call has sent its warning (or found none). */
+    public static volatile java.util.concurrent.CompletableFuture<Void> lastParkedWarning =
+            java.util.concurrent.CompletableFuture.completedFuture(null);
 
     private void notifySender(UUID senderUUID, String translationKey) {
         if (senderUUID == null) {

@@ -10,10 +10,10 @@ import net.kroia.banksystem.util.BankSystemPermissions;
 import net.kroia.modutilities.PermissionCompat;
 import net.kroia.modutilities.permission.LuckPermsBridge;
 import net.kroia.modutilities.testing.LuckPermsPhase;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
-import net.kroia.modutilities.testing.autotest.AutoTest;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
+import net.kroia.testkit.autotest.AutoTest;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 

@@ -2,9 +2,9 @@ package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.client.cache.LookupBackoff;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 /** Task #167: a failed client cache lookup is not resent before its retry time (was: every frame). Offline. */
 public class LookupBackoffTests extends TestSuite {

@@ -27,6 +27,10 @@ import java.util.stream.Stream;
  * <p>
  * A new step is needed whenever a format change would be misread by the code before it; append it to
  * the step list in {@link #migrate}. Every step must be safe to run again and must skip files a role doesn't have.
+ * <ol>
+ *   <li>{@link #step1}: pre-2.2.0 folders, database columns and the Integrations settings group.</li>
+ *   <li>{@link #step2}: drops the obsolete setting BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM from settings.json (BS-278).</li>
+ * </ol>
  */
 public final class BankSystemDataMigration {
 
@@ -57,7 +61,8 @@ public final class BankSystemDataMigration {
                 List.of(worldRoot.resolve(BankSystemDataHandler.BASE_PATH),
                         worldRoot.resolve(OLD_DATA_PATH),
                         worldRoot.resolve(OLD_SHARE_SYMBOLS_PATH.getParent())),
-                List.of(new DataMigration.Step(1, "2.2.0", () -> step1(worldRoot, log))));
+                List.of(new DataMigration.Step(1, "2.2.0", () -> step1(worldRoot, log)),
+                        new DataMigration.Step(2, "2.2.0", () -> step2(worldRoot, log))));
     }
 
     /** The backup zips in {@link #BACKUP_DIR}; empty when there are none. */
@@ -111,6 +116,13 @@ public final class BankSystemDataMigration {
         Path settings = data.resolve("settings.json");
         if (Files.isRegularFile(settings) && BankSystemModSettings.migrateIntegrations(settings))
             log.info("[DataMigration] Moved the Placeholder settings and SYNC_ADMIN_FLAG_WITH_PERMISSION into the Integrations group.");
+    }
+
+    /** Step 2 (2.2.0, BS-278): removes Utilities.BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM from settings.json. */
+    static void step2(Path worldRoot, BankSystemLogger log) throws Exception {
+        Path settings = worldRoot.resolve(BankSystemDataHandler.BASE_PATH).resolve("settings.json");
+        if (Files.isRegularFile(settings) && BankSystemModSettings.removeObsoleteSettings(settings))
+            log.info("[DataMigration] Removed the old setting BALANCE_SNAPSHOT_MAX_RECORDS_PER_ITEM from settings.json; it had no effect since 2.0.7.");
     }
 
     /**

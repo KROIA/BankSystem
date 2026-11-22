@@ -27,10 +27,10 @@ import net.kroia.banksystem.testing.LedgerByRefRequest;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
-import net.kroia.modutilities.testing.autotest.AutoTest;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
+import net.kroia.testkit.autotest.AutoTest;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;

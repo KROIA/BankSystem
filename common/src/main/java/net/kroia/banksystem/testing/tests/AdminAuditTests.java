@@ -50,9 +50,9 @@ import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.multi_server.TransferParkedRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
