@@ -2,9 +2,9 @@ package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemIDManager;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
