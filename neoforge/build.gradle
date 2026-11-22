@@ -102,7 +102,7 @@ if ((findProperty('with_luckperms') ?: 'false').toBoolean()) {
 if ((findProperty('with_testkit') ?: 'false').toBoolean()) {
     repositories {
         flatDir {
-            dir "../../../MC_TestKit/mc_${minecraft_version}_MC_TestKit/neoforge/build/libs"
+            dir "../../../MC_TestKit/mc_26.1_MC_TestKit/neoforge/build/libs"
         }
     }
     dependencies {
