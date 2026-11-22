@@ -744,6 +744,7 @@ public class BankSystemModBackend implements BankSystemAPI {
         // Sync the ClientSettings snapshot (isMasterServer flag) to the joining
         // client — used to gate master-only UI such as the "Mod Settings" button.
         PlayerJoinSyncPacket.send(player);
+        net.kroia.banksystem.banking.company.ShareIntegrity.onPlayerJoin(player); // BS-282
         /*
         INSTANCES.SERVER_BANK_MANAGER.createUser(
                 player,

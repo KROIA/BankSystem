@@ -765,5 +765,7 @@
   "gui.banksystem.mod_settings_screen.setting.Audit.DAILY_DIGEST_ENABLED": "每日审计摘要",
   "gui.banksystem.mod_settings_screen.setting.Audit.DAILY_DIGEST_ENABLED.tooltip": "每天将前一天的 Markdown 摘要\n写入审计文件夹。",
   "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N": "摘要：最大收益者",
-  "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N.tooltip": "现金最大收益者列表中的账户数。"
+  "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N.tooltip": "现金最大收益者列表中的账户数。",
+  "banksystem.market_closed.share_duplication": "已关闭：检测到股份复制（存入银行的股份多于已盖章的股份）。公司管理员必须重新开放市场。",
+  "banksystem.market_closed.share_duplication.notify": "公司 %s 的股票市场已关闭：存入银行的股份多于已盖章的股份（可能存在股份复制）。公司管理员可以在公司的市场标签页中重新开放。"
 }

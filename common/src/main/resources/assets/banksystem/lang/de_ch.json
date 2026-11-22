@@ -765,5 +765,7 @@
   "gui.banksystem.mod_settings_screen.setting.Audit.DAILY_DIGEST_ENABLED": "Täglicher Audit-Bericht",
   "gui.banksystem.mod_settings_screen.setting.Audit.DAILY_DIGEST_ENABLED.tooltip": "Einmal täglich eine Markdown-Zusammenfassung\ndes Vortags in den Audit-Ordner schreiben.",
   "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N": "Bericht: grösste Gewinner",
-  "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N.tooltip": "Anzahl Konten in der Liste der grössten Bargeld-Gewinner."
+  "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N.tooltip": "Anzahl Konten in der Liste der grössten Bargeld-Gewinner.",
+  "banksystem.market_closed.share_duplication": "Geschlossen: Aktienduplikation erkannt (mehr Aktien eingelagert als gestempelt). Ein Firmen-Admin muss den Markt wieder öffnen.",
+  "banksystem.market_closed.share_duplication.notify": "Der Börsenmarkt der Firma %s wurde geschlossen: Es sind mehr Aktien eingelagert als gestempelt wurden (mögliche Aktienduplikation). Ein Firmen-Admin kann ihn im Markt-Tab der Firma wieder öffnen."
 }

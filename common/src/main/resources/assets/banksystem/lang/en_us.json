@@ -765,5 +765,7 @@
   "gui.banksystem.mod_settings_screen.setting.Audit.DAILY_DIGEST_ENABLED": "Daily audit digest",
   "gui.banksystem.mod_settings_screen.setting.Audit.DAILY_DIGEST_ENABLED.tooltip": "Write a markdown summary of the previous day\nto the audit folder once per day.",
   "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N": "Digest: top gainers",
-  "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N.tooltip": "Number of accounts listed under top cash gainers."
+  "gui.banksystem.mod_settings_screen.setting.Audit.DIGEST_TOP_N.tooltip": "Number of accounts listed under top cash gainers.",
+  "banksystem.market_closed.share_duplication": "Closed: share duplication detected (more shares banked than stamped). A company admin must reopen the market.",
+  "banksystem.market_closed.share_duplication.notify": "The StockMarket market of company %s was closed: more shares are banked than were stamped (possible share duplication). A company admin can reopen it in the company's Market tab."
 }

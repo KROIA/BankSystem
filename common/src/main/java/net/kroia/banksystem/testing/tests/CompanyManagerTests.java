@@ -83,6 +83,7 @@ public class CompanyManagerTests extends TestSuite {
         addTest("share_excess_raised_once_per_level", this::testShareExcessRaisedOnce);
         addTest("share_dividends_paused_until_acknowledge", this::testShareDividendsPaused);
         addTest("share_destroy_lowers_issued", this::testShareDestroyLowersIssued);
+        addTest("share_market_close_reason_api", this::testShareMarketCloseReasonApi);
         addTest("share_excess_refuses_dividend_schedules", this::testShareExcessRefusesDividendSchedules); // BS-241
         addTest("share_acknowledge_rights_and_suggestions", this::testShareAcknowledgeRights);
         addTest("stamper_needs_company_manage", this::testStamperNeedsCompanyManage); // BS-261
@@ -642,6 +643,14 @@ public class CompanyManagerTests extends TestSuite {
         if (net.kroia.banksystem.banking.company.AsyncCompanyManager.dividendUnderReview(SHARE_TEST_ID, dividend, cm))
             return fail("still refused after acknowledge");
         return pass("dividend schedules refused only while the excess is open; fixed payouts allowed");
+    }
+
+    /** BS-282: with StockMarket loaded, the reason overloads (SM-354) the duplication close relies on resolve. */
+    private TestResult testShareMarketCloseReasonApi() {
+        if (!dev.architectury.platform.Platform.isModLoaded("stockmarket")) return skip("StockMarket not loaded");
+        if (!net.kroia.banksystem.integration.stockmarket.StockMarketBridge.hasCloseReasonApi())
+            return fail("StockMarket lacks setMarketOpen(ItemID, boolean, String) / getMarketCloseReason(ItemID)");
+        return pass("close-reason API resolved");
     }
 
     private TestResult testShareDestroyLowersIssued() {
