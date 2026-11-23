@@ -47,7 +47,7 @@ You want to support me?<br>
 
 BankSystem runs on **Fabric** and **NeoForge**.
 
-Supported MC versions (in development): 1.21.1 – 1.21.11, 26.1 (26.1.2), 26.2, 26.3
+Supported MC versions: 1.21.1 – 1.21.11, 26.1 (26.1.2), 26.2, 26.3
 
 1. Install the required dependencies:
    - [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) (all loaders)
@@ -483,7 +483,7 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Current
 
-- [2.2.0](changelog/v2.2.0.md) — In Development · Multi-version port, transaction ledger and admin audit tools, suspicious-activity flags, account freeze, placeholders, Discord feed, LuckPerms permissions, reliable multi-server transfers, untrusted-slave hardening
+- [2.2.0](changelog/v2.2.0.md) — Released 2026-11-23 · Multi-version port, transaction ledger and admin audit tools, suspicious-activity flags, account freeze, placeholders, Discord feed, LuckPerms permissions, reliable multi-server transfers, untrusted-slave hardening
 - [2.1.2](changelog/v2.1.2.md) — Released 2026-10-25 · In-game test suite no longer mutates live world state; item allow-list self-heals
 - [2.1.1](changelog/v2.1.1.md) — Released 2026-08-20 · Bugfix development
 - [2.1.0](changelog/v2.1.0.md) — Released 2026-08-15 · Company system — found companies, hire workers, mint physical shares, pay dividends and recurring payouts, track it all on a live statistics dashboard
