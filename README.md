@@ -37,15 +37,22 @@ You want to support me?<br>
 - **Companies** — found a company with its own bank account and workers, mint physical shares with the Share Stamper, design the share card, and pay dividends or recurring wages on a timer
 - Multi-server support to share bank accounts across connected servers
 - **Currency mod bindings** — link a bank slot to an external currency mod's account ([Numismatics](https://modrinth.com/mod/numismatics), [Lightman's Currency](https://modrinth.com/mod/lightmans-currency)) so BankSystem, StockMarket, and the currency mod share one balance
+- **Admin tools** — a full transaction ledger, an audit screen and audit files, chat alerts, suspicious-activity flags, a daily audit digest, account freezing and per-player limits for bank accounts and companies
+- **Placeholders** for TAB and Placeholder API, a **Discord feed** of bank events, and LuckPerms permission nodes for every admin command
+- Reliable multi-server transfers: every transfer between servers is applied at most once and checked before anything is refunded
 - Mod API for developers to integrate with the banking system
 
 ---
 ## Installation
 
-1. Install [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) and the mod loader API for your platform:
-   - **Fabric**: [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api)
-   - **Quilt**: [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) + [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities)
-   - **NeoForge / Forge**: No additional API needed
+BankSystem runs on **Fabric** and **NeoForge**.
+
+Supported MC versions: 1.21.1 – 1.21.11, 26.1 (26.1.2), 26.2, 26.3
+
+1. Install the required dependencies:
+   - [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) (all loaders)
+   - **Fabric** only: [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api)
+   - [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) **2.2.0** (the build for your Minecraft version, e.g. `1.21.1-2.2.0`) is required too. It is bundled inside the BankSystem jar, so you don't have to install it separately.
 2. Download the BankSystem jar for your Minecraft version and mod loader from [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem) or the [Downloads](#downloads) table below.
 3. Place the jar in your `mods/` folder and launch the game.
 
@@ -204,13 +211,26 @@ Server admins can edit the mod's `settings.json` in-game, without touching the f
 1. Run `/banksystem manage` (admin only) to open the banking settings window.
 2. Click **Mod Settings**.
 
-The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, TAB Placeholders), with a matching editor per setting type (checkboxes, number fields, text fields). **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed).
+The screen lists every setting of the mod, grouped by category (Utilities, Player, Bank, Suspicious activity, Integrations), with a matching editor per setting type (checkboxes, number fields, text fields). The Integrations group shows one collapsible section per integration; the check box in the section header switches it on or off. **Apply** validates and saves the values on the server (out-of-range values are clamped and the corrected values are shown), **Reload** re-fetches the current server state and **Defaults** resets the fields to the built-in defaults (nothing is saved until Apply is pressed). Closing the screen with unapplied changes asks whether to **Save** or **Discard** them; **Esc** on that popup returns to the settings screen.
 
 Notes:
 
 - **Master-only:** the button is only shown when you are connected to the master server (or a regular single server). Only the master's `settings.json` can be edited; the server additionally rejects requests from non-admins regardless of the UI.
 - **Permission:** requires BankSystem admin status (the same permission as the other `/banksystem` admin commands).
 - **Restart markers:** settings that are only read once at server startup show an orange "⟳ Restart required" marker — the change is saved immediately but only takes effect after a server restart. This includes the volatile/deposit-gated component lists and the one-shot `CONFIRM_ITEMID_MERGE` / `CONFIRM_ITEMID_REPAIR` flags, which can be armed from this screen to approve a pending ItemID merge or world repair on the next restart.
+- **Integrations:** switches for placeholders, LuckPerms admin sync, Numismatics, Lightman's Currency and the [Discord feed](#discord-feed). A currency mod switched off behaves as if it were not installed: bound balances stay in that mod, frozen until it is switched back on. Only the placeholder switch and the top-list size need a restart. Each server reads its own `settings.json`, so a slave keeps the values in its own file. Settings files from older versions are moved into this group automatically.
+
+### Discord Feed
+
+The master server (or a single server) can post bank events to Discord webhooks, using ModUtilities' webhook module. Switch it on with `DISCORD_ENABLED` (Mod Settings → Integrations, default off, no restart needed). Slave servers never post, so each event is reported once.
+
+1. Start the server once. It creates `config/modutilities/discord/webhooks.json` and `config/modutilities/discord/banksystem.json`.
+2. In `webhooks.json`, add your webhook URLs by name. In `banksystem.json`, enable the message types you want and list the webhook names each one goes to. Every type starts disabled. `minAmount` skips smaller amounts, and `language` picks the message language (`en_us`, `de_de`, `de_ch`, `zh_cn`).
+3. Run `/modutilities discord reload` (or restart the server). `/modutilities discord status` shows which types are active.
+
+Message types: `bank-deposit`, `bank-withdraw`, `bank-transfer-in`, `bank-transfer-out`, `bank-payout`, `bank-dividend`, `bank-share`, `bank-admin`, `bank-suspicion` and `bank-other`. Stock trades (StockMarket buys and sells) are not posted. Payouts and dividends are posted for the receiving account only. A dividend run, or an item disallow that clears many accounts, is posted once, with the total amount and the number of holders. Webhook URLs are secrets: do not share `webhooks.json`.
+
+The [Configuration guide](documentation/user-guide/Configuration.md#discord-feed) has the file formats, how to add the account number, UUID or counterparty back to a message, and the full list of values.
 
 ---
 ## Blocks
@@ -268,9 +288,64 @@ Key commands for players and admins:
 | `/company create <name> <maxSupply>` | Found a company and its bank account |
 | `/company info <name>` | Print a company's details to chat |
 | `/company manage <name>` | Open the Company Management screen |
+| `/company shares acknowledge <name>` | Accept a share excess and resume the company's dividends (company admins) |
 | `/banksystem symbols list\|add\|remove\|reload` | Manage the share symbol library (admin only) |
 
 For the full command reference, see [Commands](documentation/user-guide/Commands.md).
+
+### Permissions (LuckPerms)
+
+Admin functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player. Without a permission mod, each node requires operator level 2 (same as before), except the `symbols`, `restorebinding` and `shares` command nodes: they let every player through and the BankSystem admin flag (`/banksystem op`) decides. `banksystem.admin.*` grants all of them.
+
+| Node | Grants |
+|------|--------|
+| `banksystem.admin.command.trust` | `/banksystem trust` and `/banksystem untrust` (slave servers) |
+| `banksystem.admin.command.op` | `/banksystem op` and `/banksystem deop` (BankSystem admin flag) |
+| `banksystem.admin.command.backup` | `/banksystem backup ...` |
+| `banksystem.admin.command.symbols` | `/banksystem symbols ...` |
+| `banksystem.admin.command.restorebinding` | `/banksystem restorebinding <account> [item]` (lift a suspended currency-mod binding) |
+| `banksystem.admin.command.exportrecipes` | `/banksystem exportrecipes` (dev builds only) |
+| `banksystem.admin.adminmode` | Setting the BankSystem admin mode of a player |
+| `banksystem.admin.software` | Using the Banking Software on another player in creative mode (the player also needs the BankSystem admin flag) |
+| `banksystem.admin` | Source of the BankSystem admin flag while `SYNC_ADMIN_FLAG_WITH_PERMISSION` is on (see below) |
+
+Nodes only apply to players online on the server that runs the check; the console always passes.
+
+**Syncing the BankSystem admin flag with LuckPerms.** The server setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Integrations, default off) keeps the BankSystem admin flag and the LuckPerms node `banksystem.admin` in step, in both directions:
+
+- `/banksystem op <player>` sets the flag and gives the player the node `banksystem.admin=true` in LuckPerms (this works for offline players too). `/banksystem deop <player>` clears the flag and removes the player's own `banksystem.admin` node.
+- Changing the node in LuckPerms (commands, web editor, a group) updates the flag straight away.
+- A LuckPerms group grant wins: if a group still grants `banksystem.admin`, the player stays a BankSystem admin right after `deop`, and the command tells you so. Remove the group grant to deop the player.
+- A player who joins for the first time while a LuckPerms group already grants `banksystem.admin` becomes a BankSystem admin straight away. Note that `banksystem.admin.*` does not include `banksystem.admin` itself; grant it on its own.
+- When the setting is first turned on (at server start or in the Mod Settings screen), every player who already has the admin flag gets `banksystem.admin=true` in LuckPerms, once. This never removes anything. A marker file `AdminFlagLuckPermsMigrated.marker` in the world's `data/BankSystem` folder records that it ran; delete it to run the migration again.
+- With multiple servers: set the option on the master. A slave server that also has it on passes LuckPerms changes of its players on to the master, but only if the master trusts that slave (`/banksystem trust`) and has the option on itself. Untrusted slaves never change the flag.
+- Without LuckPerms the setting does nothing: the flag only changes through `/banksystem op` and `deop`, and the node `banksystem.admin` falls back to operator level 2.
+
+**LuckPerms builds.** LuckPerms is not required. If you use it, these are the LuckPerms builds tested with each Minecraft version.
+Use a LuckPerms build made for your Minecraft and loader version: a build for another version can crash the server at start.
+
+| Minecraft | LuckPerms (Fabric) | LuckPerms (NeoForge) |
+|---|---|---|
+| 1.21.1  | 5.4.140 | 5.4.149 or newer (older builds kick joining players) |
+| 1.21.2  | 5.4.145 | 5.4.149 |
+| 1.21.3  | 5.4.145 | 5.4.149 |
+| 1.21.4  | 5.4.150 | 5.4.158 |
+| 1.21.5  | 5.5.4   | not available (see below) |
+| 1.21.6  | 5.5.10  | 5.5.10 |
+| 1.21.7  | 5.5.10  | 5.5.10 |
+| 1.21.8  | 5.5.10  | 5.5.10 |
+| 1.21.9  | 5.5.17  | 5.5.17 |
+| 1.21.10 | 5.5.17  | 5.5.17 |
+| 1.21.11 | 5.5.21  | 5.5.21 |
+| 26.1.2  | 5.5.85  | 5.5.85 |
+| 26.2    | 5.5.85  | 5.5.85 |
+| 26.3    | 5.5.85  | 5.5.87 |
+
+**NeoForge 1.21.5:** no published LuckPerms build starts on NeoForge 21.5.101. LuckPerms 5.4.158 and 5.5.0 crash at server start, also without BankSystem. Run that server without LuckPerms; permission checks then use the normal permission levels.
+
+Account data is private: players see only the accounts they belong to, and only BankSystem admins see everyone's accounts. On a slave server that the master does not trust yet, placeholders (including leaderboards) and display blocks show no account data until an admin trusts the slave with `/banksystem trust`. Player-name tab completion still lists names there. On such a slave, BankSystem admins also do not get admin mode in `/banksystem manage` and `/bank manage` until the slave is trusted.
+
+Company statistics follow the same rule. Shareholders who are not members of the company account see only the number of shares issued and the number of holders. Account members also see the balance, cashflow and payouts, but the top-shareholder list shows only share amounts, not the shareholders' accounts. Only BankSystem admins see which accounts hold the shares. Total money and item circulation stays public, because it is a sum over all accounts.
 
 ---
 
@@ -283,16 +358,19 @@ Detailed guides are available in the [documentation](documentation/README.md) fo
 - [Bank Accounts](documentation/user-guide/BankAccounts.md) — Shared accounts, creating accounts, permissions
 - [Companies](documentation/user-guide/Companies.md) — Found a company, hire workers, mint shares with the Share Stamper, pay dividends and recurring payouts
 - [Currency Bindings](documentation/user-guide/CurrencyBindings.md) — Link a bank slot to a Numismatics or Lightman's Currency account
-- [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts
+- [Administration](documentation/user-guide/Administration.md) — Managing banking items, player accounts, locked amounts, ledger, audit, suspicious-activity flags, suspended currency bindings, backups
 - [Configuration](documentation/user-guide/Configuration.md) — Per-world `settings.json` reference; volatile & deposit-gated item components
-- [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking
+- [Placeholders](documentation/user-guide/Placeholders.md) — Show balances, money in circulation and a richest-players list via TAB or Placeholder API
+- [Multi-Server Setup](documentation/user-guide/MultiserverSetup.md) — Master-slave architecture for cross-server banking, trusted slaves, what happens when the master does not answer, troubleshooting
 - [Commands](documentation/user-guide/Commands.md) — Full command reference
 
 **For Mod Developers:**
 - [API Reference](documentation/developer-guide/API.md) — Public API overview and usage examples
 - [Currency Integration](documentation/developer-guide/CurrencyIntegration.md) — SPI for authors of currency mods who want to expose their mod to BankSystem
-- [Events & Signals](documentation/developer-guide/EventsAndSignals.md) — Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server lifecycle
+- [Events & Signals](documentation/developer-guide/EventsAndSignals.md) — Every event/signal for dependent mods: user/account changes, ItemID merges, multi-server lifecycle, transaction logged (ledger), suspicion flagged, account freeze changed
+- [Diagnostics](documentation/developer-guide/API.md#note-flow-log-inoteflowlog) — `getNoteFlowLog()`: record money notes your mod creates or destroys outside the bank in the diagnostics database (`banksystem_diagnostics.db`), which external audit tools read together with the slave transfer journal
 - [Item Price Provider API](documentation/developer-guide/ItemPriceProviderAPI.md) — Contribute item prices for total-wealth tracking
+- [Transaction Ledger](documentation/developer-guide/TransactionLedger.md) — Ledger type codes, columns, and writing rows from other mods
 - [Async Forwarding Architecture](documentation/developer-guide/AsyncForwardingArchitecture.md) — Internal RPC system documentation
 
 ---
@@ -405,7 +483,7 @@ All notable changes are documented in version-specific files under `changelog/`.
 
 ### Current
 
-- [2.1.3](changelog/v2.1.3.md) — In Development · Bugfix development
+- [2.2.0](changelog/v2.2.0.md) — Released 2026-11-23 · Multi-version port, transaction ledger and admin audit tools, suspicious-activity flags, account freeze, placeholders, Discord feed, LuckPerms permissions, reliable multi-server transfers, untrusted-slave hardening
 - [2.1.2](changelog/v2.1.2.md) — Released 2026-10-25 · In-game test suite no longer mutates live world state; item allow-list self-heals
 - [2.1.1](changelog/v2.1.1.md) — Released 2026-08-20 · Bugfix development
 - [2.1.0](changelog/v2.1.0.md) — Released 2026-08-15 · Company system — found companies, hire workers, mint physical shares, pay dividends and recurring payouts, track it all on a live statistics dashboard

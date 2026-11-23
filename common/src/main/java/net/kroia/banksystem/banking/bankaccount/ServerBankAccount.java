@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bankaccount;
 
+import net.kroia.modutilities.NbtCompat;
 import java.util.Objects;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -18,6 +19,8 @@ import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.banking.clientdata.UserData;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
@@ -66,6 +69,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         return founderChecker;
     }
     public static final int INVALID_ACCOUNT_NUMBER = 0;
+    /** BS-228: longest account name; setAccountName cuts longer names, the client text box stops there. */
+    public static final int MAX_ACCOUNT_NAME_LENGTH = 50;
 
     public record BankAccountSQL_Data(int bankAccountNr, String accountName, @Nullable ItemID accountIcon, @Nullable UUID personalBankOwner)
     {
@@ -76,6 +81,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     private int accountNumber;
     private String accountName = ""; // Optional account name, can be empty
     private @Nullable ItemID accountIcon;
+    /** Task #117 — frozen by an admin; persisted as "frozen" (missing = not frozen). */
+    private boolean frozen = false;
 
     /**
      * The owner of the personal bank account, if this is a personal bank account.
@@ -93,6 +100,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
      * count against the creator's quota.
      */
     private @Nullable UUID creatorUUID;
+    /** Task #115 (v2.2.0) — creation time (epoch ms), NBT "createdAt"; 0 = legacy account (unknown). */
+    private long createdAt = 0L;
     private final Map<UUID, BankUser> users = new HashMap<>();
     private final Map<ItemID, ServerBank> banks = new HashMap<>();
     private boolean hasChanges = false;
@@ -101,10 +110,12 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
     private ServerBankAccount(int accountNumber) {
         this.accountNumber = accountNumber;
+        this.createdAt = System.currentTimeMillis();
         this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
     }
     private ServerBankAccount(int accountNumber, @Nullable User personalBankOwner, List<BankUser> users, Map<ItemID, ServerBank> banks) {
         this.accountNumber = accountNumber;
+        this.createdAt = System.currentTimeMillis();
         this.personalBankOwner = personalBankOwner;
         this.accountIcon = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.CHEST.getDefaultInstance());
         if( personalBankOwner != null) {
@@ -276,7 +287,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             bankData.put(canonical, new BankData(canonical, balance, lockedBalance, ratio));
         }
 
-        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData, frozen);
     }
 
     /**
@@ -326,7 +337,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             }
         }
 
-        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+        return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData, frozen);
     }*/
 
     @Override
@@ -378,7 +389,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         ServerBank bank = this.banks.get(itemID);
         if (bank != null) {
             bankData.put(itemID, bank.getMinimalData()); // Convert ServerBank to BankData
-            return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData);
+            return new BankAccountData(accountNumber, accountName, accountIcon, personalBankOwnerData, users, bankData, frozen);
         }
         else {
             return null; // No bank found for the item ID
@@ -499,6 +510,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         if (accountName == null) {
             accountName = "";
         }
+        if (accountName.length() > MAX_ACCOUNT_NAME_LENGTH) // BS-228: trust boundary for every rename/create path
+            accountName = accountName.substring(0, MAX_ACCOUNT_NAME_LENGTH);
         hasChanges |= !this.accountName.equals(accountName);
         this.accountName = accountName;
     }
@@ -519,6 +532,28 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
 
 
+
+    /** Task #115 — creation time in epoch ms, or 0 for a legacy account saved before v2.2.0. */
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
+    /** Task #115 — raw write (tests, data repair). */
+    public void setCreatedAt(long createdAt) {
+        hasChanges |= this.createdAt != createdAt;
+        this.createdAt = createdAt;
+    }
+
+    /** Task #117 — see {@code ISyncServerBankManager.isAccountFrozen}. */
+    public boolean isFrozen() {
+        return frozen;
+    }
+
+    /** Task #117 — raw flag write; use {@code ServerBankManager.setAccountFrozen} (ledger + event). */
+    public void setFrozen(boolean frozen) {
+        hasChanges |= this.frozen != frozen;
+        this.frozen = frozen;
+    }
 
     @Override
     public void setAccountIcon(@Nullable ItemID accountIcon) {
@@ -877,6 +912,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
             banks.put(itemID, bank); // Add new bank to the account
             hasChanges = true;
+            logRawSlot(bank, bank.getTotalBalance(), "bank created"); // BS-254
             return bank;
         }
         return null; // Failed to create bank
@@ -896,6 +932,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
             banks.put(itemID, bank); // Add new bank to the account
             hasChanges = true;
+            logRawSlot(bank, bank.getTotalBalance(), "bank created"); // BS-254
             return CompletableFuture.completedFuture(bank);
         }
         return CompletableFuture.completedFuture(null); // Failed to create bank
@@ -911,6 +948,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             return; // Invalid item ID
         }
         itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
+        ServerBank closing = banks.get(itemID);
+        if (closing != null) logRawSlot(closing, -closing.getTotalBalance(), "bank removed"); // BS-254
         boolean removed = banks.remove(itemID) != null;
         hasChanges |= removed;
         // Task #33 (v2.0.5): cascade-drop any external-currency binding row for the
@@ -919,10 +958,22 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             BankAccountBindings bindings =
                     BankAccountBindings.get();
             if (bindings != null) {
+                net.kroia.banksystem.banking.bankmanager.ServerBankManager.auditSuspendedDrop(this, itemID, "bank removed"); // Task #148
                 bindings.unbind(this.accountNumber, itemID);
             }
         }
     }
+    /**
+     * BS-254: RAW_CHANGE row for a slot created with a start balance or removed with a balance, unless the caller
+     * logs it itself. A suspended binding's removal is logged by {@code ServerBankManager.auditSuspendedDrop}.
+     */
+    private void logRawSlot(ServerBank bank, long delta, String note) {
+        if (delta == 0 || !TransactionLedger.rawLogDue(accountNumber)
+                || BankAccountBindings.isSuspended(accountNumber, bank.getItemID())) return;
+        TransactionLedger.logDelta(accountNumber, LedgerType.RAW_CHANGE, bank.getItemID(), delta,
+                delta < 0 ? 0L : bank.getTotalBalance(), note);
+    }
+
     @Override
     public void removeBankAsync(ItemID itemID) {
         removeBank(itemID);
@@ -937,8 +988,8 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
         for (Map.Entry<ItemID, ServerBank> entry : banks.entrySet()) {
             ServerBank bank = entry.getValue();
             // Task #57: no "not-removable" special-casing anymore — an empty money slot is
-            // pruned like any other empty slot.
-            if (bank.getTotalBalance() <= 0) {
+            // pruned like any other empty slot. Task #146: a suspended binding reads as empty; keep it.
+            if (bank.getTotalBalance() <= 0 && !BankAccountBindings.isSuspended(accountNumber, entry.getKey())) {
                 emptyBanks.add(entry.getKey());
             }
         }
@@ -964,10 +1015,12 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public void removeAllBanks() {
         hasChanges |= !banks.isEmpty();
+        for (ServerBank bank : banks.values()) logRawSlot(bank, -bank.getTotalBalance(), "bank removed"); // BS-254
         // Task #33 (v2.0.5): every slot the account owned is going away — cascade-drop
         // the whole account's bindings in one pass.
         BankAccountBindings bindings = BankAccountBindings.get();
         if (bindings != null) {
+            net.kroia.banksystem.banking.bankmanager.ServerBankManager.auditSuspendedDrop(this, null, "all banks removed"); // Task #148
             bindings.removeAllForAccount(this.accountNumber);
         }
         banks.clear(); // Clear all banks in the account
@@ -1077,12 +1130,16 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     public boolean save(CompoundTag tag) {
         tag.putInt("accountNumber", accountNumber);
         tag.putString("accountName", accountName); // Save the account name
+        if (frozen)
+            tag.putBoolean("frozen", true); // Task #117 — absent = not frozen
+        if (createdAt > 0)
+            tag.putLong("createdAt", createdAt); // Task #115 — absent = legacy
 
         if(personalBankOwner != null)
-            tag.putUUID("personalBankOwnerDataUUID", personalBankOwner.getUUID());
+            NbtCompat.putUUID(tag, "personalBankOwnerDataUUID", personalBankOwner.getUUID());
 
         if(creatorUUID != null)
-            tag.putUUID("creatorUUID", creatorUUID); // Task #58 — per-player account cap
+            NbtCompat.putUUID(tag, "creatorUUID", creatorUUID); // Task #58 — per-player account cap
 
         if (accountIcon != null) {
             CompoundTag iconTag = new CompoundTag();
@@ -1095,7 +1152,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             UUID userUUID = user.getUser().getUUID();
             int permissions = user.getPermission();
             CompoundTag userTag = new CompoundTag();
-            userTag.putUUID("userUUID", userUUID);
+            NbtCompat.putUUID(userTag, "userUUID", userUUID);
             userTag.putInt("permissions", permissions);
             usersTag.add(userTag);
         }
@@ -1120,28 +1177,31 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
             return false; // Invalid data
         }
         ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
-        this.accountNumber = tag.getInt("accountNumber");
+        this.accountNumber = NbtCompat.getInt(tag, "accountNumber");
         if(tag.contains("accountName")) {
-            this.accountName = tag.getString("accountName");
+            this.accountName = NbtCompat.getString(tag, "accountName");
         } else {
             this.accountName = ""; // Default to empty if not set
         }
 
         if(tag.contains("personalBankOwnerDataUUID")) {
-            UUID personalBankOwnerDataUUID = tag.getUUID("personalBankOwnerDataUUID");
+            UUID personalBankOwnerDataUUID = NbtCompat.getUUID(tag, "personalBankOwnerDataUUID");
             this.personalBankOwner = bankManager.getUserByUUID(personalBankOwnerDataUUID);
         } else {
             this.personalBankOwner = null; // No personalBankOwnerData set
         }
 
+        this.frozen = tag.contains("frozen") && NbtCompat.getBoolean(tag, "frozen"); // Task #117
+        this.createdAt = tag.contains("createdAt") ? NbtCompat.getLong(tag, "createdAt") : 0L; // Task #115
+
         if(tag.contains("creatorUUID")) {
-            this.creatorUUID = tag.getUUID("creatorUUID"); // Task #58 — per-player account cap
+            this.creatorUUID = NbtCompat.getUUID(tag, "creatorUUID"); // Task #58 — per-player account cap
         } else {
             this.creatorUUID = null; // Legacy account (pre-#58) — does not count against any cap
         }
 
         if(tag.contains("accountIcon")) {
-            CompoundTag iconTag = tag.getCompound("accountIcon");
+            CompoundTag iconTag = NbtCompat.getCompound(tag, "accountIcon");
             // Canonicalize a possibly aliased icon ID (cosmetic — it would alias-resolve
             // for rendering anyway, but persisted data should reference the canonical ID).
             this.accountIcon = ItemIDManager.resolveAlias(ItemID.createFromTag(iconTag)); // Load account icon if set
@@ -1151,20 +1211,20 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
 
 
 
-        ListTag usersTag = tag.getList("users", Tag.TAG_COMPOUND);
+        ListTag usersTag = NbtCompat.getList(tag, "users", Tag.TAG_COMPOUND);
         for (int i = 0; i < usersTag.size(); i++) {
-            CompoundTag userTag = usersTag.getCompound(i);
-            UUID userUUID = userTag.getUUID("userUUID");
-            int permissions = userTag.getInt("permissions");
+            CompoundTag userTag = NbtCompat.getCompound(usersTag, i);
+            UUID userUUID = NbtCompat.getUUID(userTag, "userUUID");
+            int permissions = NbtCompat.getInt(userTag, "permissions");
             User user = bankManager.getUserByUUID(userUUID);
             if (user != null) {
                 users.put(user.getUUID(), new BankUser(user, permissions));
             }
         }
 
-        ListTag banksTag = tag.getList("banks", Tag.TAG_COMPOUND);
+        ListTag banksTag = NbtCompat.getList(tag, "banks", Tag.TAG_COMPOUND);
         for (int i = 0; i < banksTag.size(); i++) {
-            CompoundTag bankTag = banksTag.getCompound(i);
+            CompoundTag bankTag = NbtCompat.getCompound(banksTag, i);
             ServerBank bank = ServerBank.createFromTag(bankTag);
             if (bank != null) {
                 // Task #33: attach for bindings lookup — must happen for both branches

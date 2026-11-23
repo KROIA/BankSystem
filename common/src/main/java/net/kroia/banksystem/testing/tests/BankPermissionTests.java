@@ -2,9 +2,9 @@ package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 /**
  * Tests for {@link BankPermission} enum and its bitmask utility methods.
@@ -14,6 +14,11 @@ public class BankPermissionTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.PERMISSION;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override

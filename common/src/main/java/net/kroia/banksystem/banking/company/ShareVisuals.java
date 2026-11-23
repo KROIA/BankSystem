@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.company;
 
+import net.kroia.modutilities.NbtCompat;
 import net.minecraft.nbt.CompoundTag;
 
 /**
@@ -70,23 +71,23 @@ public final class ShareVisuals {
         if (tag.contains("bgSymbolId")) {
             // New two-layer format.
             ShareLayer bg = new ShareLayer(
-                    tag.getString("bgSymbolId"),
-                    tag.contains("bgTint") ? tag.getInt("bgTint") : 0xFFFFFFFF);
+                    NbtCompat.getString(tag, "bgSymbolId"),
+                    tag.contains("bgTint") ? NbtCompat.getInt(tag, "bgTint") : 0xFFFFFFFF);
             ShareLayer fg = new ShareLayer(
-                    tag.contains("fgSymbolId") ? tag.getString("fgSymbolId") : "",
-                    tag.contains("fgTint") ? tag.getInt("fgTint") : 0xFFFFFFFF);
+                    tag.contains("fgSymbolId") ? NbtCompat.getString(tag, "fgSymbolId") : "",
+                    tag.contains("fgTint") ? NbtCompat.getInt(tag, "fgTint") : 0xFFFFFFFF);
             return new ShareVisuals(bg, fg,
-                    tag.contains("baseTint") ? tag.getInt("baseTint") : 0xFFFFFFFF,
-                    tag.contains("displayName") ? tag.getString("displayName") : "",
-                    tag.contains("description") ? tag.getString("description") : "");
+                    tag.contains("baseTint") ? NbtCompat.getInt(tag, "baseTint") : 0xFFFFFFFF,
+                    tag.contains("displayName") ? NbtCompat.getString(tag, "displayName") : "",
+                    tag.contains("description") ? NbtCompat.getString(tag, "description") : "");
         }
         // Legacy format: iconPresetId/tint → fgLayer; bgLayer = EMPTY.
         ShareLayer fg = new ShareLayer(
-                tag.contains("iconPresetId") ? tag.getString("iconPresetId") : "",
-                tag.contains("tint") ? tag.getInt("tint") : 0xFFFFFFFF);
+                tag.contains("iconPresetId") ? NbtCompat.getString(tag, "iconPresetId") : "",
+                tag.contains("tint") ? NbtCompat.getInt(tag, "tint") : 0xFFFFFFFF);
         return new ShareVisuals(ShareLayer.EMPTY, fg,
-                tag.contains("baseTint") ? tag.getInt("baseTint") : 0xFFFFFFFF,
-                tag.contains("displayName") ? tag.getString("displayName") : "",
-                tag.contains("description") ? tag.getString("description") : "");
+                tag.contains("baseTint") ? NbtCompat.getInt(tag, "baseTint") : 0xFFFFFFFF,
+                tag.contains("displayName") ? NbtCompat.getString(tag, "displayName") : "",
+                tag.contains("description") ? NbtCompat.getString(tag, "description") : "");
     }
 }

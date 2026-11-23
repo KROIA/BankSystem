@@ -5,10 +5,12 @@ import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
+import net.kroia.banksystem.networking.general.BalanceHistoryRequest;
+import net.kroia.banksystem.screen.widgets.BalanceHistoryChart;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.sql.Connection;
 import java.sql.Driver;
@@ -51,24 +53,115 @@ public class BalanceHistoryTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("sample_on_change_dedupes_identical_balance", this::sample_on_change_dedupes_identical_balance);
         addTest("heartbeat_forces_row_after_interval", this::heartbeat_forces_row_after_interval);
         addTest("tiered_retention_preserves_bucket_keepers", this::tiered_retention_preserves_bucket_keepers);
         addTest("tiered_retention_prunes_beyond_1y", this::tiered_retention_prunes_beyond_1y);
         addTest("migration_from_flat_cap_history", this::migration_from_flat_cap_history);
+        addTest("history_access_denied_for_non_member", this::history_access_denied_for_non_member);
+        addTest("history_access_allowed_for_member", this::history_access_allowed_for_member);
+        addTest("history_access_allowed_for_admin", this::history_access_allowed_for_admin);
+        addTest("chart_zoom_in_never_below_min_span", this::chart_zoom_in_never_below_min_span);
+        addTest("chart_recenter_after_collapse_restores_default_span", this::chart_recenter_after_collapse_restores_default_span);
+        addTest("chart_single_point_fit_gets_min_span", this::chart_single_point_fit_gets_min_span);
+        addTest("chart_zoom_out_capped_at_max_span", this::chart_zoom_out_capped_at_max_span);
+    }
+
+    // -------------------------------------------------------------------------
+    // Part 4 - chart viewport clamp (Task #106, pure BalanceHistoryChart math)
+    // -------------------------------------------------------------------------
+
+    private static final double MIN_SPAN = BalanceHistoryChart.MIN_VIEW_WIDTH_MS;
+
+    private TestResult chart_zoom_in_never_below_min_span() {
+        double max = 30L * 24L * 3_600_000L;
+        double w = 7L * 24L * 3_600_000L;
+        for (int i = 0; i < 1000; i++) {
+            w = BalanceHistoryChart.clampViewWidth(w * 0.9, max);
+            if (w < MIN_SPAN) return fail("span " + w + " below min after " + (i + 1) + " zoom-ins");
+        }
+        TestResult res = assertEquals("fully zoomed in", MIN_SPAN, w);
+        if (!res.passed()) return res;
+        res = assertEquals("zero width", MIN_SPAN, BalanceHistoryChart.clampViewWidth(0, max));
+        if (!res.passed()) return res;
+        res = assertEquals("NaN width", MIN_SPAN, BalanceHistoryChart.clampViewWidth(Double.NaN, max));
+        if (!res.passed()) return res;
+        return assertEquals("max below min: min wins", MIN_SPAN, BalanceHistoryChart.clampViewWidth(1000, 500));
+    }
+
+    private TestResult chart_recenter_after_collapse_restores_default_span() {
+        long now = 1_700_000_000_000L;
+        double oneDay = 24L * 3_600_000L;
+        // Selected timescale (or full history) is the max span; recenter uses it, not the collapsed width.
+        double span = BalanceHistoryChart.recenterSpan(oneDay);
+        TestResult res = assertEquals("timescale span", oneDay, span);
+        if (!res.passed()) return res;
+        long from = now - (long) span;
+        res = assertEquals("right edge == now", now, from + (long) span);
+        if (!res.passed()) return res;
+        res = assertEquals("collapsed history (min == max)", MIN_SPAN, BalanceHistoryChart.recenterSpan(0));
+        if (!res.passed()) return res;
+        res = assertEquals("no data: 1h default", 3_600_000.0, BalanceHistoryChart.recenterSpan(Double.POSITIVE_INFINITY));
+        if (!res.passed()) return res;
+        // Persisted collapsed width re-enters rolling mode with a real timescale cap.
+        res = assertEquals("restore snaps 1s to 1h", 3_600_000L, BalanceHistoryChart.timescaleCeilMs(1000));
+        if (!res.passed()) return res;
+        return assertEquals("restore snaps 2h to 6h", 6L * 3_600_000L, BalanceHistoryChart.timescaleCeilMs(2 * 3_600_000.0));
+    }
+
+    private TestResult chart_single_point_fit_gets_min_span() {
+        // One snapshot: fit range is 0 wide and history-to-now may be only a few seconds.
+        double w = BalanceHistoryChart.clampViewWidth(0, 5_000);
+        if (w < MIN_SPAN) return fail("single-point fit span " + w + " below min");
+        return pass("Single-point fit span = " + w);
+    }
+
+    private TestResult chart_zoom_out_capped_at_max_span() {
+        double max = 6L * 3_600_000L;
+        double w = MIN_SPAN;
+        for (int i = 0; i < 1000; i++) {
+            w = BalanceHistoryChart.clampViewWidth(w * 1.1, max);
+            if (w > max) return fail("span " + w + " above max after " + (i + 1) + " zoom-outs");
+        }
+        return assertEquals("fully zoomed out", max, w);
+    }
+
+    // -------------------------------------------------------------------------
+    // Part 3 — access gate (Task #100, BalanceHistoryRequest.isAccessAllowed)
+    // -------------------------------------------------------------------------
+
+    private TestResult history_access_denied_for_non_member() {
+        TestResult res = assertEquals("non-member, non-admin",
+                false, BalanceHistoryRequest.isAccessAllowed(false, false, false));
+        if (!res.passed()) return res;
+        res = assertEquals("non-member admin via untrusted slave",
+                false, BalanceHistoryRequest.isAccessAllowed(false, true, true));
+        if (!res.passed()) return res;
+        return pass("Non-members without a trusted admin flag are denied");
+    }
+
+    private TestResult history_access_allowed_for_member() {
+        TestResult res = assertEquals("member", true, BalanceHistoryRequest.isAccessAllowed(true, false, false));
+        if (!res.passed()) return res;
+        res = assertEquals("member via untrusted slave", true, BalanceHistoryRequest.isAccessAllowed(true, false, true));
+        if (!res.passed()) return res;
+        return pass("Account members are allowed");
+    }
+
+    private TestResult history_access_allowed_for_admin() {
+        return assertEquals("non-member admin", true, BalanceHistoryRequest.isAccessAllowed(false, true, false));
     }
 
     @Override
     public void setup() {
         try {
-            Class<?> driverClass;
-            try {
-                driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                driverClass = BalanceHistoryTests.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+            Driver driver = DatabaseManager.newSqliteDriver();
             try {
                 DriverManager.registerDriver(new DriverShim(driver));
             } catch (Exception ignored) {}

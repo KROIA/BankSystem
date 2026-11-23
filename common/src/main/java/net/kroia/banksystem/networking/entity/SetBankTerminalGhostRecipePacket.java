@@ -8,7 +8,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 
@@ -25,18 +26,22 @@ import org.jetbrains.annotations.NotNull;
  */
 public class SetBankTerminalGhostRecipePacket extends BankSystemNetworkPacket {
 
-    public static final Type<SetBankTerminalGhostRecipePacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "set_bank_terminal_ghost_recipe_packet"));
+    public static final Type<SetBankTerminalGhostRecipePacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "set_bank_terminal_ghost_recipe_packet")); // mc<=1.21.10
+    //public static final Type<SetBankTerminalGhostRecipePacket> TYPE = new Type<>(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "set_bank_terminal_ghost_recipe_packet")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, SetBankTerminalGhostRecipePacket> STREAM_CODEC = StreamCodec.composite(
             BlockPos.STREAM_CODEC, p -> p.pos,
-            ResourceLocation.STREAM_CODEC, p -> p.recipeId,
+            ResourceLocation.STREAM_CODEC, p -> p.recipeId, // mc<=1.21.10
+            //Identifier.STREAM_CODEC, p -> p.recipeId, // mc>=1.21.11
             SetBankTerminalGhostRecipePacket::new
     );
 
     private final BlockPos pos;
-    private final ResourceLocation recipeId;
+    private final ResourceLocation recipeId; // mc<=1.21.10
+    //private final Identifier recipeId; // mc>=1.21.11
 
-    public SetBankTerminalGhostRecipePacket(BlockPos pos, ResourceLocation recipeId) {
+    public SetBankTerminalGhostRecipePacket(BlockPos pos, ResourceLocation recipeId) { // mc<=1.21.10
+    //public SetBankTerminalGhostRecipePacket(BlockPos pos, Identifier recipeId) { // mc>=1.21.11
         super();
         this.pos = pos;
         this.recipeId = recipeId;
@@ -45,7 +50,8 @@ public class SetBankTerminalGhostRecipePacket extends BankSystemNetworkPacket {
     @Override
     protected boolean needsRoutingToMaster() { return false; }
 
-    public static void sendPacketToServer(BlockPos pos, ResourceLocation recipeId) {
+    public static void sendPacketToServer(BlockPos pos, ResourceLocation recipeId) { // mc<=1.21.10
+    //public static void sendPacketToServer(BlockPos pos, Identifier recipeId) { // mc>=1.21.11
         new SetBankTerminalGhostRecipePacket(pos, recipeId).sendToServer();
     }
 

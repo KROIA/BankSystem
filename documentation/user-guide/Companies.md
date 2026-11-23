@@ -9,7 +9,7 @@ Everything a company does is done through three things:
 - the **Share Stamper** block, which turns Blank Shares into physical company shares.
 
 > [!NOTE]
-> On a multi-server setup, companies live on the **master** server. Slave servers forward `/company` commands to the master automatically, but Share Stamper blocks and the symbol commands only work on the master. See [Multi-server notes](#multi-server-notes).
+> On a multi-server setup, companies live on the **master** server. Slave servers forward `/company` commands to the master automatically. Share Stamper blocks work on the master and on trusted slaves; the symbol commands only work on the master. See [Multi-server notes](#multi-server-notes).
 
 ---
 
@@ -37,6 +37,8 @@ The chat confirms with the new company ID, the bank account number and the max s
 | `Created company #2 'MyCompany' bound to bank account 6 (maxSupply=1000).` | Success. |
 | `Failed to create company 'MyCompany': NAME_TAKEN` | Another company already uses that name. Pick a different one. |
 | `Failed to create company 'MyCompany': INVALID_NAME` | The name was blank. |
+| `You have reached your limit of 3 company/companies. You cannot found another one.` | You already founded as many companies as the server allows (`MAX_COMPANIES_PER_PLAYER`, default 3, see [Configuration](Configuration.md#player-section)). |
+| `You have reached your limit of 3 bank account(s). Founding a company needs a free bank account slot.` | The company's bank account counts against your bank-account limit (`MAX_BANK_ACCOUNTS_PER_PLAYER`, default 3), and you have no free slot left. |
 | `Failed to create bank account for company 'MyCompany'.` | The bank account could not be created — usually a server-side problem; check the server log. |
 
 ---
@@ -98,12 +100,12 @@ The tabs shown depend on who you are:
 | **Payouts** | `MANAGE` or founder | Recurring payments and dividends |
 | **Shares** | Everyone (editing needs `MANAGE`) | Share card design, bound Share Stampers |
 | **Market** | Everyone, only when StockMarket is installed | Open, pause or close the share market |
-| **Statistics** | Everyone | Balance, cashflow, shareholders, upcoming payouts |
+| **Statistics** | Everyone (what you see depends on your role, see [Statistics tab](#statistics-tab)) | Balance, cashflow, shareholders, upcoming payouts |
 | **Danger Zone** | Founder only | Transfer founder, dissolve company |
 
 ---
 
-### Overview tab
+### Overview tab (Company Overview)
 
 <div align="center">
     <img src="../images/CompanyOverviewTab.png" alt="Company Management screen, Overview tab">
@@ -115,6 +117,8 @@ Managers additionally get:
 
 - **Company Currency** — an item button that opens *Choose payout currency*. This sets the default currency used for the company's balance display. Money is the default.
 - A description box plus **Save**. The description is what other players read on the company; the *share* description shown in the item tooltip is a separate field in the Share Visuals editor.
+
+If you switch to another tab or close the screen while the description has unsaved edits, a popup asks whether to **Save** or **Discard** them. Press **Esc** on the popup to stay on the Overview tab. The currency picker saves immediately and never asks.
 
 To read a company's details without opening any screen:
 
@@ -168,6 +172,8 @@ The payouts list has one row per schedule with the columns **Target | Amount | I
 | **History** | The last executions of this schedule, with **Total paid**. |
 | **Delete** | Removes the schedule. |
 
+Closing the payout editor with unsaved changes asks whether to **Save** or **Discard** them (**Esc** on the popup returns to the editor).
+
 #### Payout statuses
 
 | Status | What happened |
@@ -177,7 +183,8 @@ The payouts list has one row per schedule with the columns **Target | Amount | I
 | **Target not found** | The target player or account no longer exists. |
 | **No deposit right** | The target account does not accept deposits from this payout. |
 | **Insufficient item balance** | An item-currency payout, and the company does not hold enough of that item. |
-| **Paused** | The schedule is paused. |
+| **Paused** | The schedule is paused, or (dividend schedules) dividends are paused because more shares are banked than were stamped. See [Share integrity](#share-integrity). |
+| **Account frozen** | An admin froze the company account, so nothing can be paid from it. See [Administration](Administration.md#managing-player-bank-accounts). |
 
 A failed run does not retry immediately — the schedule advances to its next slot and the missed amount is added to its counter. Use **Pay Missed** to settle the backlog once the account has funds again; if it still cannot pay you get *"The company has insufficient funds to execute this payment."*
 
@@ -202,6 +209,7 @@ Rules worth knowing:
 - The company's **own** account is always excluded — a company does not pay a dividend to itself.
 - If a holder has no bank slot for the payout item yet, one is created for them.
 - The screen keeps a **Dividend History** list; press **Refresh** to reload it.
+- While a share excess is open (see [Share integrity](#share-integrity)) no dividend is paid and you get *"Dividends are paused: more shares are banked than were stamped. An admin must review it first."*
 
 ---
 
@@ -241,6 +249,13 @@ Pick a timeframe — **24h**, **7d**, **30d**, **90d**, **All Time** — and the
 
 Below that: an earnings/spendings chart over the selected period, a **Top Shareholders** table (Account | Shares | %) and an **Upcoming Payouts** table (Account | Amount).
 
+What you see depends on who you are:
+
+| Viewer | Sees |
+|---|---|
+| Member of the company account (worker, manager, founder), shareholder, BankSystem admin or operator of the bank master server | Everything: balance, cashflow, solvency, payouts, the chart and the Top Shareholders table with the account names. |
+| Anyone else | Only the number of shares issued and the number of holders. |
+
 ---
 
 ### Danger Zone
@@ -271,9 +286,11 @@ Place the Share Stamper and right-click it. Because it is not bound yet, the **B
 
 If you manage no companies you get *"You have no companies with MANAGE permission"*.
 
-To unbind later, use **Unbind** in the stamper's own screen, or the stamper list in the company's **Shares** tab.
+To unbind later, use **Unbind** in the stamper's own screen, or the stamper list in the company's **Shares** tab. Unbinding ejects the block's contents (Blank Shares and stamped shares) on top of the block.
 
-Once bound, right-clicking the block opens the stamper itself — but only for players with `MANAGE` on that company. Everyone else is told *"Bound to MyCompany — no permission"*. A bound stamper also takes **20× longer to break** for anyone without `MANAGE`, and when it is finally broken the dropped block keeps its binding, so re-placing it re-binds automatically.
+A bound stamper cannot be re-bound to a different company directly — unbind it first, then bind it again.
+
+Once bound, right-clicking the block opens the stamper itself — but only for founders, players with `MANAGE` on that company and BankSystem admins. The right is checked again while the screen is open: a player who loses `MANAGE` has the stamper closed at once. Everyone else is told *"Bound to MyCompany — no permission"*. A bound stamper also takes **20× longer to break** for anyone without `MANAGE`, and when it is finally broken the dropped block keeps its binding, so re-placing it re-binds automatically.
 
 ### 3. Stamp
 
@@ -286,7 +303,7 @@ Once bound, right-clicking the block opens the stamper itself — but only for p
 | Supply line | `issued / max supply` for the bound company. |
 | **Start** / **Stop** | Starts or stops the stamping/redeeming process. |
 | **Mode: Stamp** / **Mode: Redeem** | Stamp turns Blank Shares into company shares; Redeem turns company shares back into Blank Shares. |
-| **Unbind** | Clears the block's company binding (contents are kept). |
+| **Unbind** | Clears the block's company binding. Everything in the block — Blank Shares and stamped shares — is ejected on top of the block. |
 | **Auto Input** | Allows hoppers to insert into the input slot. |
 | **Auto Output** | Allows hoppers to extract from the output slot. |
 
@@ -300,6 +317,8 @@ The machine **stops itself** and the button flips back to *Start* when:
 - (Redeem mode) the company has no issued shares left, or the inserted share belongs to a different company.
 
 Only one player can have a stamper open at a time — a second player gets *"Share Stamper is already in use by another player"*.
+
+If you lose the `MANAGE` right on the company while the stamper screen is open, the screen closes.
 
 ### 4. Automate it
 
@@ -330,12 +349,13 @@ Open **Shares → Edit Visual Layers**:
 | **Preview** | A live stamped share rendered with your unsaved settings. |
 
 Press **Save** to publish. Every player's stamped shares of that company update — the card, the item name and the name colour all follow the visuals.
+Closing the editor with unsaved changes asks whether to **Save** or **Discard** them (**Esc** on the popup returns to the editor).
 
 The finished item tooltip shows the company name, `Supply: <issued> / <max>`, and the description behind **SHIFT**:
 
 ### Share symbols (server admins)
 
-Symbols are PNG textures stored per world. BankSystem ships **45** of them; admins can add their own. All symbol commands need permission level 2 **and must be run on the master server**.
+Symbols are PNG textures stored per world. BankSystem ships **45** of them; admins can add their own. All symbol commands need the BankSystem admin flag (`/banksystem op`; with a permission mod, node `banksystem.admin.command.symbols`) **and must be run on the master server**.
 
 | Command | What it does |
 |---|---|
@@ -354,13 +374,17 @@ Failures are reported inline, e.g. *"PNG validation failed: Must be square (got 
 
 ---
 
+## Share integrity
+
+The number of stamped shares is the company's share supply. If more of its shares turn up in bank accounts than were ever stamped (for example copied with a duplication bug), the server admins get an alert and the company's dividends pause until it has been reviewed: a company admin (`MANAGE` on the bound account or a founder) or a BankSystem admin accepts it with `/company shares acknowledge "<companyName>"`. Fixed payouts keep running, and nothing is taken from anyone. While dividends are paused, new payouts that are split among the shareholders cannot be created and existing ones cannot be changed; payouts to a player or account still can. Shares that are lost for good (deleted accounts, closed banks, destroyed by an admin) lower the stamped number. Details for admins are in [Administration](Administration.md#share-integrity).
+
 ## Multi-server notes
 
 On a master/slave setup ([Multi-Server Setup](MultiserverSetup.md)):
 
 - **Company data lives only on the master.** Slaves keep no company files.
 - `/company create`, `transfer`, `dissolve`, `description`, `info` and `manage` all work from a slave — the command is forwarded to the master and the reply is identical on both sides. Name auto-completion is forwarded too.
-- **Share Stampers only work on the master.** On a slave, an unbound stamper answers *"Binding is master-only (this is a slave server)"*, and a bound one reports *"no permission"* because the slave cannot see the company. Stampers on slave worlds do not tick.
+- **Share Stampers work on the master and on trusted slaves.** On a trusted slave the bind list, opening the stamper and every stamp or redeem are checked on the master; each stamped or redeemed share is counted on the master once. If the master does not answer, the share goes back into the stamper's input. If the master cannot confirm the outcome, the share also goes back and the stamper stops; check the company's issued count before starting it again. Stampers on a slave do **not** appear in the company's stamper list (Shares tab), so unbind them at the block. On a slave that is not trusted yet, the stamper answers *"This server is not trusted by the bank master…"*; an admin has to run `/banksystem trust` on the master first.
 - `/banksystem symbols …` is master-only; slaves receive the symbol files through the master's sync.
 - Stamped shares carried to a slave still show their card and tooltip — the slave mirrors the master's visuals.
 
@@ -373,7 +397,8 @@ On a master/slave setup ([Multi-Server Setup](MultiserverSetup.md)):
 | `/company create "<name>" <maxSupply>` | Found a company and its bank account | Any player |
 | `/company info "<companyName>"` | Print company details to chat | Any player |
 | `/company manage "<companyName>"` | Open the Company Management screen | `MANAGE` on the bound account, or BankSystem admin |
-| `/banksystem symbols list\|add <id>\|remove <id>\|reload` | Manage share symbol textures (master only) | Permission level 2 |
+| `/company shares acknowledge "<companyName>"` | Accept a [share excess](#share-integrity) and resume the company's dividends | `MANAGE` on the bound account, a founder, or BankSystem admin |
+| `/banksystem symbols list\|add <id>\|remove <id>\|reload` | Manage share symbol textures (master only) | BankSystem admin flag |
 
 The full command list for the rest of the mod is in [Commands](Commands.md).
 
@@ -400,7 +425,7 @@ The full command list for the rest of the mod is in [Commands](Commands.md).
 | `Bound to <company> — no permission` | You do not have `MANAGE` on that company. |
 | `Max supply reached (…/…)` — the stamper stops immediately | The company has issued every share it is ever allowed to. Max supply cannot be raised; redeem shares in Redeem mode to free capacity. |
 | `You have no companies with MANAGE permission` | You are trying to bind a stamper but manage no company. Found one, or ask to be added with *Allowed to manage*. |
-| `Binding is master-only (this is a slave server)` | Place and bind stampers on the master server. |
+| `This server is not trusted by the bank master, so the Share Stamper can't be used here…` | The slave server is not trusted yet. A bank admin runs `/banksystem trust` for it, or use the stamper on the master. |
 | `The typed name does not match the company name.` | The dissolve / close-market confirmation needs the **exact** company name, case included. |
 | `[symbols] Must run on the master server.` | Run symbol commands on the master. |
 | Stamped shares show `company#12` instead of a name | The client has not received the company data yet. It self-heals within a second; if it persists, reconnect. |

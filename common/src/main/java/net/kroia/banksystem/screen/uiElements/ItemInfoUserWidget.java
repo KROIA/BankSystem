@@ -134,7 +134,7 @@ public class ItemInfoUserWidget extends BankSystemGuiElement {
 
     private void onManageButtonClicked()
     {
-        BankAccountManagementScreen.openScreen(accountNumber, (GuiScreen) Minecraft.getInstance().screen, true);
+        BankAccountManagementScreen.openScreen(accountNumber, (GuiScreen) net.kroia.modutilities.gui.client.ClientCompat.screen(), true);
     }
 
 }

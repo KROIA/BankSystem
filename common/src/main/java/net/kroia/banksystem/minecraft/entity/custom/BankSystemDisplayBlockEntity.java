@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
@@ -39,6 +40,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
@@ -120,7 +122,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     // ── Balance overview state ──
 
     private int slotCount = 0;
-    private boolean overviewDataPending = false;
+    private volatile boolean overviewDataPending = false;
     private volatile BankAccountData pendingOverviewData = null;
     private Label overviewAccountLabel;
     private final List<ItemView> overviewIcons = new ArrayList<>();
@@ -128,6 +130,8 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     private final List<Label> overviewCompLabels = new ArrayList<>();
     private String pendingOverviewAccountText = null;
     private ListTag pendingOverviewSlotData = null;
+    /** Icon stacks decoded from the update tag (ItemView is DISPLAY-only, its stack is not synced by the GUI input). */
+    private List<ItemStack> pendingOverviewStacks = null;
 
     // ── Balance history state ──
 
@@ -135,11 +139,12 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     private Label historyStatusLabel;
     private final List<Frame> legendFrames = new ArrayList<>();
     private final List<ItemView> legendIcons = new ArrayList<>();
-    private boolean historyDataPending = false;
+    private volatile boolean historyDataPending = false;
     private volatile List<BalanceHistoryRecord> pendingHistoryRecords = null;
     private CompoundTag pendingChartState = null;
     private String pendingStatusText = null;
     private ListTag pendingLegendData = null;
+    private List<ItemStack> pendingLegendStacks = null;
     private int[] legendOutlineColors = new int[0];
     private int[] legendBgColors = new int[0];
     private boolean[] legendVisible = new boolean[0];
@@ -295,29 +300,29 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     @Override
     protected void loadCustomData(CompoundTag tag, HolderLookup.Provider registries) {
         if (tag.contains("displayType")) {
-            displayType = DisplayType.fromId(tag.getString("displayType"));
+            displayType = DisplayType.fromId(NbtCompat.getString(tag, "displayType"));
         }
         if (tag.contains("accountNumber")) {
-            accountNumber = tag.getInt("accountNumber");
+            accountNumber = NbtCompat.getInt(tag, "accountNumber");
         }
-        loadOverviewData(tag);
-        loadHistoryData(tag);
+        loadOverviewData(tag, registries);
+        loadHistoryData(tag, registries);
     }
 
-    @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        DisplayType oldType = this.displayType;
-        int oldAccount = this.accountNumber;
-        int oldSlotCount = this.slotCount;
-        super.loadAdditional(tag, registries);
+    @Override // mc<=1.21.5
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) { DisplayType oldType = displayType; int oldAccount = accountNumber; int oldSlotCount = slotCount; super.loadAdditional(tag, registries); afterLoad(tag, registries, oldType, oldAccount, oldSlotCount); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //protected void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { DisplayType oldType = displayType; int oldAccount = accountNumber; int oldSlotCount = slotCount; super.loadAdditional(input); afterLoad(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup(), oldType, oldAccount, oldSlotCount); } // mc>=1.21.6
 
+    /** Client controller refresh after the base class loaded the tag (version-neutral part of loadAdditional). */
+    private void afterLoad(CompoundTag tag, HolderLookup.Provider registries, DisplayType oldType, int oldAccount, int oldSlotCount) {
         if (level != null && level.isClientSide() && isController()) {
             // Re-load pending data: super.loadAdditional calls buildAndInitGui→wireCallbacks
             // →applyPendingState which consumes it, then gui.deserializeTree replaces all
             // elements with componentless copies. Re-loading ensures the data is available
             // for the final applyPendingState below.
-            loadOverviewData(tag);
-            loadHistoryData(tag);
+            loadOverviewData(tag, registries);
+            loadHistoryData(tag, registries);
 
             if (oldType != this.displayType || oldAccount != this.accountNumber || oldSlotCount != this.slotCount) {
                 rebuildGui();
@@ -356,15 +361,20 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         if (pendingOverviewSlotData != null) {
             int count = Math.min(pendingOverviewSlotData.size(), Math.min(overviewIcons.size(), overviewLabels.size()));
             for (int i = 0; i < count; i++) {
-                CompoundTag entry = pendingOverviewSlotData.getCompound(i);
+                CompoundTag entry = NbtCompat.getCompound(pendingOverviewSlotData, i);
                 if (entry.contains("text")) {
-                    overviewLabels.get(i).setText(entry.getString("text"));
+                    overviewLabels.get(i).setText(NbtCompat.getString(entry, "text"));
                 }
                 if (i < overviewCompLabels.size()) {
-                    overviewCompLabels.get(i).setText(entry.contains("compText") ? entry.getString("compText") : "");
+                    overviewCompLabels.get(i).setText(entry.contains("compText") ? NbtCompat.getString(entry, "compText") : "");
                 }
+                overviewIcons.get(i).setItemStack(iconAt(pendingOverviewStacks, i));
+            }
+            for (int i = count; i < overviewIcons.size(); i++) {
+                overviewIcons.get(i).setItemStack(null);
             }
             pendingOverviewSlotData = null;
+            pendingOverviewStacks = null;
         }
 
         // History pending state
@@ -379,12 +389,13 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         if (pendingLegendData != null) {
             int count = Math.min(pendingLegendData.size(), Math.min(legendFrames.size(), legendIcons.size()));
             for (int i = 0; i < count; i++) {
-                CompoundTag entry = pendingLegendData.getCompound(i);
+                CompoundTag entry = NbtCompat.getCompound(pendingLegendData, i);
                 Frame f = legendFrames.get(i);
-                f.setOutlineColor(entry.getInt("color"));
-                f.setBackgroundColor(entry.getInt("bgColor"));
-                f.setEnableOutline(entry.getBoolean("visible"));
-                f.setEnableBackground(entry.getBoolean("visible"));
+                f.setOutlineColor(NbtCompat.getInt(entry, "color"));
+                f.setBackgroundColor(NbtCompat.getInt(entry, "bgColor"));
+                f.setEnableOutline(NbtCompat.getBoolean(entry, "visible"));
+                f.setEnableBackground(NbtCompat.getBoolean(entry, "visible"));
+                legendIcons.get(i).setItemStack(iconAt(pendingLegendStacks, i));
             }
             for (int i = count; i < legendFrames.size(); i++) {
                 legendFrames.get(i).setEnableOutline(false);
@@ -394,6 +405,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 legendIcons.get(i).setItemStack(null);
             }
             pendingLegendData = null;
+            pendingLegendStacks = null;
         }
 
         if (level != null && level.isClientSide() && historyChart != null) {
@@ -554,8 +566,9 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         overviewDataPending = true;
 
         BACKEND.SERVER_BANK_MANAGER.getAsync().getBankAccountDataAsync(accountNumber)
-                .thenAccept(data -> {
-                    pendingOverviewData = data;
+                .whenComplete((data, ex) -> {
+                    if (data != null) pendingOverviewData = data;
+                    else overviewDataPending = false; // Issue #79: failed or empty reply, retry on the next poll
                 });
     }
 
@@ -627,6 +640,42 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         }
     }
 
+    /** Writes an icon with all components ("stack") plus the plain item id ("item", legacy readers). */
+    private static void writeIcon(CompoundTag entry, ItemStack stack, HolderLookup.Provider registries) {
+        if (stack == null || stack.isEmpty())
+            return;
+        entry.putString("item", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+        ItemStack.OPTIONAL_CODEC.encodeStart(registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), stack)
+                .result().ifPresent(t -> entry.put("stack", t));
+    }
+
+    /** Decodes the icon of every entry; EMPTY when the entry has none. */
+    private static List<ItemStack> readIcons(ListTag entries, HolderLookup.Provider registries) {
+        if (entries == null)
+            return null;
+        List<ItemStack> out = new ArrayList<>(entries.size());
+        for (int i = 0; i < entries.size(); i++) {
+            CompoundTag entry = NbtCompat.getCompound(entries, i);
+            ItemStack stack = ItemStack.EMPTY;
+            if (entry.contains("stack")) {
+                stack = ItemStack.OPTIONAL_CODEC.parse(registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), entry.get("stack"))
+                        .result().orElse(ItemStack.EMPTY);
+            } else if (entry.contains("item")) { // data saved before full stacks were written
+                net.minecraft.resources.ResourceLocation id = net.minecraft.resources.ResourceLocation.tryParse(NbtCompat.getString(entry, "item")); // mc<=1.21.10
+                //net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.tryParse(NbtCompat.getString(entry, "item")); // mc>=1.21.11
+                if (id != null)
+                    stack = new ItemStack(BuiltInRegistries.ITEM.getOptional(id).orElse(net.minecraft.world.item.Items.AIR));
+            }
+            out.add(stack);
+        }
+        return out;
+    }
+
+    private static ItemStack iconAt(List<ItemStack> stacks, int i) {
+        ItemStack stack = stacks != null && i < stacks.size() ? stacks.get(i) : ItemStack.EMPTY;
+        return stack.isEmpty() ? null : stack;
+    }
+
     private void saveOverviewData(CompoundTag tag, HolderLookup.Provider registries) {
         tag.putInt("slotCount", slotCount);
         if (overviewAccountLabel != null) {
@@ -636,10 +685,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         int count = Math.min(overviewIcons.size(), overviewLabels.size());
         for (int i = 0; i < count; i++) {
             CompoundTag entry = new CompoundTag();
-            ItemStack stack = overviewIcons.get(i).getItemStack();
-            if (stack != null && !stack.isEmpty()) {
-                entry.putString("item", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
-            }
+            writeIcon(entry, overviewIcons.get(i).getItemStack(), registries);
             entry.putString("text", overviewLabels.get(i).getText());
             if (i < overviewCompLabels.size()) {
                 entry.putString("compText", overviewCompLabels.get(i).getText());
@@ -649,12 +695,13 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         tag.put("ovSlots", slots);
     }
 
-    private void loadOverviewData(CompoundTag tag) {
+    private void loadOverviewData(CompoundTag tag, HolderLookup.Provider registries) {
         if (tag.contains("slotCount")) {
-            slotCount = tag.getInt("slotCount");
+            slotCount = NbtCompat.getInt(tag, "slotCount");
         }
-        pendingOverviewAccountText = tag.contains("ovAccountText") ? tag.getString("ovAccountText") : null;
-        pendingOverviewSlotData = tag.contains("ovSlots") ? tag.getList("ovSlots", 10) : null;
+        pendingOverviewAccountText = tag.contains("ovAccountText") ? NbtCompat.getString(tag, "ovAccountText") : null;
+        pendingOverviewSlotData = tag.contains("ovSlots") ? NbtCompat.getList(tag, "ovSlots", 10) : null;
+        pendingOverviewStacks = readIcons(pendingOverviewSlotData, registries);
     }
 
     static String formatCompact(long rawAmount) {
@@ -799,15 +846,14 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         if (historyDataPending) return;
         historyDataPending = true;
 
+        CompletableFuture<List<BalanceHistoryRecord>> reply;
         if (BACKEND.BALANCE_HISTORY_MANAGER != null) {
-            BACKEND.BALANCE_HISTORY_MANAGER.getHistory(
+            reply = BACKEND.BALANCE_HISTORY_MANAGER.getHistory(
                     Optional.empty(),
                     Optional.of(new EqualityFilter(accountNumber)),
                     Optional.empty(),
                     0
-            ).thenAccept(records -> {
-                pendingHistoryRecords = (records != null) ? records : List.of();
-            });
+            );
         } else if (BACKEND.isSlaveServer) {
             // Display blocks fetch the full history (0 = unlimited); Task #40's bucketed
             // downsampling is opt-in via a positive maxPoints — kept off here so the
@@ -818,12 +864,14 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                     Long.MAX_VALUE,
                     0
             );
-            BankSystemNetworking.BALANCE_HISTORY_REQUEST
-                    .sendRequestToMaster(query)
-                    .thenAccept(records -> {
-                        pendingHistoryRecords = (records != null) ? records : List.of();
-                    });
+            reply = BankSystemNetworking.BALANCE_HISTORY_REQUEST.sendRequestToMaster(query);
+        } else {
+            return;
         }
+        reply.whenComplete((records, ex) -> {
+            if (ex == null) pendingHistoryRecords = (records != null) ? records : List.of();
+            else historyDataPending = false; // Issue #85: failed or timed-out reply, retry on the next poll
+        });
     }
 
     private void applyHistoryData(List<BalanceHistoryRecord> records) {
@@ -937,29 +985,27 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
             entry.putInt("color", legendFrames.get(i).getOutlineColor());
             entry.putInt("bgColor", legendFrames.get(i).getBackgroundColor());
             entry.putBoolean("visible", legendFrames.get(i).isOutlineEnabled());
-            ItemStack stack = legendIcons.get(i).getItemStack();
-            if (stack != null && !stack.isEmpty()) {
-                entry.putString("item", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
-            }
+            writeIcon(entry, legendIcons.get(i).getItemStack(), registries);
             legend.add(entry);
         }
         tag.put("legend", legend);
     }
 
-    private void loadHistoryData(CompoundTag tag) {
-        pendingChartState = tag.contains("chartState") ? tag.getCompound("chartState") : null;
-        pendingStatusText = tag.contains("statusText") ? tag.getString("statusText") : null;
-        pendingLegendData = tag.contains("legend") ? tag.getList("legend", 10) : null;
+    private void loadHistoryData(CompoundTag tag, HolderLookup.Provider registries) {
+        pendingChartState = tag.contains("chartState") ? NbtCompat.getCompound(tag, "chartState") : null;
+        pendingStatusText = tag.contains("statusText") ? NbtCompat.getString(tag, "statusText") : null;
+        pendingLegendData = tag.contains("legend") ? NbtCompat.getList(tag, "legend", 10) : null;
+        pendingLegendStacks = readIcons(pendingLegendData, registries);
         if (pendingLegendData != null) {
             int n = pendingLegendData.size();
             legendOutlineColors = new int[n];
             legendBgColors = new int[n];
             legendVisible = new boolean[n];
             for (int i = 0; i < n; i++) {
-                CompoundTag entry = pendingLegendData.getCompound(i);
-                legendOutlineColors[i] = entry.getInt("color");
-                legendBgColors[i] = entry.getInt("bgColor");
-                legendVisible[i] = entry.getBoolean("visible");
+                CompoundTag entry = NbtCompat.getCompound(pendingLegendData, i);
+                legendOutlineColors[i] = NbtCompat.getInt(entry, "color");
+                legendBgColors[i] = NbtCompat.getInt(entry, "bgColor");
+                legendVisible[i] = NbtCompat.getBoolean(entry, "visible");
             }
         }
     }

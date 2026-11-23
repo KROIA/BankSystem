@@ -9,7 +9,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -34,7 +35,8 @@ import java.util.Map;
  */
 public class ConverterDepositPacket extends BankSystemNetworkPacket {
 
-    public static final Type<ConverterDepositPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "converter_deposit_packet"));
+    public static final Type<ConverterDepositPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "converter_deposit_packet")); // mc<=1.21.10
+    //public static final Type<ConverterDepositPacket> TYPE = new Type<>(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "converter_deposit_packet")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, ConverterDepositPacket> STREAM_CODEC = StreamCodec.composite(
             ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap::new), p -> p.requested,
@@ -60,6 +62,7 @@ public class ConverterDepositPacket extends BankSystemNetworkPacket {
         if (sender == null || requested == null || requested.isEmpty()) return;
 
         long depositTotal = 0L;
+        Map<ItemID, Long> destroyed = new HashMap<>(); // Task #124: NoteFlow converter_in
         Inventory inv = sender.getInventory();
         int size = inv.getContainerSize();
 
@@ -98,6 +101,7 @@ public class ConverterDepositPacket extends BankSystemNetworkPacket {
             try {
                 value = Math.multiplyExact(removedCount, worth);
                 depositTotal = Math.addExact(depositTotal, value);
+                destroyed.put(itemID, removedCount);
             } catch (ArithmeticException overflow) {
                 // A single denomination's value alone exceeds the running Long range.
                 // Refuse this denomination line and try to unwind by putting the just-removed
@@ -108,14 +112,14 @@ public class ConverterDepositPacket extends BankSystemNetworkPacket {
                 refund.setCount((int) Math.min(removedCount, refund.getMaxStackSize()));
                 long left = removedCount - refund.getCount();
                 if (!sender.getInventory().add(refund)) {
-                    sender.drop(refund, false);
+                    net.kroia.modutilities.PlayerCompat.drop(sender, refund);
                 }
                 while (left > 0) {
                     ItemStack more = template.copy();
                     int c = (int) Math.min(left, more.getMaxStackSize());
                     more.setCount(c);
                     if (!sender.getInventory().add(more)) {
-                        sender.drop(more, false);
+                        net.kroia.modutilities.PlayerCompat.drop(sender, more);
                     }
                     left -= c;
                 }
@@ -125,6 +129,8 @@ public class ConverterDepositPacket extends BankSystemNetworkPacket {
 
         if (depositTotal > 0) {
             long resulting = ConverterCacheManager.get().deposit(sender.getUUID(), depositTotal);
+            net.kroia.banksystem.data.NoteFlowLog.converter(true, sender.getUUID(), destroyed,
+                    net.kroia.banksystem.data.DiagnosticsDatabase.at(sender.level(), sender.blockPosition()));
             debug("ConverterDepositPacket: player " + sender.getUUID() + " deposited "
                     + depositTotal + " cents into converter cache; new balance = " + resulting);
         }

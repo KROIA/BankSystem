@@ -95,7 +95,7 @@ public class ATMScreen extends BankSystemGuiScreen {
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(
                     this, minecraft.player.getUUID(),
                     (accountNumber) -> this.currentSelectedAccountNumber = accountNumber);
-            minecraft.setScreen(selectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
         });
         applyTopTooltip(selectAccountButton, TOOLTIP_SELECT_ACCOUNT_KEY);
         rootElement.addChild(selectAccountButton);
@@ -140,7 +140,7 @@ public class ATMScreen extends BankSystemGuiScreen {
 
     public static void openScreen() {
         ATMScreen screen = new ATMScreen();
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
     }
 
     @Override
@@ -222,7 +222,7 @@ public class ATMScreen extends BankSystemGuiScreen {
     }
 
     private static void onClientTick(Player player) {
-        if (Minecraft.getInstance().screen != instance || instance == null)
+        if (net.kroia.modutilities.gui.client.ClientCompat.screen() != instance || instance == null)
             return;
 
         long currentTickCount = System.currentTimeMillis();

@@ -72,11 +72,13 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             sendMessage(executor, "No UUID found for Player: "+userName);
             return false;
         }
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().setBanksystemAdminMode(playerUUID, isAdmin))
+        if(net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), // BS-257: actor of the audit line
+                () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().setBanksystemAdminMode(playerUUID, isAdmin)))
         {
             sendMessage(executor, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
             if(!executor.equals(playerUUID))
                 sendMessage(playerUUID, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
+            net.kroia.banksystem.util.AdminFlagSync.pushToLuckPerms(executor, playerUUID, userName, isAdmin); // Task #107
             return true;
         }
         return false;
@@ -101,7 +103,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
                 sendMessage(executor, "The slave '"+slaveID+"' is already trusted");
                 return true;
             }
-            manager.trustSlaveServer(slaveID);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), () -> { manager.trustSlaveServer(slaveID); return null; }); // BS-257
             sendMessage(executor, "The slave '"+slaveID+"' is now trusted");
         }
         else
@@ -111,7 +113,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
                 sendMessage(executor, "The slave '"+slaveID+"' was not trusted");
                 return true;
             }
-            manager.untrustSlaveServer(slaveID);
+            net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), () -> { manager.untrustSlaveServer(slaveID); return null; }); // BS-257
             sendMessage(executor, "The slave '"+slaveID+"' is no longer trusted");
         }
         return true;
@@ -140,7 +142,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
             return false;
         }
 
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().allowItemID(itemID)) {
+        if(net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), // BS-257: actor of the audit line
+                () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().allowItemID(itemID))) {
             sendMessage(executor, BankSystemTextMessages.getItemNowAllowedMessage(itemID.getName(), ServerBank.getFormattedAmountStatic(1)));
             return true;
         }
@@ -160,6 +163,67 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
 
 
 
+    /** Task #117 — mode 0 = off, 1 = on, 2 = toggle. Admin only. */
+    @Override
+    public boolean banksystem_freeze(@NotNull UUID executor, int accountNumber, int mode) {
+        if(!isPlayerAdmin(executor))
+            return false;
+        ISyncServerBankManager bankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync();
+        if (bankManager.getBankAccount(accountNumber) == null) {
+            sendMessage(executor, BankSystemTextMessages.getAccountFreezeFailedMessage(accountNumber));
+            return false;
+        }
+        boolean frozen = mode == 2 ? !bankManager.isAccountFrozen(accountNumber) : mode == 1;
+        bankManager.setAccountFrozen(accountNumber, frozen, net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor));
+        sendMessage(executor, frozen ? BankSystemTextMessages.getAccountFreezeSetMessage(accountNumber)
+                : BankSystemTextMessages.getAccountFreezeClearedMessage(accountNumber));
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> banksystem_freeze_async(@NotNull UUID executor, int accountNumber, int mode) {
+        return CompletableFuture.completedFuture(banksystem_freeze(executor, accountNumber, mode));
+    }
+
+    /** Task #110 — per-admin chat alerts toggle (audit file and flags are written regardless). */
+    @Override
+    public boolean banksystem_alerts(@NotNull UUID executor, boolean enabled) {
+        if(!isPlayerAdmin(executor))
+            return false;
+        if(!net.kroia.banksystem.banking.ledger.AdminAudit.setAlertsEnabled(executor, enabled))
+            return false;
+        sendMessage(executor, enabled ? BankSystemTextMessages.getAlertsOnMessage() : BankSystemTextMessages.getAlertsOffMessage());
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> banksystem_alerts_async(@NotNull UUID executor, boolean enabled) {
+        return CompletableFuture.completedFuture(banksystem_alerts(executor, enabled));
+    }
+
+    /** Task #113 — digest written on the DB worker; the future completes on the server thread. */
+    @Override
+    public CompletableFuture<String> banksystem_auditreport(@NotNull UUID executor, int hours) {
+        if(!isPlayerAdmin(executor))
+            return CompletableFuture.completedFuture("");
+        return reportOnServerThread(hours);
+    }
+    @Override
+    public CompletableFuture<String> banksystem_auditreport_async(@NotNull UUID executor, int hours) {
+        return banksystem_auditreport(executor, hours);
+    }
+
+    /** Task #113 — {@link net.kroia.banksystem.banking.ledger.AuditDigest#report}, completed on the server thread ("" on failure). */
+    public static CompletableFuture<String> reportOnServerThread(int hours) {
+        net.minecraft.server.MinecraftServer srv = dev.architectury.utils.GameInstance.getServer();
+        CompletableFuture<String> out = new CompletableFuture<>();
+        net.kroia.banksystem.banking.ledger.AuditDigest.report(hours, System.currentTimeMillis()).whenComplete((path, t) -> {
+            if (t != null && BACKEND_INSTANCES.LOGGER != null) BACKEND_INSTANCES.LOGGER.warn("[AuditDigest] audit report failed: " + t);
+            String result = t == null && path != null ? path.toString() : "";
+            if (srv != null && !srv.isSameThread()) srv.execute(() -> out.complete(result));
+            else out.complete(result);
+        });
+        return out;
+    }
+
     @Override
     public boolean banksystem_disallowItem(@NotNull UUID executor, ItemID itemID) {
         if(!isPlayerAdmin(executor))
@@ -173,7 +237,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         // holder dump to the server console and returns the cleared holders for the capped
         // chat summary below.
         java.util.List<net.kroia.banksystem.api.bankmanager.ISyncServerBankManager.DisallowedHolder> cleared =
-                BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().disallowItemIDAndReport(itemID);
+                net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor),
+                        () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().disallowItemIDAndReport(itemID));
         if (cleared == null) {
             sendMessage(executor, BankSystemTextMessages.getItemNotAllowedFailedMessage(itemID.getName()));
             return false;
@@ -266,7 +331,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
                 return false;
             }
             String playerName = user.getName();
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(playerName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(playerName, MoneyItem.getMoneyItemName()));
             return false;
         }
         long balance = bank.getBalance();
@@ -302,16 +367,19 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank bank = bankManager.getOrCreatePersonalBank(userName, MoneyItem.getItemID());
         if(bank == null)
         {
-            ClientConsoleMessagePacket.sendMessageFromMaster(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            ClientConsoleMessagePacket.sendMessageFromMaster(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
 
-        BankStatus status = bank.depositReal(amount);
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.depositReal(amount)); // BS-254: ADMIN_ADD row below
+        if(status == BankStatus.SUCCESS)
+            net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_ADD, bank.convertToRawAmount(amount),
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money add " + userName);
         if(status != BankStatus.SUCCESS){
             sendMessage(executor,
                     BankSystemTextMessages.getCantAddMessage(
                             bank.getFormattedAmount(amount),
-                            MoneyItem.getName(),
+                            MoneyItem.getMoneyItemName(),
                             userName,
                             status.toString()));
             return false;
@@ -348,17 +416,20 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank bank = bankManager.getOrCreatePersonalBank(userName, MoneyItem.getItemID());
         if(bank == null)
         {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
-        bank.setRealBalance(amount);
+        long oldBalance = bank.getBalance();
+        net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.setRealBalance(amount)); // BS-254: ADMIN_SET row below
+        net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_SET, Math.abs(bank.getBalance() - oldBalance),
+                net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money set " + userName + ": " + oldBalance + "->" + bank.getBalance());
         User owner = bankManager.getUserByName(userName);
         if (owner == null) {
             sendMessage(executor, BankSystemTextMessages.getUserNotFoundMessage(userName));
             return true;
         }
         UUID bankOwner = owner.getUUID();
-        String message = BankSystemTextMessages.getSetBalanceMessage(bank.getFormattedAmount(amount), MoneyItem.getName(), userName);
+        String message = BankSystemTextMessages.getSetBalanceMessage(bank.getFormattedAmount(amount), MoneyItem.getMoneyItemName(), userName);
         sendMessage(executor, message);
         if(!executor.equals(bankOwner))
             sendMessage(bankOwner, message);
@@ -393,14 +464,16 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank bank = bankManager.getOrCreatePersonalBank(userName, MoneyItem.getItemID());
         if(bank == null)
         {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
         if(bank.getRealBalance() >= amount) {
-            bank.withdrawReal(amount);
+            if(net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> bank.withdrawReal(amount)) == BankStatus.SUCCESS) // BS-254: row below
+                net.kroia.banksystem.banking.ledger.TransactionLedger.logBank(bank, net.kroia.banksystem.api.ledger.LedgerType.ADMIN_REMOVE, bank.convertToRawAmount(amount),
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), "money remove " + userName);
         }
         else {
-            sendMessage(executor, BankSystemTextMessages.getNotEnoughInAccountMessage(userName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getNotEnoughInAccountMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
         return true;
@@ -421,27 +494,32 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         ISyncServerBank fromBank = bankManager.getOrCreatePersonalBank(fromUserName, MoneyItem.getItemID());
         if(fromBank == null)
         {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(fromUserName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(fromUserName, MoneyItem.getMoneyItemName()));
             return false;
         }
         ISyncServerBank toBank = bankManager.getOrCreatePersonalBank(toUserName, MoneyItem.getItemID());
         if(toBank == null)
         {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(toUserName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(toUserName, MoneyItem.getMoneyItemName()));
             return false;
         }
 
         if(fromBank == toBank)
         {
-            sendMessage(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getTransferToSameAccountMessage(MoneyItem.getMoneyItemName()));
             return false;
         }
-        BankStatus status = fromBank.transfer(fromBank.convertToRawAmount(amount), toBank);
+        // Task #117: tagged TRANSFER so a frozen source or target account refuses the transfer.
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.player(executor),
+                () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.TRANSFER, executor, null,
+                        () -> fromBank.transfer(fromBank.convertToRawAmount(amount), toBank)));
+        if (status == BankStatus.FAILED_ACCOUNT_FROZEN)
+            return false; // the player was already told
         if(status != BankStatus.SUCCESS) {
             if (fromBank.getRealBalance() < amount)
-                sendMessage(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getName()));
+                sendMessage(executor, BankSystemTextMessages.getNotEnoughMoneyForTransfer(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getMoneyItemName()));
             else
-                sendMessage(executor, BankSystemTextMessages.getTransferFailedMessage(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getName(), status.toString()));
+                sendMessage(executor, BankSystemTextMessages.getTransferFailedMessage(fromUserName, toUserName, fromBank.getFormattedAmount(amount), MoneyItem.getMoneyItemName(), status.toString()));
             return false;
         }
         return true;
@@ -457,7 +535,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public boolean money_circulation(@NotNull UUID executor) {
         double circulation = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getRealMoneyCirculation();
-        sendMessage(executor, BankSystemTextMessages.getCirculationMessage(ServerBank.getFormattedAmountStatic(circulation), MoneyItem.getName()));
+        sendMessage(executor, BankSystemTextMessages.getCirculationMessage(ServerBank.getFormattedAmountStatic(circulation), MoneyItem.getMoneyItemName()));
         return true;
     }
     @Override
@@ -620,7 +698,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
 
         IServerBankAccount account = bankManager.getOrCreatePersonalBankAccount(userName);
         if (account == null) {
-            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getName()));
+            sendMessage(executor, BankSystemTextMessages.getBankNotFoundMessage(userName, MoneyItem.getMoneyItemName()));
             return false;
         }
         sendMessage(executor, account.toJsonString());
@@ -687,12 +765,18 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         sendNoAdminMessage(player);
         return false;
     }
+    public static final String NO_ADMIN_MESSAGE = "This command can only be used by BankSystem admins!";
     public static void sendNoAdminMessage(UUID executor)
     {
-        sendMessage(executor, "This command can only be used by BankSystem admins!");
+        sendMessage(executor, "§c" + NO_ADMIN_MESSAGE); // SM-312: refusals are red (the packet carries plain text)
     }
+    /** Test hook (dev suites only, null otherwise): sees every executor message; the packet itself cannot be read back. */
+    public static @Nullable java.util.function.BiConsumer<UUID, String> messageListener_forTesting = null;
     public static void sendMessage(UUID player, String message)
     {
+        java.util.function.BiConsumer<UUID, String> listener = messageListener_forTesting;
+        if (listener != null)
+            listener.accept(player, message);
         ClientConsoleMessagePacket.sendMessageFromMaster(player, message);
     }
 

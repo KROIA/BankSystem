@@ -57,23 +57,28 @@ public class ItemColorUtil {
     // Isolated in its own class so the server never loads Minecraft/renderer classes.
     // The JVM only loads this class when the code path above actually calls it (client only).
     private static class ClientTextureHelper {
+        /** The item's first texture sprite, or null (version-specific model access). */
+        private static net.minecraft.client.renderer.texture.TextureAtlasSprite spriteOf(
+                net.minecraft.client.Minecraft mc, ItemStack stack, net.minecraft.util.RandomSource random) {
+            var model = mc.getItemRenderer().getModel(stack, null, null, 0); // mc<=1.21.3
+            var quads = model.getQuads(null, null, random); // mc<=1.21.3
+            for (var dir : net.minecraft.core.Direction.values()) { if (!quads.isEmpty()) break; quads = model.getQuads(null, dir, random); } // mc<=1.21.3
+            return quads.isEmpty() ? null : quads.get(0).getSprite(); // mc<=1.21.3
+            //var state = new net.minecraft.client.renderer.item.ItemStackRenderState(); // mc>=1.21.4
+            //mc.getItemModelResolver().updateForTopItem(state, stack, net.minecraft.world.item.ItemDisplayContext.GUI, false, null, null, 0); // mc>=1.21.4 mc<=1.21.4
+            //mc.getItemModelResolver().updateForTopItem(state, stack, net.minecraft.world.item.ItemDisplayContext.GUI, null, null, 0); // mc>=1.21.5
+            //return state.isEmpty() ? null : state.pickParticleIcon(random); // mc>=1.21.4 mc<=1.21.11
+            //return state.isEmpty() ? null : state.pickParticleMaterial(random).sprite(); // mc>=26.1
+        }
+
         @SuppressWarnings("JavaReflectionMemberAccess")
         static int tryExtractFromTexture(ItemStack stack) {
             try {
                 var mc = net.minecraft.client.Minecraft.getInstance();
                 if (mc == null) return 0;
                 var random = net.minecraft.util.RandomSource.create();
-                var model = mc.getItemRenderer().getModel(stack, null, null, 0);
-                var quads = model.getQuads(null, null, random);
-                if (quads.isEmpty()) {
-                    for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
-                        quads = model.getQuads(null, dir, random);
-                        if (!quads.isEmpty()) break;
-                    }
-                }
-                if (quads.isEmpty()) return 0;
-
-                var sprite = quads.get(0).getSprite();
+                var sprite = spriteOf(mc, stack, random);
+                if (sprite == null) return 0;
                 int width = sprite.contents().width();
                 int height = sprite.contents().height();
 
@@ -86,7 +91,8 @@ public class ItemColorUtil {
                 int count = 0;
                 for (int x = 0; x < width; x++) {
                     for (int y = 0; y < height; y++) {
-                        int pixel = nativeImage.getPixelRGBA(x, y);
+                        int pixel = nativeImage.getPixelRGBA(x, y); // mc<=1.21.1
+                        //int pixel = net.minecraft.util.ARGB.toABGR(nativeImage.getPixel(x, y)); // mc>=1.21.2
                         int a = (pixel >> 24) & 0xFF;
                         if (a < 128) continue;
                         rSum += pixel & 0xFF;

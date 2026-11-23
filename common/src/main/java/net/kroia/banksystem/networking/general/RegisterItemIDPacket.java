@@ -1,5 +1,6 @@
 package net.kroia.banksystem.networking.general;
 
+import net.kroia.banksystem.util.ItemStackNbt;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
@@ -15,7 +16,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
@@ -24,7 +26,8 @@ import java.util.List;
 
 public class RegisterItemIDPacket extends BankSystemNetworkPacket
 {
-    public static final Type<RegisterItemIDPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "register_item_id_packet"));
+    public static final Type<RegisterItemIDPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "register_item_id_packet")); // mc<=1.21.10
+    //public static final Type<RegisterItemIDPacket> TYPE = new Type<>(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "register_item_id_packet")); // mc>=1.21.11
     @Override
     public @NotNull Type<? extends CustomPacketPayload> type() {
         return TYPE;
@@ -105,7 +108,7 @@ public class RegisterItemIDPacket extends BankSystemNetworkPacket
                 continue;
             try
             {
-                Tag stackTag = stack.save(access, new CompoundTag());
+                Tag stackTag = ItemStackNbt.save(stack, access, new CompoundTag());
                 if(stackTag instanceof CompoundTag compoundTag)
                     tags.add(compoundTag);
             }
@@ -145,11 +148,11 @@ public class RegisterItemIDPacket extends BankSystemNetworkPacket
 
     @Override
     protected void handleOnServer(NetworkManager.PacketContext context) {
-        ItemIDManager.receiveRegisterItemIDPacket(this);
+        ItemIDManager.receiveRegisterItemIDPacket(this, "", context.getPlayer().getUUID());
     }
     @Override
     protected void handleOnMaster(ForwardPacketContext context)
     {
-        ItemIDManager.receiveRegisterItemIDPacket(this);
+        ItemIDManager.receiveRegisterItemIDPacket(this, context.senderServerID, context.senderPlayerUUID);
     }
 }

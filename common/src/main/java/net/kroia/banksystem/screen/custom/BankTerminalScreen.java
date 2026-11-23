@@ -1,5 +1,7 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.modutilities.NbtCompat;
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -115,7 +117,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
             // the row without its own child element, so this cannot conflict
             // with the amount textbox or the +/- buttons (children consume
             // their clicks first).
-            if (button == 0 && itemStackHitBox.contains(getMousePos().x, getMousePos().y)) {
+            if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT && itemStackHitBox.contains(getMousePos().x, getMousePos().y)) {
                 parent.onBankItemProductClicked(itemID);
                 return true;
             }
@@ -203,6 +205,8 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private static final Component FILTER_LABEL_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".filter");
     private static final Component USE_BANK_ITEMS_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.use_bank_items");
     private static final Component AUTO_DEPOSIT_OUTPUT_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.deposit_crafted_to_bank");
+    private static final Component NO_ANSWER_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".request.no_answer");
+    private static final Component COULD_NOT_LOAD_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".request.could_not_load");
 
 
     private int lastTickCount = 0;
@@ -306,13 +310,14 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         selectAccountButton = new BankAccountSelectionScreen.AccountButton();
         selectAccountButton.setOnFallingEdge(() -> {
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, playerUUID, this::onBankaccountSelected);
-            minecraft.setScreen(selectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
         });
 
         removeEmptyBankAccountsButton = new Button(REMOVE_EMPTY_BANKS_BUTTON_TEXT.getString());
         removeEmptyBankAccountsButton.setOnFallingEdge(() -> {
             if(selectedBankAccountNr > 0) {
-                getBankManager().requestRemoveEmptyBanks(selectedBankAccountNr).thenAccept((removed) -> {
+                getBankManager().requestRemoveEmptyBanks(selectedBankAccountNr).whenComplete((removed, ex) -> {
+                    if (ex != null) notifyNoAnswer();
                     updateBankList();
                 });
             }
@@ -327,7 +332,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         balanceHistoryButton.setOnFallingEdge(() -> {
             if (selectedBankAccountNr > 0) {
                 BalanceHistoryScreen historyScreen = new BalanceHistoryScreen(this, selectedBankAccountNr);
-                minecraft.setScreen(historyScreen);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(historyScreen);
             }
         });
 
@@ -366,17 +371,19 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         // selection; only when no last-selected account is stored do we fall back to
         // the per-block, per-player value on the terminal block entity, and finally to
         // the personal account.
-        getBankManager().getUserCustomData().thenAccept(customData ->
+        // Issue #95: a failed customData load falls through to the terminal / personal account
+        // without the saved crafting preference.
+        getBankManager().getUserCustomData().whenComplete((customData, ex) ->
                 net.minecraft.client.Minecraft.getInstance().execute(() -> {
                     if (!screenIsOpen) return;
                     int lastAccount = 0;
-                    if (customData != null) {
-                        var prefs = customData.getCompound(CRAFT_PREFS_KEY);
-                        savedCraftUseBankItems = prefs.getBoolean(KEY_USE_BANK_ITEMS);
-                        savedCraftDepositOutput = prefs.getBoolean(KEY_DEPOSIT_OUTPUT);
-                        lastAccount = customData.getInt(KEY_LAST_ACCOUNT);
+                    if (ex == null && customData != null) {
+                        var prefs = NbtCompat.getCompound(customData, CRAFT_PREFS_KEY);
+                        savedCraftUseBankItems = NbtCompat.getBoolean(prefs, KEY_USE_BANK_ITEMS);
+                        savedCraftDepositOutput = NbtCompat.getBoolean(prefs, KEY_DEPOSIT_OUTPUT);
+                        lastAccount = NbtCompat.getInt(customData, KEY_LAST_ACCOUNT);
                     }
-                    craftPreferenceLoaded = true;
+                    craftPreferenceLoaded = ex == null;
                     ghostsDirty = true;
 
                     if (lastAccount > 0) {
@@ -388,15 +395,15 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
                     } else {
                         // No user-scoped last selection — legacy fallback: read the
                         // per-block, per-player value written by previous transfers.
-                        getBankManager().requestBankTerminalData(pMenu.getBlockPos()).thenAccept(btd ->
+                        getBankManager().requestBankTerminalData(pMenu.getBlockPos()).whenComplete((btd, btdEx) ->
                                 net.minecraft.client.Minecraft.getInstance().execute(() -> {
                                     if (!screenIsOpen) return;
-                                    setSelectedBankAccountNr(btd.selectedBankAccount());
+                                    if (btdEx == null && btd != null)
+                                        setSelectedBankAccountNr(btd.selectedBankAccount());
                                     if (selectedBankAccountNr > 0) {
                                         updateBankList();
                                     } else {
-                                        getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID())
-                                                .thenAccept(this::updateBankList);
+                                        loadPersonalAccount();
                                     }
                                 }));
                     }
@@ -616,14 +623,55 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private void saveCraftingPreference() {
         final boolean useBankItems = useBankItemsCheckBox.isChecked();
         final boolean depositOutput = autoDepositCheckBox.isChecked();
-        getBankManager().getUserCustomData().thenAccept(customData -> {
-            var data = customData != null ? customData : new net.minecraft.nbt.CompoundTag();
-            var prefs = data.getCompound(CRAFT_PREFS_KEY);
+        saveUserPreference(data -> {
+            var prefs = NbtCompat.getCompound(data, CRAFT_PREFS_KEY);
             prefs.putBoolean(KEY_USE_BANK_ITEMS, useBankItems);
             prefs.putBoolean(KEY_DEPOSIT_OUTPUT, depositOutput);
             data.put(CRAFT_PREFS_KEY, prefs);
-            getBankManager().updateUserCustomData(data);
         });
+    }
+
+    /**
+     * Fetch-modify-write on the player's customData. Issue #95: a failed fetch writes nothing
+     * (a blank tag would wipe the other screens' keys); a failed fetch or write tells the player.
+     */
+    private void saveUserPreference(java.util.function.Consumer<net.minecraft.nbt.CompoundTag> edit) {
+        getBankManager().getUserCustomData().whenComplete((customData, ex) -> {
+            if (ex != null || customData == null) {
+                notifyNoAnswer();
+                return;
+            }
+            edit.accept(customData);
+            getBankManager().updateUserCustomData(customData).whenComplete((ok, saveEx) -> {
+                if (saveEx != null || !Boolean.TRUE.equals(ok)) notifyNoAnswer();
+            });
+        });
+    }
+
+    /** Issue #95: chat line for a request that got no answer (same channel as the screens' other notices). */
+    private static void notifyNoAnswer() {
+        var player = net.minecraft.client.Minecraft.getInstance().player;
+        if (player != null) net.kroia.modutilities.PlayerCompat.sendMessage(player, NO_ANSWER_TEXT, false);
+    }
+
+    /** Falls back to the personal account; shows "could not load" in the list when that fails too (Issue #95). */
+    private void loadPersonalAccount() {
+        getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).whenComplete((data, ex) ->
+                net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                    if (!screenIsOpen) return;
+                    if (ex == null && data != null) {
+                        updateBankList(data);
+                        return;
+                    }
+                    showCouldNotLoad();
+                }));
+    }
+
+    private void showCouldNotLoad() {
+        itemListView.removeChilds();
+        Label label = new Label(COULD_NOT_LOAD_TEXT.getString());
+        label.setHeight(15);
+        itemListView.addChild(label);
     }
 
     private void setSelectedBankAccountNr(int selectedBankAccountNr) {
@@ -658,7 +706,11 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     {
         if(selectedBankAccountNr <= 0)
             return;
-        getBankManager().getBankAccountDataAsync(selectedBankAccountNr).thenAccept(this::updateBankList);
+        getBankManager().getBankAccountDataAsync(selectedBankAccountNr).whenComplete((data, ex) ->
+                net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                    if (ex == null) updateBankList(data);
+                    else if (screenIsOpen) showCouldNotLoad();
+                }));
     }
     private void updateBankList(BankAccountData minimalBankUserData)
     {
@@ -667,10 +719,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         if(minimalBankUserData == null)
         {
             error("Failed to update bank data for player: " + playerName + ". BankAccountData is null.");
-            getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept((data)->{
-                if(data != null)
-                    setSelectedBankAccountNr(data.accountNumber);
-            });
+            loadPersonalAccount();
             return;
         }
         selectAccountButton.setAccountData(minimalBankUserData);
@@ -776,7 +825,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private static String buildSearchableName(String displayName, ItemStack stack) {
         StringBuilder sb = new StringBuilder(displayName.toLowerCase());
         if (stack != null && !stack.isEmpty()) {
-            stack.getTags().forEach(tagKey -> {
+            stack.getItem().builtInRegistryHolder().tags().forEach(tagKey -> {
                 String path = tagKey.location().getPath();
                 sb.append(' ').append(path.replace('_', ' ').replace('/', ' '));
             });
@@ -856,7 +905,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         }
         List<CraftingRecipeSelectionScreen.Candidate> candidates = new ArrayList<>(satisfiable);
         candidates.addAll(unsatisfiable);
-        minecraft.setScreen(new CraftingRecipeSelectionScreen(this, product, candidates, this::applyProductRecipe));
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(new CraftingRecipeSelectionScreen(this, product, candidates, this::applyProductRecipe));
     }
 
     /** Applies a picked recipe: ghost layout in bank mode, physical fill otherwise. */
@@ -864,7 +913,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         if (useBankItemsCheckBox.isChecked())
             menu.requestGhostRecipe(recipe); // existing ghost path (server-validated)
         else
-            FillBankTerminalCraftingGridPacket.sendPacketToServer(menu.getBlockPos(), recipe.id());
+            FillBankTerminalCraftingGridPacket.sendPacketToServer(menu.getBlockPos(), BankCraftingRecipes.id(recipe));
         ghostsDirty = true;
     }
 
@@ -940,10 +989,6 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
      * stale cached copy.
      */
     private void saveLastAccountPreference(int accountNumber) {
-        getBankManager().getUserCustomData().thenAccept(customData -> {
-            var data = customData != null ? customData : new net.minecraft.nbt.CompoundTag();
-            data.putInt(KEY_LAST_ACCOUNT, accountNumber);
-            getBankManager().updateUserCustomData(data);
-        });
+        saveUserPreference(data -> data.putInt(KEY_LAST_ACCOUNT, accountNumber));
     }
 }

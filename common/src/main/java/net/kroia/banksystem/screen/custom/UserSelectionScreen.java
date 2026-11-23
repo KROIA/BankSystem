@@ -43,7 +43,7 @@ public class UserSelectionScreen extends BankSystemGuiScreen {
     public void onClose() {
         super.onClose();
         if (parent != null) {
-            minecraft.setScreen(parent);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
         }
     }
     @Override

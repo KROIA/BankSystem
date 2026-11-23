@@ -5,9 +5,11 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.*;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
@@ -21,6 +23,11 @@ public class SerializationTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("bankData_codec_round_trip", this::testBankDataCodecRoundTrip);
         addTest("bankAccountData_codec_round_trip", this::testBankAccountDataCodecRoundTrip);
@@ -31,7 +38,10 @@ public class SerializationTests extends TestSuite {
     }
 
     @Override
-    public void setup() {}
+    public void setup() {
+        SharedConstants.tryDetectVersion(); // offline JUnit run: registries for ItemID/ItemStack; no-op in game
+        Bootstrap.bootStrap();
+    }
 
     @Override
     public void teardown() {}

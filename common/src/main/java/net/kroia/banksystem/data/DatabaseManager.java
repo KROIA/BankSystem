@@ -34,6 +34,7 @@ public class DatabaseManager {
     });
 
     public static final Path DATABASE_PATH = Path.of("data", "BankSystem", "Database");
+    public static final String FILE_NAME = "banksystem.db";
 
     // ----- Task #42 (v2.0.7) — external-backup pause/resume state -----
 
@@ -78,7 +79,8 @@ public class DatabaseManager {
     public static final java.util.List<String> SQL_SCHEMA_FILES = java.util.List.of(
             "/sql/BalanceHistory.sql",
             "/sql/TransactionLog.sql",
-            "/sql/PayoutHistory.sql"
+            "/sql/PayoutHistory.sql",
+            "/sql/SuspicionFlag.sql"
     );
 
     public boolean createDatabase(MinecraftServer server) {
@@ -90,67 +92,157 @@ public class DatabaseManager {
                 return false;
             }
         }
-        migratePayoutHistoryColumns();
-        migrateTransactionLogColumns();
+        // BS-274: data-migration step 1 already did this before the server started; this idempotent re-check
+        // only matters for a database file restored from an older save into an already migrated world.
+        try {
+            for (String col : migrateColumns(connection))
+                getLogger().info("[DatabaseManager] Column migration: added " + col);
+            commitTransaction();
+        } catch (SQLException e) {
+            getLogger().error("Column migration failed: " + e.getMessage());
+        }
         return true;
+    }
+
+    /**
+     * BS-274: brings every existing table of {@code banksystem.db} up to the current columns
+     * (PayoutHistory, TransactionLog, SuspicionFlag). Missing tables are skipped; the schema files create
+     * them complete. Run by data-migration step 1 on a plain connection and by {@link #createDatabase}.
+     * Idempotent. Does not commit.
+     *
+     * @return {@code "Table.column"} for each added column
+     */
+    public static java.util.List<String> migrateColumns(Connection c) throws SQLException {
+        java.util.List<String> added = new java.util.ArrayList<>();
+        if (tableExists(c, "PayoutHistory"))
+            migratePayoutHistory(c).forEach(col -> added.add("PayoutHistory." + col));
+        if (tableExists(c, "TransactionLog"))
+            migrateTransactionLog(c).forEach(col -> added.add("TransactionLog." + col));
+        if (tableExists(c, "SuspicionFlag"))
+            migrateSuspicionFlag(c).forEach(col -> added.add("SuspicionFlag." + col));
+        return added;
+    }
+
+    private static boolean tableExists(Connection c, String table) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")) {
+            ps.setString(1, table);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
     }
 
     /**
      * Spec A.9 / B.3 / B.4 (v2.1.0) — column migration for pre-existing worlds.
      * {@code CREATE TABLE IF NOT EXISTS} does not add columns to an existing table,
      * so add the new PayoutHistory columns via {@code ALTER TABLE} when missing.
-     * Idempotent: checks {@code PRAGMA table_info} first.
+     * Idempotent: checks {@code PRAGMA table_info} first. Does not commit.
+     *
+     * @return names of the columns that were added
      */
-    private void migratePayoutHistoryColumns() {
+    private static java.util.List<String> migratePayoutHistory(Connection c) throws SQLException {
         java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
         wanted.put("target_player_name", "TEXT NOT NULL DEFAULT ''");
         wanted.put("target_account_name", "TEXT NOT NULL DEFAULT ''");
         wanted.put("currency_item", "INTEGER NOT NULL DEFAULT 0");
         wanted.put("type", "TEXT NOT NULL DEFAULT 'NORMAL'");
-        try (Statement stmt = connection.createStatement()) {
+        java.util.List<String> added = new java.util.ArrayList<>();
+        try (Statement stmt = c.createStatement()) {
             java.util.Set<String> existing = new java.util.HashSet<>();
             try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(PayoutHistory)")) {
                 while (rs.next()) existing.add(rs.getString("name"));
             }
             for (var e : wanted.entrySet()) {
                 if (existing.contains(e.getKey())) continue;
-                try (Statement alter = connection.createStatement()) {
-                    alter.execute("ALTER TABLE PayoutHistory ADD COLUMN "
-                            + e.getKey() + " " + e.getValue());
-                }
-                getLogger().info("[DatabaseManager] PayoutHistory migration: added column " + e.getKey());
+                stmt.execute("ALTER TABLE PayoutHistory ADD COLUMN " + e.getKey() + " " + e.getValue());
+                added.add(e.getKey());
             }
-            commitTransaction();
-        } catch (SQLException e) {
-            getLogger().error("PayoutHistory column migration failed: " + e.getMessage());
         }
+        return added;
     }
 
     /**
-     * v2.1.0 — column migration for TransactionLog.
-     * Adds source_kind and tag columns when missing (pre-existing worlds).
+     * v2.1.0 (Task #109) — brings an existing TransactionLog table up to the current schema:
+     * adds missing columns, creates the indexes on the new columns and maps legacy
+     * {@code kind} values to {@code type_code}. Idempotent: only rows with
+     * {@code type_code = 0} are mapped, and TRANSFER_OUT amounts are negated in the same
+     * UPDATE that sets the code, so a re-run never negates twice. Does not commit.
+     * Public static so the in-game tests can run it on an in-memory database.
+     *
+     * @return names of the columns that were added
      */
-    private void migrateTransactionLogColumns() {
+    public static java.util.List<String> migrateTransactionLog(Connection c) throws SQLException {
         java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
         wanted.put("source_kind", "TEXT NOT NULL DEFAULT 'UNKNOWN'");
         wanted.put("tag", "TEXT");
-        try (Statement stmt = connection.createStatement()) {
+        wanted.put("type_code", "INTEGER NOT NULL DEFAULT 0");
+        wanted.put("ref", "TEXT");
+        wanted.put("money_amount", "INTEGER");
+        wanted.put("price", "INTEGER");
+        wanted.put("currency_item", "INTEGER");
+        wanted.put("actor_name", "TEXT");
+        wanted.put("balance_after", "INTEGER");
+        wanted.put("virtual_qty", "INTEGER");
+        wanted.put("origin_server", "TEXT"); // BS-256: slave id of the request's server, NULL = master
+        wanted.put("dimension", "TEXT");     // BS-258: block of the action (dimension, x, y, z), NULL when not at a block
+        wanted.put("x", "INTEGER");
+        wanted.put("y", "INTEGER");
+        wanted.put("z", "INTEGER");
+        java.util.List<String> added = new java.util.ArrayList<>();
+        try (Statement stmt = c.createStatement()) {
             java.util.Set<String> existing = new java.util.HashSet<>();
             try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(TransactionLog)")) {
                 while (rs.next()) existing.add(rs.getString("name"));
             }
             for (var e : wanted.entrySet()) {
                 if (existing.contains(e.getKey())) continue;
-                try (Statement alter = connection.createStatement()) {
-                    alter.execute("ALTER TABLE TransactionLog ADD COLUMN "
-                            + e.getKey() + " " + e.getValue());
-                }
-                getLogger().info("[DatabaseManager] TransactionLog migration: added column " + e.getKey());
+                stmt.execute("ALTER TABLE TransactionLog ADD COLUMN " + e.getKey() + " " + e.getValue());
+                added.add(e.getKey());
             }
-            commitTransaction();
-        } catch (SQLException e) {
-            getLogger().error("TransactionLog column migration failed: " + e.getMessage());
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_log_type_ts ON TransactionLog (type_code, ts DESC)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_log_ref ON TransactionLog (ref)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_log_actor_ts ON TransactionLog (actor_uuid, ts DESC)");
+            // Legacy kind -> type_code. TRANSFER_OUT becomes a negative TRANSFER row.
+            stmt.execute("UPDATE TransactionLog SET type_code = 3, amount = -amount "
+                    + "WHERE type_code = 0 AND kind = 'TRANSFER_OUT'");
+            for (String kind : new String[]{"DEPOSIT", "WITHDRAW", "TRANSFER_IN", "PAYOUT", "DIVIDEND",
+                    "SHARE_STAMP", "SHARE_REDEEM", "SHARE_TRADE"}) {
+                int code = net.kroia.banksystem.api.ledger.LedgerType.fromLegacyKind(kind).code();
+                stmt.execute("UPDATE TransactionLog SET type_code = " + code
+                        + " WHERE type_code = 0 AND kind = '" + kind + "'");
+            }
         }
+        return added;
+    }
+
+    /**
+     * Task #110 (v2.2.0) — brings an existing SuspicionFlag table up to the current schema
+     * (same pattern as {@link #migrateTransactionLog}). Add new columns here, never rename.
+     * Idempotent. Does not commit.
+     *
+     * @return names of the columns that were added
+     */
+    public static java.util.List<String> migrateSuspicionFlag(Connection c) throws SQLException {
+        java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
+        wanted.put("severity", "INTEGER NOT NULL DEFAULT 0");
+        wanted.put("amount", "INTEGER NOT NULL DEFAULT 0");
+        wanted.put("ref", "TEXT");
+        wanted.put("details", "TEXT");
+        wanted.put("acknowledged", "INTEGER NOT NULL DEFAULT 0");
+        java.util.List<String> added = new java.util.ArrayList<>();
+        try (Statement stmt = c.createStatement()) {
+            java.util.Set<String> existing = new java.util.HashSet<>();
+            try (ResultSet rs = stmt.executeQuery("PRAGMA table_info(SuspicionFlag)")) {
+                while (rs.next()) existing.add(rs.getString("name"));
+            }
+            for (var e : wanted.entrySet()) {
+                if (existing.contains(e.getKey())) continue;
+                stmt.execute("ALTER TABLE SuspicionFlag ADD COLUMN " + e.getKey() + " " + e.getValue());
+                added.add(e.getKey());
+            }
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_flag_account_ts ON SuspicionFlag (account_number, ts DESC)");
+        }
+        return added;
     }
 
     public void executeSqlFile(String resourcePath) throws IOException, SQLException {
@@ -170,28 +262,27 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * New org.sqlite.JDBC instance, loaded through our mod classloader first (the copy we bundle) and the
+     * system classloader only as fallback. System-first ran JDBC's static init against a second log4j on
+     * Fabric dev runs (sqlite-jdbc is also on the launch classpath there) and spammed StatusLogger traces.
+     */
+    public static Driver newSqliteDriver() throws ReflectiveOperationException {
+        Class<?> cls;
+        try {
+            cls = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            cls = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
+        }
+        return (Driver) cls.getDeclaredConstructor().newInstance();
+    }
+
     public void connectToDatabase(MinecraftServer server) {
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path dbPath = worldPath.resolve(DATABASE_PATH);
-        String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), "banksystem.db");
-        Class<?> driverClass = null;
-        Exception exception = null;
+        String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), FILE_NAME);
         try {
-            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-        } catch (ClassNotFoundException e) {
-            exception = e;
-        }
-        if (exception != null) {
-            try {
-                driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                getLogger().error("Failed to register JDBC driver", e);
-                return;
-            }
-        }
-        try {
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
-            DriverManager.registerDriver(new DriverShim(driver));
+            DriverManager.registerDriver(new DriverShim(newSqliteDriver()));
         } catch (Exception e) {
             getLogger().error("Failed to register JDBC driver", e);
             return;
@@ -218,25 +309,39 @@ public class DatabaseManager {
         }
     }
 
-    public void close() {
-        try {
-            if (connection != null && !connection.isClosed()) {
-                connection.commit();
-                connection.close();
-                getLogger().info("Successfully closed database connection");
-            }
-        } catch (SQLException e) {
-            getLogger().error("Failed to close database connection: " + e.getMessage());
-        }
+    /** Max time {@link #close()} waits for queued DB jobs (ledger rows etc.) to finish. */
+    public static final long CLOSE_DRAIN_TIMEOUT_SECONDS = 30L;
 
-        executor.shutdown();
+    /**
+     * Stops accepting jobs, drains every queued job on the db-worker, then commits and
+     * closes the connection. Draining first is what keeps ledger rows queued during
+     * shutdown from failing with "database connection closed".
+     */
+    public void close() {
+        // A held backup pause would block the worker for the whole drain timeout.
+        endBackupPause();
+
+        ExecutorService worker = getDatabaseThread();
+        worker.shutdown();
         try {
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
+            if (!worker.awaitTermination(CLOSE_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                logError("DB worker did not drain within " + CLOSE_DRAIN_TIMEOUT_SECONDS
+                        + "s at shutdown; dropping " + worker.shutdownNow().size() + " queued job(s)");
             }
         } catch (InterruptedException e) {
-            executor.shutdownNow();
+            worker.shutdownNow();
             Thread.currentThread().interrupt();
+        }
+
+        Connection c = getConnection();
+        try {
+            if (c != null && !c.isClosed()) {
+                c.commit();
+                c.close();
+                logInfo("Successfully closed database connection");
+            }
+        } catch (SQLException e) {
+            logError("Failed to close database connection: " + e.getMessage());
         }
 
         // Task #42 — release the backup safety-timer thread so the JVM can exit cleanly.
@@ -404,17 +509,7 @@ public class DatabaseManager {
                     result.complete(false);
                     return;
                 }
-                String escaped = abs.toString().replace("'", "''");
-                boolean wasInTransaction = !c.getAutoCommit();
-                if (wasInTransaction) {
-                    c.commit();
-                    c.setAutoCommit(true);
-                }
-                try (Statement stmt = c.createStatement()) {
-                    stmt.execute("VACUUM INTO '" + escaped + "'");
-                } finally {
-                    if (wasInTransaction) c.setAutoCommit(false);
-                }
+                vacuumInto(c, abs);
                 logInfo("[BankSystem] snapshot written to " + abs);
                 result.complete(true);
             } catch (SQLException | IOException e) {
@@ -426,6 +521,26 @@ public class DatabaseManager {
             }
         });
         return result;
+    }
+
+    /**
+     * Writes a consistent copy of {@code c}'s database to {@code target} with {@code VACUUM INTO}.
+     * Call it on the thread that owns {@code c}. A connection with auto-commit off has its pending
+     * work committed first (SQLite refuses VACUUM inside a transaction) and gets auto-commit off back
+     * afterwards. The target must not exist yet; single quotes in the path are doubled.
+     */
+    public static void vacuumInto(Connection c, Path target) throws SQLException {
+        String escaped = target.toAbsolutePath().toString().replace("'", "''");
+        boolean wasInTransaction = !c.getAutoCommit();
+        if (wasInTransaction) {
+            c.commit();
+            c.setAutoCommit(true);
+        }
+        try (Statement stmt = c.createStatement()) {
+            stmt.execute("VACUUM INTO '" + escaped + "'");
+        } finally {
+            if (wasInTransaction) c.setAutoCommit(false);
+        }
     }
 
     // ========================================================================

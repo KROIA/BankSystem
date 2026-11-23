@@ -9,13 +9,15 @@ import net.kroia.banksystem.client.company.ClientSymbolRegistry;
 import net.kroia.banksystem.client.company.SharePresetRegistry;
 import net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.MultiBufferSource; // mc<=26.1
+import net.minecraft.client.renderer.RenderType; // mc<=1.21.10
+//import net.minecraft.client.renderer.rendertype.RenderType; import net.minecraft.client.renderer.rendertype.RenderTypes; // mc>=1.21.11
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
@@ -23,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
@@ -56,10 +59,14 @@ import java.util.function.Function;
  */
 public final class StampedShareRenderer {
 
-    private static final ResourceLocation BLANK_CARD =
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/blank_share");
-    private static final ResourceLocation STAMPED_CARD =
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/stamped_share");
+    private static final ResourceLocation BLANK_CARD = // mc<=1.21.10
+    //private static final Identifier BLANK_CARD = // mc>=1.21.11
+            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/blank_share"); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/blank_share"); // mc>=1.21.11
+    private static final ResourceLocation STAMPED_CARD = // mc<=1.21.10
+    //private static final Identifier STAMPED_CARD = // mc>=1.21.11
+            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/stamped_share"); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "item/stamped_share"); // mc>=1.21.11
 
     /** Card thickness — identical to vanilla item/generated flat items (1/16, centered). */
     private static final float Z_BACK = 7.5f / 16.0f;
@@ -89,17 +96,29 @@ public final class StampedShareRenderer {
     private StampedShareRenderer() {}
 
     /**
+     * Draw target. Geometry is handed over as a callback so it can be drawn immediately
+     * (MultiBufferSource) or deferred (1.21.9+ SubmitNodeCollector#submitCustomGeometry).
+     */
+    public interface Sink {
+        void draw(RenderType type, BiConsumer<PoseStack.Pose, VertexConsumer> geometry);
+    }
+
+    /**
      * Platform entry point (Fabric {@code DynamicItemRenderer} / NeoForge
      * {@code BlockEntityWithoutLevelRenderer#renderByItem}). The pose already carries
      * the display-context transform from the item model JSON plus the vanilla
      * {@code translate(-0.5)} — geometry below lives in [0..1] model space.
      */
-    public static void render(ItemStack stack, ItemDisplayContext ctx, PoseStack poseStack,
-                              MultiBufferSource buffers, int light, int overlay) {
-        Function<ResourceLocation, TextureAtlasSprite> atlas =
-                Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS);
-        VertexConsumer vc = buffers.getBuffer(Sheets.cutoutBlockSheet());
-        PoseStack.Pose pose = poseStack.last();
+    public static void render(ItemStack stack, ItemDisplayContext ctx, PoseStack poseStack, // mc<=26.1
+                              MultiBufferSource buffers, int light, int overlay) { // mc<=26.1
+        render(stack, (type, geometry) -> geometry.accept(poseStack.last(), buffers.getBuffer(type)), light, overlay); // mc<=26.1
+    } // mc<=26.1
+
+    public static void render(ItemStack stack, Sink sink, int light, int overlay) {
+        Function<ResourceLocation, TextureAtlasSprite> atlas = // mc<=1.21.10
+        //Function<Identifier, TextureAtlasSprite> atlas = // mc>=1.21.11
+                Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS); // mc<=1.21.8
+                //Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS)::getSprite; // mc>=1.21.9
 
         Integer companyId = StampedShareItem.getCompanyId(stack);
         ShareVisuals visuals = null;
@@ -117,14 +136,17 @@ public final class StampedShareRenderer {
         TextureAtlasSprite card = atlas.apply(companyId != null ? STAMPED_CARD : BLANK_CARD);
         int cardTint = visuals != null ? opaque(visuals.getBaseTint()) : 0xFFFFFFFF;
         List<Quad> geometry = CARD_GEOMETRY.computeIfAbsent(card, StampedShareRenderer::buildCardGeometry);
-        for (Quad q : geometry) {
-            emit(vc, pose, q, card, cardTint, light, overlay);
-        }
+        sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> { // mc<=26.1
+        //sink.draw(Sheets.cutoutBlockItemSheet(), (pose, vc) -> { // mc>=26.2
+            for (Quad q : geometry) {
+                emit(vc, pose, q, card, cardTint, light, overlay);
+            }
+        });
 
         if (visuals != null) {
-            drawSymbol(buffers, vc, pose, atlas, visuals.getBgLayer(), BG_X, BG_Y, BG_SIZE,
+            drawSymbol(sink, atlas, visuals.getBgLayer(), BG_X, BG_Y, BG_SIZE,
                     DECAL_EPS, light, overlay);
-            drawSymbol(buffers, vc, pose, atlas, visuals.getFgLayer(), FG_X, FG_Y, FG_SIZE,
+            drawSymbol(sink, atlas, visuals.getFgLayer(), FG_X, FG_Y, FG_SIZE,
                     2 * DECAL_EPS, light, overlay);
         }
     }
@@ -136,9 +158,9 @@ public final class StampedShareRenderer {
      * registered under {@code banksystem:dynamic/share_symbol/<id>} via
      * {@link net.minecraft.client.renderer.RenderType#entityCutoutNoCull}.
      */
-    private static void drawSymbol(MultiBufferSource buffers, VertexConsumer atlasVc,
-                                   PoseStack.Pose pose,
-                                   Function<ResourceLocation, TextureAtlasSprite> atlas,
+    private static void drawSymbol(Sink sink,
+                                   Function<ResourceLocation, TextureAtlasSprite> atlas, // mc<=1.21.10
+                                   //Function<Identifier, TextureAtlasSprite> atlas, // mc>=1.21.11
                                    ShareVisuals.ShareLayer layer,
                                    float x0, float y0, float size, float eps,
                                    int light, int overlay) {
@@ -151,24 +173,32 @@ public final class StampedShareRenderer {
 
         if (SharePresetRegistry.isBundledId(id)) {
             // Bundled symbol: render via blocks atlas sprite.
-            TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath(
+            TextureAtlasSprite sprite = atlas.apply(ResourceLocation.fromNamespaceAndPath( // mc<=1.21.10
+            //TextureAtlasSprite sprite = atlas.apply(Identifier.fromNamespaceAndPath( // mc>=1.21.11
                     BankSystemMod.MOD_ID, "item/share_symbol/" + id));
-            emit(atlasVc, pose, new Quad(
-                    new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
-                    new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), sprite, tint, light, overlay);
-            emit(atlasVc, pose, new Quad(
-                    new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
-                    new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), sprite, tint, light, overlay);
+            sink.draw(Sheets.cutoutBlockSheet(), (pose, vc) -> { // mc<=26.1
+            //sink.draw(Sheets.cutoutBlockItemSheet(), (pose, vc) -> { // mc>=26.2
+                emit(vc, pose, new Quad(
+                        new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
+                        new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), sprite, tint, light, overlay);
+                emit(vc, pose, new Quad(
+                        new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
+                        new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), sprite, tint, light, overlay);
+            });
         } else if (ClientSymbolRegistry.hasDynamicTexture(id)) {
             // Dynamic synced symbol: render via DynamicTexture registered with TextureManager.
-            ResourceLocation dynRl = ClientSymbolRegistry.getDynamicRL(id);
-            VertexConsumer dynVc = buffers.getBuffer(RenderType.entityCutoutNoCull(dynRl));
-            emitRaw(dynVc, pose, new Quad(
-                    new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
-                    new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), tint, light, overlay);
-            emitRaw(dynVc, pose, new Quad(
-                    new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
-                    new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), tint, light, overlay);
+            ResourceLocation dynRl = ClientSymbolRegistry.getDynamicRL(id); // mc<=1.21.10
+            //Identifier dynRl = ClientSymbolRegistry.getDynamicRL(id); // mc>=1.21.11
+            sink.draw(RenderType.entityCutoutNoCull(dynRl), (pose, vc) -> { // mc<=1.21.10
+            //sink.draw(RenderTypes.entityCutoutNoCull(dynRl), (pose, vc) -> { // mc>=1.21.11 mc<=1.21.11
+            //sink.draw(RenderTypes.entityCutout(dynRl), (pose, vc) -> { // mc>=26.1
+                emitRaw(vc, pose, new Quad(
+                        new float[]{x0, y0, zf, x1, y0, zf, x1, y1, zf, x0, y1, zf},
+                        new float[]{0, 1, 1, 1, 1, 0, 0, 0}, 0, 0, 1), tint, light, overlay);
+                emitRaw(vc, pose, new Quad(
+                        new float[]{x0, y0, zb, x0, y1, zb, x1, y1, zb, x1, y0, zb},
+                        new float[]{0, 1, 0, 0, 1, 0, 1, 1}, 0, 0, -1), tint, light, overlay);
+            });
         }
         // else: symbol is in ClientSymbolRegistry but DynamicTexture not yet registered
         //       (bytes arrived, but registration is scheduled for next render tick).

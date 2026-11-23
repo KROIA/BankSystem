@@ -4,9 +4,9 @@ import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
@@ -26,6 +26,11 @@ public class PayoutArrsRoundTripTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.NETWORKING;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -174,7 +179,7 @@ public class PayoutArrsRoundTripTests extends TestSuite {
         if (in.accountNr() != ind.accountNr()) return fail("GetCompanyInfoByAccountInput mismatch: " + ind);
 
         AsyncCompanyManager.CompanyInfoOutput out = new AsyncCompanyManager.CompanyInfoOutput(
-                true, 5, "Acme", 88, 10_000L, 0L, "d", List.of("Alice"), (short) 0);
+                true, 5, "Acme", 88, 10_000L, 0L, "d", List.of("Alice"), (short) 0, "");
         AsyncCompanyManager.CompanyInfoOutput outd = roundTrip(AsyncCompanyManager.CompanyInfoOutput.STREAM_CODEC, out);
         if (!outd.name().equals("Acme")) return fail("CompanyInfoOutput name lost");
         return pass("GetCompanyInfoByAccount round-trip preserved fields.");

@@ -12,7 +12,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -39,7 +40,8 @@ import java.util.UUID;
  */
 public class ConverterWithdrawPacket extends BankSystemNetworkPacket {
 
-    public static final Type<ConverterWithdrawPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "converter_withdraw_packet"));
+    public static final Type<ConverterWithdrawPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "converter_withdraw_packet")); // mc<=1.21.10
+    //public static final Type<ConverterWithdrawPacket> TYPE = new Type<>(Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "converter_withdraw_packet")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, ConverterWithdrawPacket> STREAM_CODEC = StreamCodec.composite(
             ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap::new), p -> p.requested,
@@ -107,6 +109,11 @@ public class ConverterWithdrawPacket extends BankSystemNetworkPacket {
         // amounts.
         MinecraftServer server = UtilitiesPlatform.getServer();
         Map<ItemID, Long> notDispensed = DropItemsInPlayerInventoryRequest.dropItems(server, playerUUID, validated, true);
+        // Task #124: NoteFlow converter_out for what actually came out.
+        Map<ItemID, Long> dispensed = new HashMap<>(validated);
+        notDispensed.forEach((id, n) -> dispensed.computeIfPresent(id, (k, v) -> v - n > 0 ? v - n : null));
+        net.kroia.banksystem.data.NoteFlowLog.converter(false, playerUUID, dispensed,
+                net.kroia.banksystem.data.DiagnosticsDatabase.at(sender.level(), sender.blockPosition()));
         if (!notDispensed.isEmpty()) {
             long refund = 0L;
             for (Map.Entry<ItemID, Long> e : notDispensed.entrySet()) {

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -10,9 +11,9 @@ import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.BankCraftingMatcher;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -197,10 +198,8 @@ public class BankCraftingMatcherTests extends TestSuite {
     /** Resolves a vanilla crafting-recipe holder by path (e.g. "bucket"), or null. */
     @SuppressWarnings("unchecked")
     private static RecipeHolder<CraftingRecipe> craftingRecipe(Level level, String path) {
-        return (RecipeHolder<CraftingRecipe>) level.getRecipeManager()
-                .byKey(net.minecraft.resources.ResourceLocation.withDefaultNamespace(path))
-                .filter(holder -> holder.value() instanceof CraftingRecipe)
-                .orElse(null);
+        return BankCraftingRecipes.byId(level, net.minecraft.resources.ResourceLocation.withDefaultNamespace(path)); // mc<=1.21.10
+        //return BankCraftingRecipes.byId(level, net.minecraft.resources.Identifier.withDefaultNamespace(path)); // mc>=1.21.11
     }
 
     // ========================================================================
@@ -528,12 +527,12 @@ public class BankCraftingMatcherTests extends TestSuite {
         // Informational: is the exclusion load-bearing on this server, or vacuous?
         ItemStack moneyStack = money.getStack();
         boolean anyIngredientAcceptsMoney = false;
-        for (RecipeHolder<CraftingRecipe> holder : level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING)) {
+        for (RecipeHolder<CraftingRecipe> holder : BankCraftingRecipes.all(level)) {
             CraftingRecipe recipe = holder.value();
             if (!(recipe instanceof ShapedRecipe) && !(recipe instanceof ShapelessRecipe))
                 continue;
-            for (Ingredient ingredient : recipe.getIngredients()) {
-                if (!ingredient.isEmpty() && ingredient.test(moneyStack)) {
+            for (Ingredient ingredient : BankCraftingRecipes.ingredients(recipe)) {
+                if (!BankCraftingRecipes.isEmpty(ingredient) && ingredient.test(moneyStack)) {
                     anyIngredientAcceptsMoney = true;
                     break;
                 }
@@ -771,11 +770,11 @@ public class BankCraftingMatcherTests extends TestSuite {
         List<RecipeHolder<CraftingRecipe>> bucketRecipes =
                 BankCraftingMatcher.findRecipesForProduct(level, new ItemStack(Items.BUCKET));
         boolean containsVanillaBucket = bucketRecipes.stream()
-                .anyMatch(holder -> holder.id().getPath().equals("bucket"));
+                .anyMatch(holder -> BankCraftingRecipes.id(holder).getPath().equals("bucket"));
         TestResult r = assertTrue("bucket lookup contains the vanilla bucket recipe", containsVanillaBucket);
         if (!r.passed()) return r;
         for (RecipeHolder<CraftingRecipe> holder : bucketRecipes) {
-            if (!holder.value().getResultItem(level.registryAccess()).is(Items.BUCKET))
+            if (!BankCraftingRecipes.resultOf(holder, level.registryAccess()).is(Items.BUCKET))
                 return fail("lookup returned a recipe that does not produce a bucket: " + holder.id());
         }
 

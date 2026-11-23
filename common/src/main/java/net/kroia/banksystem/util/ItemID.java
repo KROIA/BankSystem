@@ -1,5 +1,6 @@
 package net.kroia.banksystem.util;
 
+import net.kroia.modutilities.NbtCompat;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
@@ -284,7 +285,7 @@ public class ItemID implements ServerSaveable {
     public boolean load(CompoundTag tag) {
         if(!tag.contains(compoundTagKey_ID))
             return false;
-        id = tag.getShort(compoundTagKey_ID);
+        id = NbtCompat.getShort(tag, compoundTagKey_ID);
         // Resolve the real name immediately if possible. NBT load can run before the item
         // registry / ItemIDManager is populated — in that case tryUpdateNameCache() stores the
         // numeric id as a marked placeholder (see nameIsPlaceholder) and getName() self-heals

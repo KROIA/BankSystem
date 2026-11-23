@@ -1,5 +1,7 @@
 package net.kroia.banksystem.minecraft.block.custom;
 
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankUploadBlockEntity;
 import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
@@ -23,7 +25,6 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.NotNull;
@@ -69,10 +70,10 @@ public class BankUploadBlock extends Block implements EntityBlock {
     public static final String NAME = "bank_upload_block";
     public static final EnumProperty<ConnectionState> CONNECTION_STATE = EnumProperty.create("connection_state", ConnectionState.class);
     public static final EnumProperty<SendingState> SENDING_STATE = EnumProperty.create("sending_state", SendingState.class);
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
 
     public BankUploadBlock() {
-        super(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.CHEST).isRedstoneConductor((state, level, pos) -> false));
+        super(RegistryCompat.blockProperties(Properties.ofFullCopy(net.minecraft.world.level.block.Blocks.CHEST).isRedstoneConductor((state, level, pos) -> false), BankSystemMod.id(NAME)));
         this.registerDefaultState(this.stateDefinition.any().setValue(CONNECTION_STATE, ConnectionState.NOT_CONNECTED));
         this.registerDefaultState(this.stateDefinition.any().setValue(SENDING_STATE, SendingState.NOT_SENDING));
         this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
@@ -92,25 +93,22 @@ public class BankUploadBlock extends Block implements EntityBlock {
     }
 
 
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        // Drop items only if the block is replaced by a different block
-        if (!state.is(newState.getBlock())) {
-            BlockEntity blockEntity = level.getBlockEntity(pos);
-            if (blockEntity instanceof BankUploadBlockEntity storageBlockEntity) {
-                storageBlockEntity.dropContents();
-            }
-            super.onRemove(state, level, pos, newState, isMoving); // Ensure the block gets properly removed
-        }
-    }
+    // Drops are done by the block entity (preRemoveSideEffects from 1.21.5).
+    @Override // mc<=1.21.4
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) { // mc<=1.21.4
+        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof BankUploadBlockEntity be) be.dropContents(); // mc<=1.21.4
+        super.onRemove(state, level, pos, newState, isMoving); // mc<=1.21.4
+    } // mc<=1.21.4
 
 
     @Override
-    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean isMoving) {
-       if (level.isClientSide)
+    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean isMoving) { // mc<=1.21.1
+    //public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, @org.jetbrains.annotations.Nullable net.minecraft.world.level.redstone.Orientation orientation, boolean isMoving) { // mc>=1.21.2
+       if (level.isClientSide())
             return;
         level.scheduleTick(pos, this, 4);
-        super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes
+        super.neighborChanged(state, level, pos, block, fromPos, isMoving); // Call super to handle other changes // mc<=1.21.1
+        //super.neighborChanged(state, level, pos, block, orientation, isMoving); // Call super to handle other changes // mc>=1.21.2
     }
 
     @Override

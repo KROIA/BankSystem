@@ -7,9 +7,9 @@ import net.kroia.banksystem.data.filter.EqualityFilter;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -27,6 +27,11 @@ public class DatabaseTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.DATABASE;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -50,13 +55,7 @@ public class DatabaseTests extends TestSuite {
     @Override
     public void setup() {
         try {
-            Class<?> driverClass;
-            try {
-                driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                driverClass = DatabaseTests.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+            Driver driver = DatabaseManager.newSqliteDriver();
             try {
                 DriverManager.registerDriver(new DriverShim(driver));
             } catch (Exception ignored) {}

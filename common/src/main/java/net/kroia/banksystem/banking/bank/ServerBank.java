@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bank;
 
+import net.kroia.modutilities.NbtCompat;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemMod;
@@ -222,10 +223,12 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if (row == null) return null;
         ExternalCurrencyProvider provider =
                 BankSystemMod.getAPI().getCurrencyProvider(row.ref().providerId());
+        // Task #146: a suspended binding takes the degraded path, so every write through it is
+        // refused (FAILED_EXTERNAL_UNAVAILABLE) and reads hide the external balance.
         ExternalAccount external =
-                (provider != null && provider.isAvailable()) ? provider.open(row.ref()) : null;
+                (!row.suspended() && provider != null && provider.isAvailable()) ? provider.open(row.ref()) : null;
         if (external == null) {
-            maybeWarnProviderUnavailable(row);
+            if (!row.suspended()) maybeWarnProviderUnavailable(row);
             return new BoundView(row, null, 0L, 1L, row.dustBalance());
         }
         // Under the transactional-lock protocol (Task #33 v2.0.5+), locked funds
@@ -252,10 +255,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
             BACKEND_INSTANCES.LOGGER.warn("[ServerBank] Bound slot " + accountId + "/"
                     + itemID + " references external provider '" + row.ref().providerId()
-                    + "' which is not currently available (mod uninstalled or adapter not "
-                    + "loaded). Reads return degraded values (free=0, locked=" + row.lockedBalance()
+                    + "' which is not currently available (mod missing or disabled in Integrations "
+                    + "settings). Reads return degraded values (free=0, locked=" + row.lockedBalance()
                     + "); writes fail with FAILED_EXTERNAL_UNAVAILABLE. The binding row is "
-                    + "preserved — reinstall the mod to resume operation. "
+                    + "preserved — install or enable the mod to resume operation. "
                     + "This warning fires once per slot per session.");
         }
     }
@@ -434,6 +437,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
     // Weak-lock semantics — lockedBalance is advisory; callers verify before withdrawing locked funds
     @Override
     public boolean setBalance(long balance) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return rawLogged("setBalance", () -> setBalance(balance)); // BS-254
         // Task #33: bound branch. Set the free pool (external + dust) to `balance`
         // — locked stays untouched (it's a separate axis under the transactional
         // model). Unbound path below is byte-for-byte unchanged.
@@ -493,6 +497,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus deposit(long amount) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return rawLogged("deposit", () -> deposit(amount)); // BS-254
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Dust-aware add to the free pool. The whole-native
         // portion goes through external.deposit; sub-native remainder is persisted
         // to row.dustBalance so no fraction is silently dropped. Unbound path unchanged.
@@ -560,6 +566,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdraw(long amount) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return rawLogged("withdraw", () -> withdraw(amount)); // BS-254
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Dust-aware subtract from the free pool.
         // Unbound path unchanged.
         BoundView bv = resolveBound();
@@ -612,6 +620,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLocked(long amount) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return rawLogged("withdrawLocked", () -> withdrawLocked(amount)); // BS-254
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. External balance was already decremented on lock —
         // just decrement local locked. Unbound path unchanged.
         BoundView bv = resolveBound();
@@ -661,6 +671,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus withdrawLockedPrefered(long amount) {
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) { final long a = amount; return rawLogged("withdrawLockedPrefered", () -> withdrawLockedPrefered(a)); } // BS-254
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Discount from locked first (no external op — the
         // funds were already deducted at lock time), then fall back to the free
         // pool via the dust-aware split. Unbound path unchanged.
@@ -729,6 +741,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transfer(long amount, @NotNull ISyncServerBank other) {
+        // BS-254: the TRANSFER pair covers both banks; the inner deposit / withdraw write no RAW_CHANGE row
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> transfer(amount, other));
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into primitives (withdraw + deposit) so we
         // never have to special-case bound-source-to-bound-target. Unbound path unchanged.
         BindingRow boundRow = lookupBindingRow();
@@ -765,34 +780,46 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
 
     /**
-     * Task #44 (v2.1.0) — Transaction Ledger write for a successful transfer. Two rows:
-     * one TRANSFER_OUT on the source account and one TRANSFER_IN on the destination.
-     * Actor is unknown at this layer (the transfer primitive carries no player context),
-     * so both rows are actor-null. Best-effort: manager missing (slave / shutdown) or
-     * counterparty not a {@code ServerBank} (unknown accountId) simply skips the write.
+     * BS-254: runs one of this bank's own value-moving calls (re-entered inside {@code withoutRawLog}) and writes a
+     * RAW_CHANGE row for the change of the total balance, so a caller that logs nothing still leaves a row.
+     */
+    private <T> T rawLogged(String op, java.util.function.Supplier<T> body) {
+        long before = getTotalBalance();
+        T result = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(body);
+        long after = getTotalBalance();
+        net.kroia.banksystem.banking.ledger.TransactionLedger.logDelta(accountId, net.kroia.banksystem.api.ledger.LedgerType.RAW_CHANGE, itemID, after - before, after, op);
+        return result;
+    }
+
+    /**
+     * Task #44 / #109 (v2.1.0) — Transaction Ledger write for a successful transfer. Two
+     * {@code TRANSFER} rows: {@code -amount} on the source account and {@code +amount} on the
+     * destination, each naming the other account. The actor comes from
+     * {@link net.kroia.banksystem.banking.ledger.TransactionLedger#currentActor()} (SYSTEM if the
+     * caller set none). Best-effort: a counterparty that is not an attached {@code ServerBank}
+     * simply skips the write.
      */
     private void logTransferLedger(ISyncServerBank other, long amount) {
-        if (amount <= 0) return;
-        net.kroia.banksystem.data.table.TransactionLogManager mgr =
-                BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null) return;
+        if (amount <= 0 || net.kroia.banksystem.banking.ledger.TransactionLedger.isTransferLogSuppressed()) return;
         if (!(other instanceof ServerBank otherBank)) return;
         int srcAccount = this.accountId;
         int dstAccount = otherBank.accountId;
         if (srcAccount == UNATTACHED_ACCOUNT_ID || dstAccount == UNATTACHED_ACCOUNT_ID) return;
-        long now = System.currentTimeMillis();
+        net.kroia.banksystem.api.ledger.LedgerActor actor =
+                net.kroia.banksystem.banking.ledger.TransactionLedger.currentActor();
+        // Normally TRANSFER; UNKNOWN_LEGACY + note when a slave sent a rejected code.
+        net.kroia.banksystem.banking.ledger.TransactionLedger.Resolved kind =
+                net.kroia.banksystem.banking.ledger.TransactionLedger.currentTransferType();
         short srcItem = this.itemID == null ? 0 : this.itemID.getShort();
         short dstItem = otherBank.itemID == null ? srcItem : otherBank.itemID.getShort();
-        try {
-            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.transfer(
-                    srcAccount, null,
-                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.TRANSFER_OUT,
-                    srcItem, amount, dstAccount, now));
-            mgr.save(net.kroia.banksystem.data.table.record.TransactionLogRecord.transfer(
-                    dstAccount, null,
-                    net.kroia.banksystem.data.table.record.TransactionLogRecord.Kind.TRANSFER_IN,
-                    dstItem, amount, srcAccount, now));
-        } catch (RuntimeException ignored) { }
+        net.kroia.banksystem.banking.ledger.TransactionLedger.write(
+                net.kroia.banksystem.data.table.record.TransactionLogRecord.of(srcAccount,
+                        kind.type(), srcItem, -amount, actor,
+                        dstAccount, null, null, kind.note(), this.getTotalBalance()));
+        net.kroia.banksystem.banking.ledger.TransactionLedger.write(
+                net.kroia.banksystem.data.table.record.TransactionLogRecord.of(dstAccount,
+                        kind.type(), dstItem, amount, actor,
+                        srcAccount, null, null, kind.note(), otherBank.getTotalBalance()));
     }
     @Override
     public BankStatus transfer(long amount, int toAccount)
@@ -841,6 +868,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transferFromLocked(long amount, @NotNull ISyncServerBank other) {
+        // BS-254: the TRANSFER pair covers both banks; the inner deposit / withdraw write no RAW_CHANGE row
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) return net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> transferFromLocked(amount, other));
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into withdrawLocked + deposit primitives.
         // Unbound path unchanged.
         BindingRow boundRow = lookupBindingRow();
@@ -849,7 +879,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
             BankStatus w = this.withdrawLocked(amount);
             if (w != BankStatus.SUCCESS) return w;
             BankStatus d = other.deposit(amount);
-            if (d == BankStatus.SUCCESS) return BankStatus.SUCCESS;
+            if (d == BankStatus.SUCCESS) {
+                logTransferLedger(other, amount); // BS-254
+                return BankStatus.SUCCESS;
+            }
             // Rollback: put the funds back on the external side and re-lock them.
             if (!this.deposit(amount).equals(BankStatus.SUCCESS)) {
                 if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
@@ -876,6 +909,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
             changeFlag = true;
+            logTransferLedger(other, amount); // BS-254
             return BankStatus.SUCCESS;
         }
         lockedBalance += amount;
@@ -926,6 +960,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
 
     @Override
     public BankStatus transferFromLockedPrefered(long amount, @NotNull ISyncServerBank other) {
+        // BS-254: the TRANSFER pair covers both banks; the inner deposit / withdraw write no RAW_CHANGE row
+        if (net.kroia.banksystem.banking.ledger.TransactionLedger.rawLogDue(accountId)) { final long a = amount; return net.kroia.banksystem.banking.ledger.TransactionLedger.withoutRawLog(() -> transferFromLockedPrefered(a, other)); }
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocksTagged(accountId)) return BankStatus.FAILED_ACCOUNT_FROZEN; // Task #117
         // Task #33: bound branch. Decompose into withdrawLockedPrefered + deposit.
         // Unbound path unchanged.
         BindingRow boundRow = lookupBindingRow();
@@ -935,7 +972,10 @@ public class ServerBank implements ServerSaveable, IServerBank {
             BankStatus w = this.withdrawLockedPrefered(amount);
             if (w != BankStatus.SUCCESS) return w;
             BankStatus d = other.deposit(amount);
-            if (d == BankStatus.SUCCESS) return BankStatus.SUCCESS;
+            if (d == BankStatus.SUCCESS) {
+                logTransferLedger(other, amount); // BS-254
+                return BankStatus.SUCCESS;
+            }
             // Rollback: deposit back into the external side and restore the pre-op lock.
             if (!this.deposit(amount).equals(BankStatus.SUCCESS)) {
                 if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
@@ -963,6 +1003,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
             BankStatus otherBankStatus = other.deposit(origAmount);
             if(otherBankStatus == BankStatus.SUCCESS) {
                 addBalanceInternal(-amount);
+                logTransferLedger(other, origAmount); // BS-254
                 return BankStatus.SUCCESS;
             }
             lockedBalance = lastLocked;
@@ -973,6 +1014,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         BankStatus otherBankStatus = other.deposit(amount);
         if(otherBankStatus == BankStatus.SUCCESS) {
             changeFlag = true;
+            logTransferLedger(other, amount); // BS-254
             return BankStatus.SUCCESS;
         }
         lockedBalance = lastLocked;
@@ -1471,9 +1513,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
             return false;
 
         itemID = ItemID.INVALID_ID;
-        if(tag.contains("itemID",Tag.TAG_STRING))
+        if(NbtCompat.contains(tag, "itemID",Tag.TAG_STRING))
         {
-            String itemIDStr = tag.getString("itemID");
+            String itemIDStr = NbtCompat.getString(tag, "itemID");
             if(itemIDStr.equals("$") || itemIDStr.equals("money")) {
                 itemID = ItemID.getFromItemStack(BankSystemItems.MONEY.get().getDefaultInstance());
             }
@@ -1485,7 +1527,7 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }
         else
         {
-            CompoundTag itemTag = tag.getCompound("itemID");
+            CompoundTag itemTag = NbtCompat.getCompound(tag, "itemID");
             itemID = ItemID.createFromTag(itemTag);
             // Canonicalize at load time: the saved ID may have been merged into another ID
             // (alias) by a volatile-component merge — possibly in an EARLIER session, before
@@ -1497,8 +1539,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         }
 
 
-        long balance = tag.getLong("balance");
-        lockedBalance = tag.getLong("lockedBalance");
+        long balance = NbtCompat.getLong(tag, "balance");
+        lockedBalance = NbtCompat.getLong(tag, "lockedBalance");
         setBalanceInternal(balance);
         // Issue #61: when the item this bank held can no longer be resolved (its mod was
         // removed, or a removed mod's data component broke the saved template's parse), the
@@ -1509,7 +1551,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         if (!itemID.isValid() && (balance > 0 || lockedBalance > 0)
                 && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
             BACKEND_INSTANCES.LOGGER.warn("[ServerBank] Dropping a bank balance for an unresolvable item '"
-                    + itemID.getName() + "' (balance=" + balance + ", locked=" + lockedBalance + "). "
+                    + itemID.getName() + "' (balance=" + getFormattedAmountStatic(balance)
+                    + ", locked=" + getFormattedAmountStatic(lockedBalance) + "). "
                     + "Its mod is not installed on this server, so the balance cannot be restored and "
                     + "will be gone on the next save — this matches vanilla's handling of unknown items. "
                     + "Re-install the mod BEFORE loading/saving this world if you need to recover it.");
@@ -1546,11 +1589,15 @@ public class ServerBank implements ServerSaveable, IServerBank {
             boolean origTo1ChangeFlag = castedTo1.changeFlag;
             boolean origTo2ChangeFlag = castedTo2.changeFlag;
 
-            // Try to transfer from locked balance
-            BankStatus BankStatus1 = from1.transferFromLockedPrefered(amount1, to1);
-            BankStatus BankStatus2 = from2.transferFromLockedPrefered(amount2, to2);
+            // Try to transfer from locked balance; BS-254: the TRANSFER pairs are written once both legs stay
+            BankStatus[] legs = net.kroia.banksystem.banking.ledger.TransactionLedger.withoutTransferLog(() -> new BankStatus[]{
+                    from1.transferFromLockedPrefered(amount1, to1), from2.transferFromLockedPrefered(amount2, to2)});
+            BankStatus BankStatus1 = legs[0];
+            BankStatus BankStatus2 = legs[1];
             if(BankStatus1 == BankStatus.SUCCESS && BankStatus2 == BankStatus.SUCCESS)
             {
+                castedFrom1.logTransferLedger(to1, amount1);
+                castedFrom2.logTransferLedger(to2, amount2);
                 return BankStatus.SUCCESS;
             }
             // If not possible, revert changes
@@ -1749,7 +1796,8 @@ public class ServerBank implements ServerSaveable, IServerBank {
         String exponents = "kMGTPEZY";
 
         if(amount < 0) {
-            BACKEND_INSTANCES.LOGGER.warn("[ServerBank] getNormalizedAmountStatic called with negative amount: " + amount);
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.warn("[ServerBank] getNormalizedAmountStatic called with negative amount: " + amount);
             return "0";
         }
         if(amount == 0)

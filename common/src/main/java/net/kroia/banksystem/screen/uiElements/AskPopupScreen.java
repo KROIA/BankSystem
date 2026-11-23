@@ -7,6 +7,7 @@ import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.Label;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public class AskPopupScreen extends BankSystemGuiScreen {
@@ -15,17 +16,42 @@ public class AskPopupScreen extends BankSystemGuiScreen {
     public static final Component YES = Component.translatable("gui."+BankSystemMod.MOD_ID+".ask_popup.yes");
     public static final Component NO = Component.translatable("gui."+BankSystemMod.MOD_ID+".ask_popup.no");
 
-    private final GuiScreen parent;
+    private static final String UNSAVED_PREFIX = "gui."+BankSystemMod.MOD_ID+".unsaved_changes.";
+    public static final Component UNSAVED_TITLE = Component.translatable(UNSAVED_PREFIX+"title");
+    public static final Component UNSAVED_MESSAGE = Component.translatable(UNSAVED_PREFIX+"message");
+    public static final Component UNSAVED_DISCARD = Component.translatable(UNSAVED_PREFIX+"discard");
+    public static final Component UNSAVED_SAVE = Component.translatable(UNSAVED_PREFIX+"save");
+    public static final Component UNSAVED_SAVE_FAILED = Component.translatable(UNSAVED_PREFIX+"save_failed");
+
+    /**
+     * Shared unsaved-changes prompt: Discard (red, left) / Save (green, right).
+     * Both callbacks run deferred, after the popup has switched back to {@code parent},
+     * so they may save / close {@code parent} as if called from it directly.
+     * Esc on the popup returns to {@code parent} without running either callback.
+     */
+    public static void openUnsavedChangesPopup(Screen parent, Runnable onDiscard, Runnable onSave) {
+        AskPopupScreen popup = warningPopup(parent,
+                () -> runLater(onDiscard),
+                () -> runLater(onSave),
+                UNSAVED_TITLE.getString(), UNSAVED_MESSAGE.getString());
+        popup.setButtonLabels(UNSAVED_DISCARD.getString(), UNSAVED_SAVE.getString());
+        switchScreen(popup);
+    }
+
+    private final Screen parent;
 
     private final Frame frame;
     private final Label titleLabel;
     private final Label msgLabel;
     private final Button yesButton;
     private final Button noButton;
+    private Button cancelButton = null;
+    private Runnable onCancel = null;
 
     private int frameWidth = 200;
     private int frameHeight = 100;
-    public AskPopupScreen(GuiScreen parent, Runnable onYes, Runnable onNo, String title, String message) {
+    /** Any parent screen, e.g. a container screen. */
+    public AskPopupScreen(Screen parent, Runnable onYes, Runnable onNo, String title, String message) {
         super(TITLE);
         this.parent = parent;
 
@@ -60,10 +86,56 @@ public class AskPopupScreen extends BankSystemGuiScreen {
      */
     public static AskPopupScreen warningPopup(GuiScreen parent, Runnable onYes, Runnable onNo,
                                               String title, String message) {
+        return warningPopup((Screen) parent, onYes, onNo, title, message);
+    }
+
+    public static AskPopupScreen warningPopup(Screen parent, Runnable onYes, Runnable onNo,
+                                              String title, String message) {
         AskPopupScreen popup = new AskPopupScreen(parent, onYes, onNo, title, message);
         popup.setSize(460, 140);
         popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
         return popup;
+    }
+
+    /** Replaces the default YES / NO button labels. */
+    public void setButtonLabels(String yes, String no)
+    {
+        yesButton.setLabel(yes);
+        noButton.setLabel(no);
+    }
+
+    /** BS-234: adds a third (Cancel) button; it and Esc run {@code onCancel} after returning to the parent. */
+    public void addCancelButton(String label, Runnable onCancel)
+    {
+        this.onCancel = onCancel;
+        cancelButton = new Button(label, this::onClose);
+        frame.addChild(cancelButton);
+        updateLayout(getGui());
+    }
+
+    /** BS-234: greys out the yes / no button; the tooltip says why. */
+    public void disableButton(boolean yes, String reason)
+    {
+        Button b = yes ? yesButton : noButton;
+        b.setClickable(false);
+        b.setTextColor(0xFF808080);
+        b.setHoverTooltipSupplier(() -> reason);
+    }
+
+    /**
+     * Esc = cancel: return to the parent without running either callback.
+     * Closing to no screen would orphan an open container menu when the
+     * parent is a container screen.
+     */
+    @Override
+    public void onClose() {
+        if (parent == null) {
+            super.onClose();
+        } else {
+            switchScreen(parent);
+        }
+        if (onCancel != null)
+            onCancel.run();
     }
 
     public void setSize(int width, int height)
@@ -94,8 +166,20 @@ public class AskPopupScreen extends BankSystemGuiScreen {
         int padding = 5;
         titleLabel.setBounds(padding,padding,frame.getWidth()-2*padding,20);
         msgLabel.setBounds(padding+5,titleLabel.getBottom(),frame.getWidth()-2*padding,frame.getHeight()-titleLabel.getBottom()-padding-20);
-        noButton.setBounds(frame.getWidth()-padding-50,msgLabel.getBottom(),50,20);
-        yesButton.setBounds(noButton.getLeft()-20-noButton.getWidth(),noButton.getTop(),noButton.getWidth(),noButton.getHeight());
+        int right = frame.getWidth()-padding;
+        if (cancelButton != null) {
+            int w = buttonWidth(cancelButton);
+            cancelButton.setBounds(right-w,msgLabel.getBottom(),w,20);
+            right = cancelButton.getLeft()-20;
+        }
+        int w = Math.max(buttonWidth(noButton), buttonWidth(yesButton));
+        noButton.setBounds(right-w,msgLabel.getBottom(),w,20);
+        yesButton.setBounds(noButton.getLeft()-20-w,noButton.getTop(),w,20);
 
+    }
+
+    private static int buttonWidth(Button b)
+    {
+        return Math.max(50, b.getTextWidth(b.getText())+10);
     }
 }

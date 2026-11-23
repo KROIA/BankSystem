@@ -37,6 +37,8 @@ public class BankSystemNetworking extends NetworkPacketManager {
     public static AllowedItemsRequest ALLOWED_ITEMS_REQUEST = (AllowedItemsRequest) AsynchronousRequestResponseSystem.register(new AllowedItemsRequest());
     public static DropItemsInPlayerInventoryRequest DROP_ITEMS_IN_PLAYER_INVENTORY_REQUEST = (DropItemsInPlayerInventoryRequest)AsynchronousRequestResponseSystem.register(new DropItemsInPlayerInventoryRequest());
     public static DepositItemsInBankRequest DEPOSIT_ITEMS_IN_BANK_REQUEST = (DepositItemsInBankRequest)AsynchronousRequestResponseSystem.register(new DepositItemsInBankRequest());
+    public static TransferStatusRequest TRANSFER_STATUS_REQUEST = (TransferStatusRequest)AsynchronousRequestResponseSystem.register(new TransferStatusRequest()); // Task #126
+    public static TransferParkedRequest TRANSFER_PARKED_REQUEST = (TransferParkedRequest)AsynchronousRequestResponseSystem.register(new TransferParkedRequest()); // BS-267
     public static WithdrawItemsFromBankRequest WITHDRAW_ITEMS_FROM_BANK_REQUEST = (WithdrawItemsFromBankRequest)AsynchronousRequestResponseSystem.register(new WithdrawItemsFromBankRequest());
     public static RegisterItemStacksBatchRequest REGISTER_ITEM_STACKS_BATCH_REQUEST = (RegisterItemStacksBatchRequest)AsynchronousRequestResponseSystem.register(new RegisterItemStacksBatchRequest());
 
@@ -61,6 +63,8 @@ public class BankSystemNetworking extends NetworkPacketManager {
     // The one bank-crossing branch (commit-to-bank) routes via DepositItemsInBankRequest on
     // slave, inheriting the Task #26 untrusted-slave gate on master.
     public static GetConverterCachePacket GET_CONVERTER_CACHE_REQUEST = (GetConverterCachePacket) AsynchronousRequestResponseSystem.register(new GetConverterCachePacket());
+    public static net.kroia.banksystem.networking.general.FlagMarkersRequest FLAG_MARKERS_REQUEST = (net.kroia.banksystem.networking.general.FlagMarkersRequest) AsynchronousRequestResponseSystem.register(new net.kroia.banksystem.networking.general.FlagMarkersRequest()); // Task #116
+    public static net.kroia.banksystem.networking.general.AuditPageRequest AUDIT_PAGE_REQUEST = (net.kroia.banksystem.networking.general.AuditPageRequest) AsynchronousRequestResponseSystem.register(new net.kroia.banksystem.networking.general.AuditPageRequest()); // Task #110
 
     public static BankAccountChangeStream BANKSYSTEM_ACCOUNT_CHANGE_STREAM = (BankAccountChangeStream) StreamSystem.register(new BankAccountChangeStream());
 
@@ -96,12 +100,15 @@ public class BankSystemNetworking extends NetworkPacketManager {
         // Task #46 (v2.1.0) — Company share visuals + supply sync (S2C).
         registerS2C(S2CCompanyVisualUpdatePacket.TYPE, S2CCompanyVisualUpdatePacket.STREAM_CODEC);
         registerS2C(S2CCompanyVisualBulkPacket.TYPE, S2CCompanyVisualBulkPacket.STREAM_CODEC);
+        registerS2C(net.kroia.banksystem.networking.entity.S2CCraftingRecipesPacket.TYPE, net.kroia.banksystem.networking.entity.S2CCraftingRecipesPacket.STREAM_CODEC);
         registerS2C(S2CCompanyVisualSupplyUpdatePacket.TYPE, S2CCompanyVisualSupplyUpdatePacket.STREAM_CODEC);
         // Task #51 (v2.1.0, spec §1.4) — Company.description propagation (S2C).
         registerS2C(net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket.TYPE,
                 net.kroia.banksystem.networking.general.S2CCompanyDescriptionUpdatePacket.STREAM_CODEC);
         // Task #47 (v2.1.0) — Share Stamper bind screen open (S2C).
         registerS2C(OpenStamperBindScreenPacket.TYPE, OpenStamperBindScreenPacket.STREAM_CODEC);
+        registerS2C(net.kroia.banksystem.networking.entity.OpenDisplayConfigScreenPacket.TYPE,
+                net.kroia.banksystem.networking.entity.OpenDisplayConfigScreenPacket.STREAM_CODEC);
         // Task #51 (v2.1.0) — Company Management screen open (S2C).
         registerS2C(net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.TYPE,
                 net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket.STREAM_CODEC);

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.compat;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
@@ -36,8 +37,8 @@ public class OldBankDataLoader {
                 BankData data = new BankData();
 
                 // Check if "itemID" tag is a string or a compound
-                if (!tag.contains("itemID", Tag.TAG_COMPOUND)) {
-                    ItemStack itemStack = ItemUtilities.createItemStackFromId(tag.getString("itemID"));
+                if (!NbtCompat.contains(tag, "itemID", Tag.TAG_COMPOUND)) {
+                    ItemStack itemStack = ItemUtilities.createItemStackFromId(NbtCompat.getString(tag, "itemID"));
                     data.itemID = ItemID.getFromItemStack(itemStack);
                 }else if (tag.get("itemID") instanceof CompoundTag itemTag) {
                     data.itemID = ItemID.createFromTag(itemTag);
@@ -47,8 +48,8 @@ public class OldBankDataLoader {
                 }
 
                 // Convert to cent system
-                data.balance = tag.getLong("balance") * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-                data.lockedBalance = tag.getLong("lockedBalance") * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                data.balance = NbtCompat.getLong(tag, "balance") * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                data.lockedBalance = NbtCompat.getLong(tag, "lockedBalance") * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
                 return data;
             }
         }
@@ -60,11 +61,11 @@ public class OldBankDataLoader {
         public static AccountData loadFromTag(CompoundTag tag)
         {
             AccountData accountData = new AccountData();
-            accountData.playerUUID = tag.getUUID("userUUID");
-            accountData.playerName = tag.getString("userName");
-            ListTag bankList = tag.getList("bankMap", Tag.TAG_COMPOUND);
+            accountData.playerUUID = NbtCompat.getUUID(tag, "userUUID");
+            accountData.playerName = NbtCompat.getString(tag, "userName");
+            ListTag bankList = NbtCompat.getList(tag, "bankMap", Tag.TAG_COMPOUND);
             for (int i = 0; i < bankList.size(); i++) {
-                CompoundTag bankTag = bankList.getCompound(i);
+                CompoundTag bankTag = NbtCompat.getCompound(bankList, i);
                 BankData bankData = BankData.loadFromTag(bankTag);
                 if (bankData != null) {
                     accountData.banks.add(bankData);
@@ -87,7 +88,7 @@ public class OldBankDataLoader {
         {
             return load_vLessThan_1_5_0(tag);
         }
-        int version = tag.getInt("version");
+        int version = NbtCompat.getInt(tag, "version");
         if(version == 1)
         {
             return load_vLessThan_1_5_0_ALPHA_3(tag);
@@ -99,20 +100,20 @@ public class OldBankDataLoader {
     {
         Map<UUID, User> userMap = new HashMap<>();
         Map<Integer, ServerBankAccount> bankAccounts = new HashMap<>();
-        int nextAccountNumber = tag.getInt("nextAccountNumber");
+        int nextAccountNumber = NbtCompat.getInt(tag, "nextAccountNumber");
         manager.load_compatibilityMode_setNextAccountNumber(nextAccountNumber);
 
         Set<ItemID> usedItems = new HashSet<>();
         // Load item cent scale factors
         if(tag.contains("itemCentScaleFactors")) {
-            ListTag itemScaleFactors = tag.getList("itemCentScaleFactors", 10);
+            ListTag itemScaleFactors = NbtCompat.getList(tag, "itemCentScaleFactors", 10);
             for (int i = 0; i < itemScaleFactors.size(); i++) {
-                CompoundTag pairTag = itemScaleFactors.getCompound(i);
+                CompoundTag pairTag = NbtCompat.getCompound(itemScaleFactors, i);
                 if(!pairTag.contains("itemID") || !pairTag.contains("scaleFactor")) {
                     BACKEND_INSTANCES.LOGGER.warn("Invalid item scale factor tag: " + pairTag);
                     continue; // Skip invalid entries
                 }
-                ItemID itemID = ItemID.createFromTag(pairTag.getCompound("itemID"));
+                ItemID itemID = ItemID.createFromTag(NbtCompat.getCompound(pairTag, "itemID"));
                // int scaleFactor = pairTag.getInt("scaleFactor");
                 usedItems.add(itemID);
             }
@@ -133,10 +134,10 @@ public class OldBankDataLoader {
 
         // Load users
         if(tag.contains("users")) {
-            ListTag userList = tag.getList("users", 10);
+            ListTag userList = NbtCompat.getList(tag, "users", 10);
             userMap.clear();
             for (int i = 0; i < userList.size(); i++) {
-                CompoundTag userTag = userList.getCompound(i);
+                CompoundTag userTag = NbtCompat.getCompound(userList, i);
                 User user = User.createFromTag(userTag);
                 if(user != null) {
                     userMap.put(user.getUUID(), user);
@@ -149,10 +150,10 @@ public class OldBankDataLoader {
 
         // Load bank accounts
         if(tag.contains("bankAccounts")) {
-            ListTag accountsList = tag.getList("bankAccounts", 10);
+            ListTag accountsList = NbtCompat.getList(tag, "bankAccounts", 10);
             bankAccounts.clear();
             for (int i = 0; i < accountsList.size(); i++) {
-                CompoundTag accountTag = accountsList.getCompound(i);
+                CompoundTag accountTag = NbtCompat.getCompound(accountsList, i);
                 ServerBankAccount account = ServerBankAccount.createFromTag(accountTag);
                 if(account != null) {
                     bankAccounts.put(account.getAccountNumber(), account);
@@ -168,9 +169,9 @@ public class OldBankDataLoader {
     {
         List<AccountData> accountDataList = new ArrayList<>();
         boolean success = true;
-        ListTag bankElements = tag.getList("users", Tag.TAG_COMPOUND);
+        ListTag bankElements = NbtCompat.getList(tag, "users", Tag.TAG_COMPOUND);
         for (int i = 0; i < bankElements.size(); i++) {
-            CompoundTag bankTag = bankElements.getCompound(i);
+            CompoundTag bankTag = NbtCompat.getCompound(bankElements, i);
             AccountData accountData = AccountData.loadFromTag(bankTag);
             if(accountData == null)
             {

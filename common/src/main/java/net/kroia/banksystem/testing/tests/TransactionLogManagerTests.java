@@ -1,13 +1,14 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.api.ledger.LedgerType;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
 import net.kroia.banksystem.data.table.TransactionLogManager;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.sql.Connection;
 import java.sql.Driver;
@@ -38,29 +39,47 @@ public class TransactionLogManagerTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("insert_and_get_by_account", this::insert_and_get_by_account);
         addTest("get_by_company_filters_correctly", this::get_by_company_filters_correctly);
         addTest("get_by_account_and_kind_filters", this::get_by_account_and_kind_filters);
         addTest("null_actor_and_note_roundtrip", this::null_actor_and_note_roundtrip);
         addTest("newest_first_ordering", this::newest_first_ordering);
+        addTest("close_drains_queued_writes", this::close_drains_queued_writes);
+        addTest("audit_csv_export_escaping", this::audit_csv_export_escaping);
+    }
+
+    /** Issue #166: audit CSV — BOM, quoting, doubled quotes, formula defusing, negative amounts stay numbers. */
+    private TestResult audit_csv_export_escaping() {
+        String csv = net.kroia.banksystem.screen.custom.AuditExport.csv(new String[]{"a", "b"},
+                List.of(new String[]{"x,y", "say \"hi\""}, new String[]{"=1+2", "-12.50"}, new String[]{"line\nbreak", null}));
+        return assertEquals("csv", "﻿a,b\r\n\"x,y\",\"say \"\"hi\"\"\"\r\n'=1+2,-12.50\r\n\"line\nbreak\",\r\n", csv);
     }
 
     @Override
     public void setup() {
         try {
-            Class<?> driverClass;
-            try {
-                driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                driverClass = TransactionLogManagerTests.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+            Driver driver = DatabaseManager.newSqliteDriver();
             try {
                 DriverManager.registerDriver(new DriverShim(driver));
             } catch (Exception ignored) {}
 
             connection = DriverManager.getConnection("jdbc:sqlite::memory:");
+            createSchema(connection);
+
+            testDbManager = new TestDatabaseManager(connection);
+            manager = new TransactionLogManager(testDbManager);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to setup in-memory SQLite for tests", e);
+        }
+    }
+
+    private static void createSchema(Connection connection) throws SQLException {
             connection.setAutoCommit(false);
             try (Statement stmt = connection.createStatement()) {
                 stmt.execute("CREATE TABLE IF NOT EXISTS TransactionLog (" +
@@ -79,13 +98,9 @@ public class TransactionLogManagerTests extends TestSuite {
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_log_company_ts " +
                         "ON TransactionLog (company_id, ts DESC)");
             }
+            // Task #109: bring the legacy schema up to date the same way a live world does.
+            DatabaseManager.migrateTransactionLog(connection);
             connection.commit();
-
-            testDbManager = new TestDatabaseManager(connection);
-            manager = new TransactionLogManager(testDbManager);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to setup in-memory SQLite for tests", e);
-        }
     }
 
     @Override
@@ -105,9 +120,9 @@ public class TransactionLogManagerTests extends TestSuite {
         long t = 1_000L;
         try {
             manager.save(TransactionLogRecord.simple(42, actor,
-                    TransactionLogRecord.Kind.DEPOSIT, (short) 7, 500L, t)).get(10, TimeUnit.SECONDS);
+                    LedgerType.DEPOSIT, (short) 7, 500L, t)).get(10, TimeUnit.SECONDS);
             manager.save(TransactionLogRecord.simple(42, actor,
-                    TransactionLogRecord.Kind.WITHDRAW, (short) 7, 100L, t + 10)).get(10, TimeUnit.SECONDS);
+                    LedgerType.WITHDRAW, (short) 7, 100L, t + 10)).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("save threw: " + e.getMessage());
         }
@@ -121,7 +136,7 @@ public class TransactionLogManagerTests extends TestSuite {
         if (!res.passed()) return res;
 
         TransactionLogRecord newest = rows.get(0);
-        res = assertEquals("newest kind", TransactionLogRecord.Kind.WITHDRAW, newest.kind());
+        res = assertEquals("newest kind", LedgerType.WITHDRAW, newest.type());
         if (!res.passed()) return res;
         res = assertEquals("newest amount", 100L, newest.amount());
         if (!res.passed()) return res;
@@ -131,7 +146,7 @@ public class TransactionLogManagerTests extends TestSuite {
         if (!res.passed()) return res;
 
         TransactionLogRecord older = rows.get(1);
-        res = assertEquals("older kind", TransactionLogRecord.Kind.DEPOSIT, older.kind());
+        res = assertEquals("older kind", LedgerType.DEPOSIT, older.type());
         if (!res.passed()) return res;
         res = assertEquals("older amount", 500L, older.amount());
         if (!res.passed()) return res;
@@ -143,14 +158,14 @@ public class TransactionLogManagerTests extends TestSuite {
         try {
             // Account row without company_id.
             manager.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    1, null, TransactionLogRecord.Kind.DEPOSIT, (short) 5, 10L,
+                    1, null, LedgerType.DEPOSIT, (short) 5, 10L,
                     null, null, t, null)).get(10, TimeUnit.SECONDS);
             // Company-scoped row.
             manager.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    2, null, TransactionLogRecord.Kind.PAYOUT, (short) 5, 200L,
+                    2, null, LedgerType.PAYOUT, (short) 5, 200L,
                     null, 99, t + 5, "wage")).get(10, TimeUnit.SECONDS);
             manager.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    3, null, TransactionLogRecord.Kind.PAYOUT, (short) 5, 300L,
+                    3, null, LedgerType.PAYOUT, (short) 5, 300L,
                     null, 99, t + 10, "wage")).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("save threw: " + e.getMessage());
@@ -179,23 +194,23 @@ public class TransactionLogManagerTests extends TestSuite {
         long t = 9_000L;
         try {
             manager.save(TransactionLogRecord.simple(7, null,
-                    TransactionLogRecord.Kind.DEPOSIT, (short) 1, 10L, t)).get(10, TimeUnit.SECONDS);
+                    LedgerType.DEPOSIT, (short) 1, 10L, t)).get(10, TimeUnit.SECONDS);
             manager.save(TransactionLogRecord.simple(7, null,
-                    TransactionLogRecord.Kind.WITHDRAW, (short) 1, 5L, t + 1)).get(10, TimeUnit.SECONDS);
+                    LedgerType.WITHDRAW, (short) 1, 5L, t + 1)).get(10, TimeUnit.SECONDS);
             manager.save(TransactionLogRecord.transfer(7, null,
-                    TransactionLogRecord.Kind.TRANSFER_OUT, (short) 1, 3L, 8, t + 2))
+                    (short) 1, -3L, 8, t + 2))
                     .get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("save threw: " + e.getMessage());
         }
         try {
-            List<TransactionLogRecord> deposits = manager.getByAccountAndKind(7,
-                    TransactionLogRecord.Kind.DEPOSIT, 0).get(10, TimeUnit.SECONDS);
+            List<TransactionLogRecord> deposits = manager.getByAccountAndType(7,
+                    LedgerType.DEPOSIT.code(), 0, 0).get(10, TimeUnit.SECONDS);
             TestResult res = assertEquals("deposit rows", 1, deposits.size());
             if (!res.passed()) return res;
 
-            List<TransactionLogRecord> transfers = manager.getByAccountAndKind(7,
-                    TransactionLogRecord.Kind.TRANSFER_OUT, 0).get(10, TimeUnit.SECONDS);
+            List<TransactionLogRecord> transfers = manager.getByAccountAndType(7,
+                    LedgerType.TRANSFER.code(), 0, 0).get(10, TimeUnit.SECONDS);
             res = assertEquals("transfer_out rows", 1, transfers.size());
             if (!res.passed()) return res;
             res = assertEquals("transfer other_account", Integer.valueOf(8),
@@ -219,7 +234,7 @@ public class TransactionLogManagerTests extends TestSuite {
         long t = 42_000L;
         try {
             manager.save(TransactionLogRecord.simple(11, null,
-                    TransactionLogRecord.Kind.DEPOSIT, (short) 3, 77L, t)).get(10, TimeUnit.SECONDS);
+                    LedgerType.DEPOSIT, (short) 3, 77L, t)).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             return fail("save threw: " + e.getMessage());
         }
@@ -244,7 +259,7 @@ public class TransactionLogManagerTests extends TestSuite {
         try {
             for (int i = 0; i < 5; i++) {
                 manager.save(TransactionLogRecord.simple(20, null,
-                        TransactionLogRecord.Kind.DEPOSIT, (short) 2, i,
+                        LedgerType.DEPOSIT, (short) 2, i,
                         t + i * 10L)).get(10, TimeUnit.SECONDS);
             }
         } catch (Exception e) {
@@ -266,6 +281,51 @@ public class TransactionLogManagerTests extends TestSuite {
         res = assertEquals("newest amount (i=4)", 4L, rows.get(0).amount());
         if (!res.passed()) return res;
         return pass("limit + newest-first honored");
+    }
+
+    /**
+     * Rows queued on the db-worker right before {@link DatabaseManager#close()} must all be
+     * persisted: close() drains the worker before it closes the connection.
+     */
+    private TestResult close_drains_queued_writes() {
+        java.nio.file.Path file = null;
+        try {
+            file = java.nio.file.Files.createTempFile("banksystem-close-drain-", ".db");
+            String url = "jdbc:sqlite:" + file.toAbsolutePath();
+            Connection c = DriverManager.getConnection(url);
+            createSchema(c);
+            TestDatabaseManager db = new TestDatabaseManager(c);
+            TransactionLogManager mgr = new TransactionLogManager(db);
+
+            // Hold the worker so the writes are still queued when close() starts.
+            db.getDatabaseThread().submit(() -> {
+                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+            });
+            int n = 50;
+            java.util.concurrent.atomic.AtomicInteger failed = new java.util.concurrent.atomic.AtomicInteger();
+            for (int i = 0; i < n; i++) {
+                mgr.save(TransactionLogRecord.simple(7, null, LedgerType.DEPOSIT, (short) 1, i + 1, 1_000L + i))
+                        .exceptionally(t -> { failed.incrementAndGet(); return null; });
+            }
+            db.close();
+
+            TestResult res = assertEquals("connection closed after close()", true, c.isClosed());
+            if (!res.passed()) return res;
+            res = assertEquals("failed writes", 0, failed.get());
+            if (!res.passed()) return res;
+            try (Connection verify = DriverManager.getConnection(url);
+                 Statement stmt = verify.createStatement();
+                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM TransactionLog")) {
+                rs.next();
+                res = assertEquals("persisted rows", n, rs.getInt(1));
+                if (!res.passed()) return res;
+            }
+            return pass("close() drained " + n + " queued ledger writes before closing");
+        } catch (Exception e) {
+            return fail("close_drains_queued_writes threw: " + e.getMessage());
+        } finally {
+            if (file != null) try { java.nio.file.Files.deleteIfExists(file); } catch (Exception ignored) {}
+        }
     }
 
     // ------------------------------------------------------------------

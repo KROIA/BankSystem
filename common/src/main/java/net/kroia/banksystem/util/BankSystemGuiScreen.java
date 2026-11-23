@@ -5,7 +5,8 @@ import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+//import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
@@ -44,7 +45,17 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
      * current event pass completes.
      */
     public static void switchScreen(Screen newScreen) {
-        Minecraft.getInstance().tell(() -> Minecraft.getInstance().setScreen(newScreen));
+        runLater(() -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(newScreen));
+    }
+
+    /**
+     * Enqueues {@code task} on the client thread (FIFO, after the current event
+     * pass). Tasks run in the order they were queued, so a task queued after a
+     * {@link #switchScreen} call runs once that screen swap has happened.
+     */
+    public static void runLater(Runnable task) {
+        Minecraft.getInstance().tell(task); // mc<=1.21.1
+        //Minecraft.getInstance().schedule(task); // mc>=1.21.2
     }
 
     /**
@@ -95,6 +106,21 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
         return BACKEND_INSTANCES.CLIENT_BANK_MANAGER;
     }
 
+    /** Amber of a Save button while there are unsaved edits. */
+    public static final int UNSAVED_COLOR = 0xFFD99A26;
+
+    /**
+     * Recolors a button including its hover/pressed shades. {@code color} 0 restores the default
+     * button colors (same formula as ModUtilities EmptyButton). Cheap enough to call every frame.
+     */
+    public static void setButtonColor(net.kroia.modutilities.gui.elements.EmptyButton button, int color) {
+        int base = color != 0 ? color : net.kroia.modutilities.ColorUtilities.setBrightness(
+                net.kroia.modutilities.gui.elements.base.GuiElement.DEFAULT_BACKGROUND_COLOR, 0.8f);
+        button.setBackgroundColor(base);
+        button.setHoverColor(net.kroia.modutilities.ColorUtilities.setBrightness(base, 0.8f));
+        button.setPressedColor(net.kroia.modutilities.ColorUtilities.setBrightness(base, 0.6f));
+    }
+
     /**
      * @return true if the server this client is connected to is the MASTER server
      *         (or a regular single server, which acts as its own master). Synced at
@@ -116,7 +142,8 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
             new EditBox(Minecraft.getInstance().font, 0, 0, 0, 0, Component.empty());
 
     @Override
-    public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
+    public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) { // mc<=1.21.11
+    //public void render(GuiGraphicsExtractor pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) { // mc>=26.1
         modTextInputFocusProxy.setFocused(getGui().getFocusedElement() instanceof TextBox);
         applyTooltipAutoFlip(getGui(), pMouseX, this.width);
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);

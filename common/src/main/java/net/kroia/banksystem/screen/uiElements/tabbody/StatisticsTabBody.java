@@ -26,6 +26,7 @@ import java.util.List;
 public class StatisticsTabBody extends TabBody {
 
     private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".company_management_screen.";
+    private static final String NO_VALUE = "—";
     private static final String[] TIMEFRAME_KEYS = {"tf_24h", "tf_7d", "tf_30d", "tf_90d", "tf_all"};
 
     /** Runtime-only cache of selected timeframe per company — never persisted to server. */
@@ -187,12 +188,17 @@ public class StatisticsTabBody extends TabBody {
         }
         loadingLabel.setText("");
 
+        if (stats.reduced()) {
+            applyReducedStats();
+            return;
+        }
+
         balanceLabel.setText(Component.translatable(PREFIX + "stats_balance").getString()
                 + ": " + fmtVal(stats.currentBalance()));
 
         long net = stats.netCashflow();
         netCashflowLabel.setText(Component.translatable(PREFIX + "stats_net_cashflow").getString()
-                + ": " + (net >= 0 ? "+" : "") + fmtVal(Math.abs(net)));
+                + ": " + (net >= 0 ? "+" : "") + fmtVal(net)); // MoneyFormat writes the minus
 
         long days = stats.daysToInsolvency();
         String daysText;
@@ -214,7 +220,7 @@ public class StatisticsTabBody extends TabBody {
             maxVal = Math.max(maxVal, Math.max(b.earnings(), b.spendings()));
         yAxisTop.setText(fmtVal(maxVal));
         yAxisMid.setText("0");
-        yAxisBot.setText(fmtVal(maxVal));
+        yAxisBot.setText("-" + fmtVal(maxVal)); // spendings are drawn below the zero line
 
         // Shareholders table
         List<AsyncCompanyManager.ShareholderWire> holders = stats.topShareholders();
@@ -226,7 +232,8 @@ public class StatisticsTabBody extends TabBody {
             List<String[]> rows = new ArrayList<>();
             for (AsyncCompanyManager.ShareholderWire h : holders) {
                 rows.add(new String[]{
-                        h.accountName(),
+                        // Task #104: non-admin members get shareholders without account names.
+                        h.accountName() == null || h.accountName().isEmpty() ? NO_VALUE : h.accountName(),
                         fmtVal(h.shares()),
                         String.format("%.1f%%", h.pct() * 100f)
                 });
@@ -274,6 +281,28 @@ public class StatisticsTabBody extends TabBody {
             colors[schedules.size()] = 0xFFFFFFFF;
             payoutsTable.setData(rows, colors, rowIcons.toArray(new ItemStack[0][]));
         }
+    }
+
+    /**
+     * Task #104: non-members get share and holder counts only. Financial cards show a dash,
+     * the chart stays empty and the shareholder table shows the totals.
+     */
+    private void applyReducedStats() {
+        balanceLabel.setText(Component.translatable(PREFIX + "stats_balance").getString() + ": " + NO_VALUE);
+        netCashflowLabel.setText(Component.translatable(PREFIX + "stats_net_cashflow").getString() + ": " + NO_VALUE);
+        insolvencyLabel.setTextColor(0xFFFFFFFF);
+        insolvencyLabel.setText(Component.translatable(PREFIX + "stats_days_insolvency").getString() + ": " + NO_VALUE);
+        missedPayoutsLabel.setText(Component.translatable(PREFIX + "stats_missed_payouts").getString() + ": " + NO_VALUE);
+        chart.setData(List.of());
+        yAxisTop.setText(""); yAxisMid.setText(""); yAxisBot.setText("");
+        List<String[]> holderRows = new ArrayList<>();
+        holderRows.add(new String[]{
+                Component.translatable(PREFIX + "holders").getString() + ": " + stats.holderCount(),
+                String.valueOf(stats.sharesIssued()), ""}); // whole shares, not a raw bank value
+        shareholdersTable.setData(holderRows, null, null);
+        List<String[]> payoutRows = new ArrayList<>();
+        payoutRows.add(new String[]{NO_VALUE, ""});
+        payoutsTable.setData(payoutRows, null, null);
     }
 
     @Override public void onInfoUpdated() { fetchStats(); }

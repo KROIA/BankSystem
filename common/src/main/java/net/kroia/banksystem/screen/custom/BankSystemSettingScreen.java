@@ -56,6 +56,8 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
      * {@code ModSettingsRequest}.
      */
     private final Button modSettingsButton;
+    /** Task #112: whole-server balance history (admin check on the master). */
+    private final Button serverHistoryButton;
     private final ItemSelectionView currentBankingItemsView;
     private final ItemView currentBankingItemView;
 
@@ -83,10 +85,10 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
 
             creativeModeItemSelectionScreen = new CreativeModeItemSelectionScreen(this::onNewBankingItemSelected,()->
             {
-                minecraft.setScreen(this);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(this);
                 creativeModeItemSelectionScreen = null;
             });
-            Minecraft.getInstance().setScreen(creativeModeItemSelectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(creativeModeItemSelectionScreen);
         });
 
 
@@ -110,7 +112,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
                 }, () -> {}, TEXT.ASK_TITLE.getString() + " " + name  + "?", TEXT.ASK_MSG.getString());
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
-                minecraft.setScreen(popup);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(popup);
             }
         });
         removeBankingItemButton.setBackgroundColor(0xFFe8711c);
@@ -124,16 +126,21 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         // Master-only "Mod Settings" button (see field javadoc). On slave servers the
         // button is not created at all — editing settings is only possible against
         // the master's settings.json.
-        if (isMasterServer()) {
+        if (ModSettingsScreen.canOpen()) { // BS-221: master + op level 2 (this screen only opens for admins)
             modSettingsButton = new Button(TEXT.MOD_SETTINGS_BUTTON.getString(), () ->
-                    Minecraft.getInstance().setScreen(new ModSettingsScreen(this)));
+                    net.kroia.modutilities.gui.client.ClientCompat.setScreen(new ModSettingsScreen(this)));
             modSettingsButton.setHoverTooltipSupplier(TEXT.MOD_SETTINGS_BUTTON_TOOLTIP::getString);
         } else {
             modSettingsButton = null;
         }
 
 
+        serverHistoryButton = new Button(Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.server_button").getString(), () ->
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(new BalanceHistoryScreen(this,
+                        net.kroia.banksystem.networking.general.BalanceHistoryRequest.Query.SERVER_WIDE_ACCOUNT, true)));
+
         addElement(closeButton);
+        addElement(serverHistoryButton);
         addElement(newBankingItemButton);
         addElement(removeBankingItemButton);
         if (modSettingsButton != null)
@@ -148,7 +155,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
     public static void openScreen()
     {
         BankSystemSettingScreen screen = new BankSystemSettingScreen();
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
         screenIsOpen = true;
     }
 
@@ -169,6 +176,7 @@ public class BankSystemSettingScreen extends BankSystemGuiScreen {
         newBankingItemButton.setBounds(currentBankingItemsView.getRight()+spacing, padding, 150, 20);
         removeBankingItemButton.setBounds(newBankingItemButton.getLeft(), newBankingItemButton.getBottom()+spacing, newBankingItemButton.getWidth(), newBankingItemButton.getHeight());
         currentBankingItemView.setBounds(newBankingItemButton.getRight()+spacing, padding, 20, 20);
+        serverHistoryButton.setBounds(currentBankingItemView.getRight()+spacing, padding, 120, 20);
 
         int itemInfoTop = removeBankingItemButton.getBottom();
         if (modSettingsButton != null) {

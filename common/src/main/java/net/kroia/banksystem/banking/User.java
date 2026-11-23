@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking;
 
+import net.kroia.modutilities.NbtCompat;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.BankSystemModBackend;
@@ -63,6 +64,11 @@ public class User implements ServerSaveable {
         return user;
     }
 
+    /** Task #104: copy safe to send to other players: UUID and name only, no admin flag, no custom data. */
+    public User namesOnly() {
+        return new User(userUUID, userName);
+    }
+
     public UserData getUserData() {
         return new UserData(userUUID, userName, customData.copy());
     }
@@ -88,7 +94,7 @@ public class User implements ServerSaveable {
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putUUID("userUUID", userUUID);
+        NbtCompat.putUUID(tag, "userUUID", userUUID);
         tag.putString("userName", userName);
         tag.putBoolean("isBanksystemAdmin", isBanksystemAdmin);
         tag.put("customData", customData);
@@ -100,14 +106,14 @@ public class User implements ServerSaveable {
         if(!tag.contains("userUUID") || !tag.contains("userName")) {
             return false; // Invalid data
         }
-        this.userUUID = tag.getUUID("userUUID");
-        this.userName = tag.getString("userName");
+        this.userUUID = NbtCompat.getUUID(tag, "userUUID");
+        this.userName = NbtCompat.getString(tag, "userName");
         if(tag.contains("isBanksystemAdmin"))
-            this.isBanksystemAdmin = tag.getBoolean("isBanksystemAdmin");
+            this.isBanksystemAdmin = NbtCompat.getBoolean(tag, "isBanksystemAdmin");
         else
             this.isBanksystemAdmin = false;
         if(tag.contains("customData"))
-            this.customData = tag.getCompound("customData");
+            this.customData = NbtCompat.getCompound(tag, "customData");
         else
             this.customData = new CompoundTag();
         return true;

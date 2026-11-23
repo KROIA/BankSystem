@@ -6,12 +6,14 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.networking.general.ModSettingsRequest;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.util.BankSystemGuiElement;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.CloseButton;
+import net.kroia.modutilities.gui.elements.FeatureToggleSection;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
@@ -48,14 +50,16 @@ import java.util.Set;
  * Fields are built generically from {@link BankSystemModSettings#getEditableGroups()}:
  * Booleans become checkboxes, Integer/Long/Float become numeric text boxes,
  * ItemStacks get an item view + creative-inventory item picker, {@code List<String>}
- * becomes a comma-separated text box and the Placeholder settings get an
- * identifier text box + refresh-rate box.
+ * becomes a comma-separated text box and Strings become a plain text box.
+ * Exception: the Integrations group is laid out by hand as collapsible on/off
+ * sections ({@link #buildIntegrationSections}); new settings there must be added
+ * explicitly.
  * <p>
  * <b>DEVELOPER NOTE — when adding a new setting:</b>
  * <ol>
  *   <li>You MUST also add a matching editing field to this screen. Settings of a
- *       supported type (Boolean/Integer/Long/Float/ItemStack/List&lt;String&gt;/
- *       PlaceholderSettingData) inside a registered group appear automatically via
+ *       supported type (Boolean/Integer/Long/Float/String/ItemStack/
+ *       List&lt;String&gt;) inside a registered group appear automatically via
  *       the generic row builder — still add the label/tooltip lang keys
  *       ({@code gui.banksystem.mod_settings_screen.setting.<Group>.<NAME>[.tooltip]})
  *       and verify the field renders and applies correctly. Unsupported types need
@@ -85,10 +89,8 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         public static final Component STATUS_LOADED = Component.translatable(PREFIX + "status.loaded");
         public static final Component STATUS_SAVED = Component.translatable(PREFIX + "status.saved");
         public static final Component STATUS_FAILED = Component.translatable(PREFIX + "status.failed");
-        public static final Component PLACEHOLDER_IDENTIFIER_TOOLTIP = Component.translatable(PREFIX + "placeholder_identifier.tooltip");
-        public static final Component PLACEHOLDER_REFRESH_TOOLTIP = Component.translatable(PREFIX + "placeholder_refresh_rate.tooltip");
 
-        /** Heading label of a settings group ("Utilities", "Player", "ServerBank", "Placeholder"). */
+        /** Heading label of a settings group ("Utilities", "Player", "ServerBank", "Audit", "Integrations"). */
         public static Component group(String groupName) {
             return Component.translatable(PREFIX + "group." + groupName);
         }
@@ -99,6 +101,10 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         /** Hover tooltip of one setting. */
         public static Component settingTooltip(String groupName, String settingName) {
             return Component.translatable(PREFIX + "setting." + groupName + "." + settingName + ".tooltip");
+        }
+        /** Description text of an Integrations section (one label per "\n"-separated line). */
+        public static Component settingDescription(String groupName, String settingName) {
+            return Component.translatable(PREFIX + "setting." + groupName + "." + settingName + ".description");
         }
     }
 
@@ -140,9 +146,11 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
      *       automatically reset to false after use. Editing them here is exactly how
      *       an admin approves a pending merge/repair without editing settings.json —
      *       set to true, apply, then restart the server once.</li>
-     *   <li>{@code Placeholder.*}: read once when the TAB-integration placeholders
-     *       are registered during server startup
-     *       ({@code NEZNAMY_TAB_Placeholders.register()}).</li>
+     *   <li>{@code Integrations.PLACEHOLDERS_ENABLED}: checked once at server start
+     *       (placeholder registration is skipped when off).</li>
+     *   <li>{@code Integrations.TOP_COUNT}: read once when the placeholders are
+     *       registered during server startup (it fixes the number of
+     *       {@code top_<n>} slots). The other Integrations settings are read live.</li>
      * </ul>
      * All other registered settings are read live at their point of use (autosave /
      * snapshot timers and logging flags per call or tick, starting balance per user
@@ -153,11 +161,9 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             "ServerBank.ADDITIONAL_DEPOSIT_GATED_COMPONENTS",
             "ServerBank.CONFIRM_ITEMID_MERGE",
             "ServerBank.CONFIRM_ITEMID_REPAIR",
-            "Placeholder.PLAYER_BALANCE",
-            "Placeholder.PLAYER_LOCKED_BALANCE",
-            "Placeholder.PLAYER_TOTAL_BALANCE",
-            "Placeholder.PLAYER_BANKUSER_JSON",
-            "Placeholder.SERVER_CIRCULATION_JSON"
+            "ServerBank.CONFIRM_ITEMID_REMOVE_MISSING",
+            "Integrations.PLACEHOLDERS_ENABLED",
+            "Integrations.TOP_COUNT"
     );
 
     /**
@@ -177,6 +183,8 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
      */
     private final BankSystemModSettings workingCopy = new BankSystemModSettings();
     private final List<FieldBinding> bindings = new ArrayList<>();
+    private boolean dirty = false;          // unsaved field edits
+    private boolean closeAfterSave = false; // Save chosen in the unsaved-changes popup
 
     private final Label titleLabel;
     private final CloseButton closeButton;
@@ -197,8 +205,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
 
         // Render this screen smaller than the BankSystemGuiScreen default (0.8):
         // a lower GUI scale enlarges the logical content area (getWidth()/getHeight()
-        // grow by 1/scale), giving the many settings rows — especially the long TAB
-        // placeholder identifiers — substantially more usable space.
+        // grow by 1/scale), giving the many settings rows substantially more usable space.
         setGuiScale(0.65f);
 
         titleLabel = new Label(Texts.TITLE.getString());
@@ -236,7 +243,30 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         addElement(reloadButton);
         addElement(applyButton);
 
-        loadFromServer();
+        if (canOpen())
+            loadFromServer(); // otherwise tick() closes the screen
+    }
+
+    /**
+     * BS-221: Mod Settings need the master server and vanilla operator level
+     * {@link ModSettingsRequest#REQUIRED_OP_LEVEL}. The BankSystem admin flag is implied: the
+     * parent BankSystemSettingScreen only opens for admins. UI gate only; the server enforces both.
+     */
+    public static boolean canOpen() {
+        var player = Minecraft.getInstance().player;
+        return isMasterServer() && player != null
+                && net.kroia.modutilities.PermissionCompat.hasPermission(player, ModSettingsRequest.REQUIRED_OP_LEVEL);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (!canOpen()) { // opened without rights, or op removed while open
+            dirty = false;
+            onClose();
+        }
+        // BS-243: amber Apply while there are unsaved edits (cleared by a successful save/reload).
+        setButtonColor(applyButton, applyButton.isClickable() && dirty ? UNSAVED_COLOR : 0);
     }
 
     @Override
@@ -275,10 +305,55 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             heading.setHeight(ELEMENT_HEIGHT);
             listView.addChild(heading);
 
+            if (group == workingCopy.INTEGRATIONS) {
+                buildIntegrationSections(workingCopy.INTEGRATIONS);
+                continue;
+            }
             for (Setting<?> setting : group.getAllSettings()) {
                 listView.addChild(new SettingRow(group, setting));
             }
         }
+    }
+
+    /**
+     * Task #119: the Integrations group is laid out by hand as one collapsible
+     * {@link FeatureToggleSection} per integration; the header check box is the
+     * integration's on/off setting.
+     */
+    private void buildIntegrationSections(BankSystemModSettings.Integrations group) {
+        FeatureToggleSection placeholders = addSection(group, group.PLACEHOLDERS_ENABLED);
+        for (Setting<?> setting : List.of(group.PLAYER_REFRESH_MS, group.SERVER_REFRESH_MS, group.TOP_COUNT, group.MONEY_FORMAT))
+            placeholders.addChild(new SettingRow(group, setting));
+        addSection(group, group.SYNC_ADMIN_FLAG_WITH_PERMISSION);
+        addSection(group, group.NUMISMATICS_ENABLED);
+        addSection(group, group.LIGHTMANS_CURRENCY_ENABLED);
+        addSection(group, group.DISCORD_ENABLED);
+    }
+
+    /** Adds a section titled with the toggle's setting label, its description lines and a binding for the toggle. */
+    private FeatureToggleSection addSection(SettingsGroup group, Setting<Boolean> toggle) {
+        FeatureToggleSection section = new FeatureToggleSection(Texts.setting(group.getName(), toggle.getName()).getString());
+        // Header marker replaces the SettingRow marker for the toggle itself (static, like RESTART_REQUIRED_SETTINGS).
+        section.setRestartRequired(RESTART_REQUIRED_SETTINGS.contains(group.getName() + "." + toggle.getName()));
+        section.setRestartMarkerText(Texts.RESTART_REQUIRED, Texts.RESTART_REQUIRED_TOOLTIP); // BankSystem wording; harmless while hidden
+        // Also fires on refreshFields(); handleResponse clears dirty after that (same as CheckBox).
+        section.setOnFeatureToggled(enabled -> dirty = true);
+        // Labels do not wrap: the lang text carries its own line breaks.
+        for (String line : Texts.settingDescription(group.getName(), toggle.getName()).getString().split("\n")) {
+            Label label = new Label(line);
+            label.setTextColor(STATUS_COLOR_NEUTRAL);
+            section.addChild(label);
+        }
+        bindings.add(new FieldBinding() {
+            @Override public void loadFromSetting() {
+                section.setFeatureEnabled(Boolean.TRUE.equals(toggle.get()));
+            }
+            @Override public void storeToSetting() {
+                toggle.set(section.isFeatureEnabled());
+            }
+        });
+        listView.addChild(section);
+        return section;
     }
 
     /**
@@ -292,8 +367,6 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         private TextBox textBox = null;
         private ItemView itemView = null;
         private Button selectItemButton = null;
-        private TextBox placeholderIdentifierBox = null;
-        private TextBox placeholderRefreshBox = null;
         private Label unsupportedLabel = null;
         private Label restartMarker = null;
 
@@ -310,13 +383,10 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             addChild(nameLabel);
 
             createEditor(group.getName(), setting, tooltip);
-
-            // Placeholder rows wrap onto two lines (label + marker on top, the long
-            // identifier box + refresh-rate box spanning the full width below), so
-            // the %...% identifier strings — the longest values of any setting —
-            // never overflow their text box.
-            if (placeholderIdentifierBox != null)
-                setHeight(2 * ELEMENT_HEIGHT + 2 * spacing);
+            // User edits mark the screen dirty. CheckBox has no user-only hook, so its
+            // state callback also fires on refreshFields(); handleResponse clears dirty after that.
+            if (textBox != null) textBox.setOnTextChanged(text -> dirty = true);
+            if (checkBox != null) checkBox.setOnStateChanged(checked -> dirty = true);
 
             if (RESTART_REQUIRED_SETTINGS.contains(group.getName() + "." + setting.getName())) {
                 // Clearly visible warning-colored marker + explanatory hover tooltip
@@ -432,10 +502,11 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
                                 copy.setCount(1);
                                 stackSetting.set(copy);
                                 itemView.setItemStack(copy);
-                                Minecraft.getInstance().setScreen(ModSettingsScreen.this);
+                                dirty = true;
+                                net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this);
                             },
-                            () -> Minecraft.getInstance().setScreen(ModSettingsScreen.this));
-                    Minecraft.getInstance().setScreen(selectionScreen);
+                            () -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this));
+                    net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
                 });
                 selectItemButton.setHoverTooltipSupplier(() -> tooltip);
                 selectItemButton.setHoverTooltipFontScale(hoverToolTipFontSize);
@@ -480,37 +551,22 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
                     }
                 });
             }
-            else if (type == BankSystemModSettings.Placeholder.PlaceholderSettingData.class) {
-                // TAB placeholder settings: identifier text box + refresh rate (ms) box.
-                Setting<BankSystemModSettings.Placeholder.PlaceholderSettingData> placeholderSetting =
-                        (Setting<BankSystemModSettings.Placeholder.PlaceholderSettingData>) setting;
-                placeholderIdentifierBox = new TextBox();
-                placeholderIdentifierBox.setHoverTooltipSupplier(() ->
-                        tooltip + "\n" + Texts.PLACEHOLDER_IDENTIFIER_TOOLTIP.getString());
-                placeholderIdentifierBox.setHoverTooltipFontScale(hoverToolTipFontSize);
-                placeholderIdentifierBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
-                addChild(placeholderIdentifierBox);
-
-                placeholderRefreshBox = new TextBox();
-                placeholderRefreshBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 9, 0));
-                placeholderRefreshBox.setHoverTooltipSupplier(Texts.PLACEHOLDER_REFRESH_TOOLTIP::getString);
-                placeholderRefreshBox.setHoverTooltipFontScale(hoverToolTipFontSize);
-                placeholderRefreshBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
-                addChild(placeholderRefreshBox);
-
+            else if (type == String.class) {
+                // Free-text settings (e.g. Integrations.MONEY_FORMAT): stored as typed;
+                // the server validates on apply.
+                Setting<String> stringSetting = (Setting<String>) setting;
+                textBox = new TextBox();
+                textBox.setHoverTooltipSupplier(() -> tooltip);
+                textBox.setHoverTooltipFontScale(hoverToolTipFontSize);
+                textBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
+                addChild(textBox);
                 bindings.add(new FieldBinding() {
                     @Override public void loadFromSetting() {
-                        BankSystemModSettings.Placeholder.PlaceholderSettingData v = placeholderSetting.get();
-                        placeholderIdentifierBox.setText(v != null ? v.getIdentifier() : "");
-                        placeholderRefreshBox.setText(v != null ? v.getRefreshRate() : 0);
+                        String v = stringSetting.get();
+                        textBox.setText(v == null ? "" : v);
                     }
                     @Override public void storeToSetting() {
-                        BankSystemModSettings.Placeholder.PlaceholderSettingData current = placeholderSetting.get();
-                        int refreshRate = current != null ? current.getRefreshRate() : 0;
-                        try { refreshRate = placeholderRefreshBox.getInt(); }
-                        catch (Exception e) { /* invalid input — keep the current rate */ }
-                        placeholderSetting.set(new BankSystemModSettings.Placeholder.PlaceholderSettingData(
-                                placeholderIdentifierBox.getText().trim(), refreshRate));
+                        stringSetting.set(textBox.getText());
                     }
                 });
             }
@@ -540,24 +596,6 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             int markerW = restartMarker != null ? (int) (w * 0.2) : 0;
             int editorX = padding + labelW + spacing;
             int editorW = w - labelW - spacing - (markerW > 0 ? markerW + spacing : 0);
-
-            if (placeholderIdentifierBox != null) {
-                // Two-line Placeholder row: line 1 = label (full width up to the
-                // restart marker), line 2 = identifier box + refresh-rate box
-                // spanning the whole row width. The identifier holds the longest
-                // values of any setting (long %...% patterns), so it gets nearly
-                // the full screen width instead of the shared editor column.
-                int labelLineW = w - (markerW > 0 ? markerW + spacing : 0);
-                nameLabel.setBounds(padding, padding / 2, labelLineW, ELEMENT_HEIGHT);
-                if (restartMarker != null)
-                    restartMarker.setBounds(padding + w - markerW, padding / 2, markerW, ELEMENT_HEIGHT);
-
-                int line2Y = padding / 2 + ELEMENT_HEIGHT + spacing;
-                int refreshW = Math.max(60, w / 6);
-                placeholderIdentifierBox.setBounds(padding, line2Y, w - refreshW - spacing, ELEMENT_HEIGHT);
-                placeholderRefreshBox.setBounds(padding + w - refreshW, line2Y, refreshW, ELEMENT_HEIGHT);
-                return;
-            }
 
             nameLabel.setBounds(padding, padding / 2, labelW, ELEMENT_HEIGHT);
 
@@ -590,6 +628,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         applyButton.setClickable(false);
         ModSettingsRequest.InputData input = new ModSettingsRequest.InputData(ModSettingsRequest.Action.GET, "");
         BankSystemNetworking.MOD_SETTINGS_REQUEST.sendRequestToServer(input)
+                .exceptionally(t -> null) // Issue #85: timeout or lost link shows STATUS_FAILED
                 .thenAccept(output -> Minecraft.getInstance().execute(() -> handleResponse(output, Texts.STATUS_LOADED.getString())));
     }
 
@@ -607,6 +646,7 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         applyButton.setClickable(false);
         ModSettingsRequest.InputData input = new ModSettingsRequest.InputData(ModSettingsRequest.Action.SET, payload);
         BankSystemNetworking.MOD_SETTINGS_REQUEST.sendRequestToServer(input)
+                .exceptionally(t -> null)
                 .thenAccept(output -> Minecraft.getInstance().execute(() -> handleResponse(output, Texts.STATUS_SAVED.getString())));
     }
 
@@ -618,7 +658,19 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
         for (SettingsGroup group : workingCopy.getEditableGroups())
             group.setToDefaultValue();
         refreshFields();
+        dirty = true;
         setStatus("", STATUS_COLOR_NEUTRAL);
+    }
+
+    @Override
+    public void onClose() {
+        if (dirty) {
+            AskPopupScreen.openUnsavedChangesPopup(this,
+                    () -> { dirty = false; onClose(); },
+                    () -> { closeAfterSave = true; onApply(); });
+            return;
+        }
+        super.onClose();
     }
 
     /**
@@ -630,6 +682,8 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
      */
     private void handleResponse(ModSettingsRequest.OutputData output, String successStatus) {
         applyButton.setClickable(true);
+        boolean closeNow = closeAfterSave;
+        closeAfterSave = false;
         if (output == null) {
             setStatus(Texts.STATUS_FAILED.getString(), STATUS_COLOR_ERROR);
             return;
@@ -646,7 +700,9 @@ public class ModSettingsScreen extends BankSystemGuiScreen {
             }
         }
         if (output.success()) {
+            dirty = false; // fields now show the confirmed server state
             setStatus(successStatus, STATUS_COLOR_OK);
+            if (closeNow) onClose();
         } else {
             String msg = output.message() == null || output.message().isEmpty()
                     ? Texts.STATUS_FAILED.getString() : output.message();

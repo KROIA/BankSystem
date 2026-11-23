@@ -3,7 +3,8 @@ package net.kroia.banksystem.client.company;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.ShareSymbolStore;
 import net.kroia.banksystem.networking.general.C2SShareSymbolDataRequest;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,8 +149,10 @@ public final class ClientSymbolRegistry {
      * {@link net.minecraft.client.renderer.texture.DynamicTexture} for a dynamic symbol.
      * Used by {@link SharePresetRegistry#getTexture} and {@link net.kroia.banksystem.client.render.StampedShareRenderer}.
      */
-    public static ResourceLocation getDynamicRL(String id) {
-        return ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "dynamic/share_symbol/" + id);
+    public static ResourceLocation getDynamicRL(String id) { // mc<=1.21.10
+    //public static Identifier getDynamicRL(String id) { // mc>=1.21.11
+        return ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "dynamic/share_symbol/" + id); // mc<=1.21.10
+        //return Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "dynamic/share_symbol/" + id); // mc>=1.21.11
     }
 
     /** {@code true} if the DynamicTexture for {@code id} has been registered with the TextureManager. */
@@ -164,7 +167,8 @@ public final class ClientSymbolRegistry {
                     com.mojang.blaze3d.platform.NativeImage.read(
                             new ByteArrayInputStream(bytes));
             net.minecraft.client.renderer.texture.DynamicTexture tex =
-                    new net.minecraft.client.renderer.texture.DynamicTexture(img);
+                    new net.minecraft.client.renderer.texture.DynamicTexture(img); // mc<=1.21.4
+                    //new net.minecraft.client.renderer.texture.DynamicTexture(() -> "banksystem_share_symbol", img); // mc>=1.21.5
             mc.getTextureManager().register(getDynamicRL(id), tex);
             dynamicTextureIds.add(id);
         } catch (Exception e) {

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.widgets;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.InputConstants;
@@ -37,6 +38,14 @@ public class BalanceHistoryChart extends GuiElement {
             "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.30d",
             "gui." + BankSystemMod.MOD_ID + ".balance_history.timescale.all"
     };
+    /**
+     * Task #106: smallest X span (ms) the viewport may show. Time labels are HH:mm, so
+     * anything under a minute renders identical left/right edge labels.
+     */
+    public static final long MIN_VIEW_WIDTH_MS = 60_000L;
+    /** Recenter fallback span when the chart holds no data at all. */
+    private static final long DEFAULT_VIEW_WIDTH_MS = 60L * 60L * 1000L;
+
     private static final int BUTTON_PADDING = 4;
     private static final int BUTTON_SPACING = 3;
     private static final int BUTTON_ROW_GAP = 3;
@@ -61,6 +70,9 @@ public class BalanceHistoryChart extends GuiElement {
     }
 
     public record DataPoint(long time, double value) {}
+
+    /** Task #116: vertical marker at {@code time} with a hover tooltip (suspicion flags). */
+    public record Marker(long time, String tooltip) {}
 
     public static class LineSeries {
         public final String name;
@@ -87,6 +99,8 @@ public class BalanceHistoryChart extends GuiElement {
     private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
     private final List<LineSeries> seriesList = new ArrayList<>();
+    private List<Marker> markers = List.of();
+    private static final int COLOR_MARKER = ColorUtilities.getRGB(230, 40, 40, 200);
     private final Rectangle canvasRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle canvasScissorRect = new Rectangle(1, 1, 0, 0);
 
@@ -133,6 +147,10 @@ public class BalanceHistoryChart extends GuiElement {
 
     public BalanceHistoryChart() {
         setTextFontScale(0.8f);
+        setHoverTooltipSupplier(this::markerTooltipAtMouse);
+        HoverTooltipData tooltipData = getHoverTooltipData();
+        tooltipData.autoSide = true; // flag details can be long: keep the tooltip narrow and on the free side
+        tooltipData.maxWidthFraction = 0.35f;
         buildTimescaleButtons();
         highlightTimescaleButton(currentTimescaleIndex);
     }
@@ -301,22 +319,22 @@ public class BalanceHistoryChart extends GuiElement {
     public void deserializeState(CompoundTag tag) {
         super.deserializeState(tag);
         if (tag.contains("viewX")) {
-            viewX = tag.getDouble("viewX");
-            viewY = tag.getDouble("viewY");
-            viewWidth = tag.getDouble("viewW");
-            viewHeight = tag.getDouble("viewH");
+            viewX = NbtCompat.getDouble(tag, "viewX");
+            viewY = NbtCompat.getDouble(tag, "viewY");
+            viewWidth = NbtCompat.getDouble(tag, "viewW");
+            viewHeight = NbtCompat.getDouble(tag, "viewH");
         }
-        pinnedSeriesIndex = tag.getInt("pinnedIdx");
+        pinnedSeriesIndex = NbtCompat.getInt(tag, "pinnedIdx");
 
         if (tag.contains("series")) {
             seriesList.clear();
-            ListTag seriesTag = tag.getList("series", 10);
+            ListTag seriesTag = NbtCompat.getList(tag, "series", 10);
             for (int i = 0; i < seriesTag.size(); i++) {
-                CompoundTag st = seriesTag.getCompound(i);
-                LineSeries s = new LineSeries(st.getString("name"), st.getInt("color"));
-                s.visible = st.getBoolean("visible");
-                long[] times = st.getLongArray("times");
-                long[] values = st.getLongArray("values");
+                CompoundTag st = NbtCompat.getCompound(seriesTag, i);
+                LineSeries s = new LineSeries(NbtCompat.getString(st, "name"), NbtCompat.getInt(st, "color"));
+                s.visible = NbtCompat.getBoolean(st, "visible");
+                long[] times = st.get("times") instanceof net.minecraft.nbt.LongArrayTag t ? t.getAsLongArray() : new long[0];
+                long[] values = st.get("values") instanceof net.minecraft.nbt.LongArrayTag v ? v.getAsLongArray() : new long[0];
                 int count = Math.min(times.length, values.length);
                 for (int j = 0; j < count; j++) {
                     s.points.add(new DataPoint(times[j], Double.longBitsToDouble(values[j])));
@@ -329,12 +347,13 @@ public class BalanceHistoryChart extends GuiElement {
         pendingHoverBindingIds.clear();
         hoverBindingsResolved = false;
         if (tag.contains("hoverBindings")) {
-            ListTag hoverTag = tag.getList("hoverBindings", 10);
+            ListTag hoverTag = NbtCompat.getList(tag, "hoverBindings", 10);
             for (int i = 0; i < hoverTag.size(); i++) {
-                CompoundTag ht = hoverTag.getCompound(i);
-                pendingHoverBindingIds.put(ht.getString("id"), ht.getInt("idx"));
+                CompoundTag ht = NbtCompat.getCompound(hoverTag, i);
+                pendingHoverBindingIds.put(NbtCompat.getString(ht, "id"), NbtCompat.getInt(ht, "idx"));
             }
         }
+        clampView();
         markDirty();
     }
 
@@ -347,6 +366,36 @@ public class BalanceHistoryChart extends GuiElement {
 
     public void addSeries(LineSeries series) {
         seriesList.add(series);
+    }
+
+    public void setMarkers(List<Marker> markers) {
+        this.markers = List.copyOf(markers);
+    }
+
+    /** @return tooltip of the markers within 3 px of the mouse, or null. */
+    private String markerTooltipAtMouse() {
+        if (markers.isEmpty()) return null;
+        int mx = getMouseX(), my = getMouseY();
+        if (my < canvasRect.y || my > canvasRect.y + canvasRect.height) return null;
+        StringBuilder sb = new StringBuilder();
+        for (Marker m : markers) {
+            if (Math.abs(toCanvasSpaceX(m.time()) - mx) > 3) continue;
+            if (sb.length() > 0) sb.append("\n\n");
+            sb.append(m.tooltip());
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    private static final int MARKER_HEAD = 5;
+
+    private void renderMarkers() {
+        for (Marker m : markers) {
+            int x = toCanvasSpaceX(m.time());
+            if (x < canvasRect.x || x > canvasRect.x + canvasRect.width) continue;
+            // BS-245: line starts below the head square; the colour is translucent, so they must not overlap.
+            drawRect(x - MARKER_HEAD / 2, canvasRect.y, MARKER_HEAD, MARKER_HEAD, COLOR_MARKER);
+            drawRect(x, canvasRect.y + MARKER_HEAD, 1, canvasRect.height - MARKER_HEAD, COLOR_MARKER);
+        }
     }
 
     public void clearSeries() {
@@ -433,8 +482,9 @@ public class BalanceHistoryChart extends GuiElement {
 
     public void scrollToPresent() {
         long now = System.currentTimeMillis();
-        if (viewWidth <= 0) viewWidth = 3_600_000;
+        viewWidth = clampViewWidth(viewWidth, maxViewWidth(now));
         viewX = now - viewWidth;
+        clampView();
         markDirty();
         fireViewChanged();
     }
@@ -467,6 +517,8 @@ public class BalanceHistoryChart extends GuiElement {
         viewX = minTime;
         viewHeight = valRange * 1.2;
         viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
+        clampView();
+        markDirty();
         fireViewChanged();
     }
 
@@ -486,10 +538,20 @@ public class BalanceHistoryChart extends GuiElement {
         boolean hasData = false;
         for (LineSeries s : seriesList) {
             if (!s.visible || s.points.isEmpty()) continue;
+            // Task #106: the last point before fromMs is the value drawn at the left
+            // edge (the line carries forward to "now"), so it counts for the Y fit.
+            // Keeps X == [fromMs, toMs] even when no snapshot lies inside the range.
+            DataPoint carried = null;
             for (DataPoint p : s.points) {
-                if (p.time() < fromMs || p.time() > toMs) continue;
+                if (p.time() < fromMs) { carried = p; continue; }
+                if (p.time() > toMs) continue;
                 minVal = Math.min(minVal, p.value());
                 maxVal = Math.max(maxVal, p.value());
+                hasData = true;
+            }
+            if (carried != null) {
+                minVal = Math.min(minVal, carried.value());
+                maxVal = Math.max(maxVal, carried.value());
                 hasData = true;
             }
         }
@@ -500,6 +562,7 @@ public class BalanceHistoryChart extends GuiElement {
         viewWidth = toMs - fromMs;
         viewHeight = valRange * 1.2;
         viewY = Math.max(-viewHeight * 0.05, minVal - valRange * 0.1);
+        clampView();
         markDirty();
         fireViewChanged();
     }
@@ -537,6 +600,7 @@ public class BalanceHistoryChart extends GuiElement {
 
         enableScissor(canvasScissorRect);
         renderLines();
+        renderMarkers();
         disableScissor();
 
         drawFrame(canvasRect, COLOR_FRAME, 1);
@@ -728,8 +792,7 @@ public class BalanceHistoryChart extends GuiElement {
 
         if (!isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
             double oldWidth = viewWidth;
-            viewWidth = Math.max(1000, viewWidth * zoomFactor);
-            if (maxViewWidthMs != null && viewWidth > maxViewWidthMs) viewWidth = maxViewWidthMs;
+            viewWidth = clampViewWidth(viewWidth * zoomFactor, maxViewWidth(System.currentTimeMillis()));
             double mouseNormX = (mouseWorldX - viewX) / oldWidth;
             viewX = mouseWorldX - mouseNormX * viewWidth;
             consumed = true;
@@ -793,8 +856,10 @@ public class BalanceHistoryChart extends GuiElement {
     protected boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == KEY_SPACE) {
             if (isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
+                // Task #106: reset to the default span ending at now (selected timescale
+                // window, else full history), never the current, possibly collapsed, width.
                 long now = System.currentTimeMillis();
-                autoCenterViewWithinRange(now - (long) viewWidth, now);
+                autoCenterViewWithinRange(now - (long) recenterSpan(maxViewWidth(now)), now);
             } else {
                 autoCenterView();
             }
@@ -806,19 +871,62 @@ public class BalanceHistoryChart extends GuiElement {
 
     // ── View clamping ──
 
+    /**
+     * Task #106: pure X-span clamp. Result is always within
+     * {@code [MIN_VIEW_WIDTH_MS, max(MIN_VIEW_WIDTH_MS, maxWidth)]}; NaN / zero / negative
+     * input snaps to the minimum. Pass {@link Double#POSITIVE_INFINITY} for "uncapped".
+     */
+    public static double clampViewWidth(double width, double maxWidth) {
+        if (!(width >= MIN_VIEW_WIDTH_MS)) return MIN_VIEW_WIDTH_MS;
+        double max = Math.max(MIN_VIEW_WIDTH_MS, maxWidth);
+        return width > max ? max : width;
+    }
+
+    /** Task #106: pure CTRL+SPACE span: the max span, clamped; 1h when unbounded (no data). */
+    public static double recenterSpan(double maxWidth) {
+        double span = clampViewWidth(maxWidth, maxWidth);
+        return Double.isInfinite(span) ? DEFAULT_VIEW_WIDTH_MS : span;
+    }
+
+    /**
+     * Task #106: smallest timescale window {@code >= widthMs}, else {@code widthMs} itself.
+     * Used when a saved viewport re-enters rolling mode, so the zoom-out cap is a real
+     * timescale and not whatever (possibly collapsed) width was persisted.
+     */
+    public static long timescaleCeilMs(double widthMs) {
+        for (long t : TIMESCALES_MS) if (t > 0 && t >= widthMs) return t;
+        return (long) Math.ceil(widthMs);
+    }
+
+    /**
+     * Task #106: upper X-span bound. The selected timescale window when one is set,
+     * else the loaded history range extended to {@code now}; infinite when no data.
+     */
+    private double maxViewWidth(long now) {
+        if (maxViewWidthMs != null) return maxViewWidthMs;
+        long first = Long.MAX_VALUE;
+        for (LineSeries s : seriesList) {
+            if (!s.points.isEmpty()) first = Math.min(first, s.points.get(0).time());
+        }
+        return first == Long.MAX_VALUE ? Double.POSITIVE_INFINITY : (double) (now - first);
+    }
+
+    /** Single choke point for every viewport mutation (zoom, pan, fit, recenter, restore). */
     private void clampView() {
+        long now = System.currentTimeMillis();
+        viewWidth = clampViewWidth(viewWidth, maxViewWidth(now));
         if (leftClampAtMs != null || rightClampAtMs != null) {
             // Explicit-bounds mode (rolling-fetch): the loaded-data extents no longer
             // clamp viewX, so the caller can drag past currently loaded data to trigger
             // prefetches. Only the caller-supplied bounds constrain viewX. viewWidth is
             // NOT clamped to dataRange here — a "30d" window with only 1d of data still
             // shows a 30d-wide viewport.
-            // Cap viewWidth at the configured maximum (if any) BEFORE the horizontal
-            // clamp math so a shrunk viewWidth feeds the viewX / rightClamp checks.
-            if (maxViewWidthMs != null && viewWidth > maxViewWidthMs) viewWidth = maxViewWidthMs;
+            // viewWidth is already capped at maxViewWidthMs above. Right clamp never
+            // trails the wall clock: a stale fetch-time bound would stop CTRL+SPACE reaching "now".
             if (leftClampAtMs != null && viewX < leftClampAtMs) viewX = leftClampAtMs;
-            if (rightClampAtMs != null && viewX + viewWidth > rightClampAtMs) {
-                viewX = rightClampAtMs - viewWidth;
+            if (rightClampAtMs != null) {
+                long right = Math.max(rightClampAtMs, now);
+                if (viewX + viewWidth > right) viewX = right - viewWidth;
             }
             // Re-apply the left clamp: if the two bounds together can't fit viewWidth,
             // let the left clamp win (right edge may extend past rightClampAtMs).
@@ -834,12 +942,11 @@ public class BalanceHistoryChart extends GuiElement {
                 maxTime = Math.max(maxTime, s.points.get(s.points.size() - 1).time());
             }
             if (minTime != Long.MAX_VALUE) {
-                double dataRange = maxTime - minTime;
-                if (dataRange <= 0) dataRange = 60_000;
-
-                if (viewWidth > dataRange) viewWidth = dataRange;
+                // Right bound is "now" (the line extends there); left bound is the first
+                // snapshot. Left wins when the min span can't fit between them.
+                long right = Math.max(maxTime, now);
+                if (viewX + viewWidth > right) viewX = right - viewWidth;
                 if (viewX < minTime) viewX = minTime;
-                if (viewX + viewWidth > maxTime) viewX = maxTime - viewWidth;
             }
         }
 

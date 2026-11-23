@@ -4,9 +4,9 @@ import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
 import net.kroia.banksystem.banking.company.PayoutSchedule;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
@@ -27,6 +27,11 @@ public class PayoutManagerTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.COMPANY;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override

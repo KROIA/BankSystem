@@ -1,5 +1,8 @@
 package net.kroia.banksystem.minecraft.item.custom.money;
 
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
@@ -43,13 +46,18 @@ public class MoneyItem extends Item{
     public static String getCurrencyName() {
         return CURRENCY_NAME.getString();
     }
-    public static String getName() {
+    public static String getMoneyItemName() {
         return ITEM_NAME.getString();
     }
 
     public MoneyItem() {
+        this(BankSystemMod.id(NAME));
+    }
+    /** Subclasses pass the id they are registered under. */
+    protected MoneyItem(ResourceLocation id) { // mc<=1.21.10
+    //protected MoneyItem(Identifier id) { // mc>=1.21.11
         //super(new Properties().tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB)); // 1.19.2 and below
-        super(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB));
+        super(RegistryCompat.itemProperties(new Properties().arch$tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB), id));
     }
 
     @Override
@@ -103,7 +111,7 @@ public class MoneyItem extends Item{
         BlockPos pos = context.getClickedPos().relative(context.getClickedFace());
         Player player = context.getPlayer();
 
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof MoneyStockpileBlockEntity stockpile) {
                 ItemStack itemStack = context.getItemInHand();
@@ -147,6 +155,6 @@ public class MoneyItem extends Item{
                 return InteractionResult.SUCCESS;
             }
         }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return level.isClientSide() ? InteractionResult.SUCCESS : InteractionResult.CONSUME;
     }
 }

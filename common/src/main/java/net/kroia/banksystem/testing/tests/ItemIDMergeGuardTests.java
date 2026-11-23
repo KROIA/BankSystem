@@ -12,15 +12,16 @@ import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.filter.EqualityFilter;
 import net.kroia.banksystem.data.table.BalanceHistoryManager;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
+import net.kroia.banksystem.networking.general.SyncItemIDsPacket;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.event.DataEvent;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
@@ -104,6 +105,11 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("putAlias_succeeds_when_source_not_in_map", this::testPutAliasSucceedsWhenSourceNotInMap);
         addTest("putAlias_rejects_when_source_in_map", this::testPutAliasRejectsWhenSourceInMap);
         addTest("renormalize_still_produces_aliases_via_guarded_path", this::testRenormalizeStillProducesAliasesViaGuardedPath);
+        addTest("receiver_follows_master_merge", this::testReceiverFollowsMasterMerge);
+        addTest("receiver_takes_master_item_on_short_clash", this::testReceiverTakesMasterItemOnShortClash);
+        addTest("receiver_full_sync_drops_stale_short", this::testReceiverFullSyncDropsStaleShort);
+        addTest("incomplete_full_sync_is_sent_as_update", this::testIncompleteFullSyncIsSentAsUpdate);
+        addTest("fixture_window_suppresses_new_item_broadcast", this::testFixtureWindowSuppressesNewItemBroadcast);
         // Task #16 — registration latch, persisted-wins merges, stale-key replacement
         addTest("master_registration_latched_before_load", this::testMasterRegistrationLatchedBeforeLoad);
         addTest("persisted_short_wins_merge_canonicality", this::testPersistedShortWinsMergeCanonicality);
@@ -575,7 +581,12 @@ public class ItemIDMergeGuardTests extends TestSuite {
 
             return pass("applied merge purges alias balance-history rows and preserves canonical rows");
         } catch (Exception e) {
-            return fail("balance-history purge test threw: " + e.getMessage());
+            // BS-277: one run failed with a message-less exception; keep class, first frame and the full stack
+            BankSystemModBackend.Instances instances = BankSystemModBackend.getInstances_forTesting();
+            if (instances != null) instances.LOGGER.error("balance-history purge test threw", e);
+            StackTraceElement[] st = e.getStackTrace();
+            return fail("balance-history purge test threw: " + e.getClass().getName() + " — " + e.getMessage()
+                    + (st.length > 0 ? " at " + st[0] : " (no stack, JVM fast-throw?)"));
         } finally {
             // Cleanup: remove any residual history rows for the synthetic account (belt-and-
             // suspenders — the merge path should already have cleaned alias-keyed rows, but
@@ -760,131 +771,133 @@ public class ItemIDMergeGuardTests extends TestSuite {
         // restore so the live world's persisted-wins merge protection is not degraded.
         Set<ItemID> savedPersisted = ItemIDManager.getPersistedShorts_forTesting();
 
-        try {
-            // ==== Build a fixture registry: 3 uniquely-tagged paper items ====
-            // Register in the live map first so ItemIDManager mints real shorts + templates.
-            ItemID id1 = registerScratch(
-                    paperWithCustomData("v202-upgrade-1"));
-            ItemID id2 = registerScratch(
-                    paperWithCustomData("v202-upgrade-2"));
-            ItemID id3 = registerScratch(
-                    paperWithCustomData("v202-upgrade-3"));
-            if (!id1.isValid() || !id2.isValid() || !id3.isValid())
-                return fail("Could not register the three synthetic templates");
-            Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
-            fixture.put(id1, ItemIDManager.getItemStackTemplate(id1).copy());
-            fixture.put(id2, ItemIDManager.getItemStackTemplate(id2).copy());
-            fixture.put(id3, ItemIDManager.getItemStackTemplate(id3).copy());
-            int maxShort = Math.max(id1.getShort(), Math.max(id2.getShort(), id3.getShort()));
-
-            // ==== Serialize the fixture through save(), then strip v2.0.3-only keys ====
-            // Install ONLY the fixture as the live state, save it to a tag.
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), maxShort + 1);
-            CompoundTag serialized = new CompoundTag();
-            boolean saveOk = new ItemIDManager().save(serialized);
-            if (!saveOk)
-                return fail("Could not serialize the fixture registry");
-
-            // Build the v2.0.2-shaped tag: only the itemIDs list is present.
-            CompoundTag v202Tag = new CompoundTag();
-            v202Tag.put("itemIDs", serialized.get("itemIDs"));
-            // NB: intentionally do NOT copy nextShortCounter (Task #11 addition) nor
-            // itemIDAliases (didn't exist in v2.0.2 in this form).
-            TestResult r = assertFalse("v2.0.2 fixture omits nextShortCounter",
-                    v202Tag.contains("nextShortCounter"));
-            if (!r.passed()) return r;
-            r = assertFalse("v2.0.2 fixture omits itemIDAliases",
-                    v202Tag.contains("itemIDAliases"));
-            if (!r.passed()) return r;
-
-            // ==== Clear the live state and load the v2.0.2 tag ====
-            ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
-
-            boolean loaded;
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
             try {
-                loaded = new ItemIDManager().load(v202Tag);
+                // ==== Build a fixture registry: 3 uniquely-tagged paper items ====
+                // Register in the live map first so ItemIDManager mints real shorts + templates.
+                ItemID id1 = registerScratch(
+                        paperWithCustomData("v202-upgrade-1"));
+                ItemID id2 = registerScratch(
+                        paperWithCustomData("v202-upgrade-2"));
+                ItemID id3 = registerScratch(
+                        paperWithCustomData("v202-upgrade-3"));
+                if (!id1.isValid() || !id2.isValid() || !id3.isValid())
+                    return fail("Could not register the three synthetic templates");
+                Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
+                fixture.put(id1, ItemIDManager.getItemStackTemplate(id1).copy());
+                fixture.put(id2, ItemIDManager.getItemStackTemplate(id2).copy());
+                fixture.put(id3, ItemIDManager.getItemStackTemplate(id3).copy());
+                int maxShort = Math.max(id1.getShort(), Math.max(id2.getShort(), id3.getShort()));
+
+                // ==== Serialize the fixture through save(), then strip v2.0.3-only keys ====
+                // Install ONLY the fixture as the live state, save it to a tag.
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), maxShort + 1);
+                CompoundTag serialized = new CompoundTag();
+                boolean saveOk = new ItemIDManager().save(serialized);
+                if (!saveOk)
+                    return fail("Could not serialize the fixture registry");
+
+                // Build the v2.0.2-shaped tag: only the itemIDs list is present.
+                CompoundTag v202Tag = new CompoundTag();
+                v202Tag.put("itemIDs", serialized.get("itemIDs"));
+                // NB: intentionally do NOT copy nextShortCounter (Task #11 addition) nor
+                // itemIDAliases (didn't exist in v2.0.2 in this form).
+                TestResult r = assertFalse("v2.0.2 fixture omits nextShortCounter",
+                        v202Tag.contains("nextShortCounter"));
+                if (!r.passed()) return r;
+                r = assertFalse("v2.0.2 fixture omits itemIDAliases",
+                        v202Tag.contains("itemIDAliases"));
+                if (!r.passed()) return r;
+
+                // ==== Clear the live state and load the v2.0.2 tag ====
+                ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
+
+                boolean loaded;
+                try {
+                    loaded = new ItemIDManager().load(v202Tag);
+                } catch (Throwable t) {
+                    return fail("v2.0.2 upgrade load threw an exception: " + t.getClass().getSimpleName()
+                            + " — " + t.getMessage());
+                }
+
+                r = assertTrue("(a) load() returned true, no exception", loaded);
+                if (!r.passed()) return r;
+
+                // (b) Counter seeded to max(loaded shorts) + 1. Dynamic against the actual
+                // loaded map instead of the fixture's known max — the fixture builder operates
+                // on static class-level maps in ItemIDManager, and isolation via
+                // replaceState_forTesting() is not perfectly hermetic against a live production
+                // world's state. What matters semantically is that legacy migration seeds the
+                // counter one past the largest short present in the loaded state, so the
+                // allocator cannot re-issue a currently-referenced short. Comparing against a
+                // hardcoded fixture max would be brittle without buying additional coverage.
+                int seededCounter = ItemIDManager.getNextShortCounter_forTesting();
+                Map<ItemID, ItemStack> loadedMap = ItemIDManager.getItemIDMap();
+                int loadedMaxShort = loadedMap.keySet().stream()
+                        .mapToInt(id -> Short.toUnsignedInt(id.getShort()))
+                        .max().orElse(0);
+                r = assertEquals("(b) counter seeded to max(loaded map shorts) + 1",
+                        loadedMaxShort + 1, seededCounter);
+                if (!r.passed()) return r;
+
+                // (c) Fixture ItemIDs preserved. Each of our curated entries must survive the
+                // round-trip through save / v2.0.2-strip / load. Exact-count check is dropped
+                // on purpose: the isolation caveat noted on (b) may cause piggybacked
+                // live-state entries to appear in the loaded map — the invariant we test is
+                // that OUR fixture entries are there, not that they're alone.
+                for (ItemID id : List.of(id1, id2, id3)) {
+                    r = assertTrue("(c) fixture entry preserved: " + id, loadedMap.containsKey(id));
+                    if (!r.passed()) return r;
+                }
+
+                // (d) appliedComponentSet recorded. The startup merge guard calls
+                // dataHandler.setAppliedEffectiveComponentSet(currentSet) after every successful
+                // load. We inspect that field via the test-only accessor and match it against the
+                // current effective set — a positive proof that the guard's write happened.
+                if (BankSystemModBackend.getInstances_forTesting() != null
+                        && BankSystemModBackend.getInstances_forTesting().SERVER_DATA_HANDLER != null) {
+                    List<String> applied = BankSystemModBackend.getInstances_forTesting().SERVER_DATA_HANDLER
+                            .getAppliedEffectiveComponentSet_forTesting();
+                    r = assertNotNull("(d) appliedComponentSet assigned after load", applied);
+                    if (!r.passed()) return r;
+                    r = assertEquals("(d) appliedComponentSet equals the current effective set",
+                            VolatileItemComponents.getEffectiveComponentIds(), applied);
+                    if (!r.passed()) return r;
+                }
+
+                // (e) Terminal alias-map state is empty after the load-time repair pass. The
+                // repair count itself is intentionally NOT asserted: a healing merge inside
+                // the load-time renormalizeAndMerge() can create-then-flatten aliases in the
+                // same pass, and any live-state leakage the fixture picks up (see the
+                // isolation note on (b)) may contribute orphans that repair correctly cleans
+                // up. What matters is the terminal state — no dangling aliases in the loaded
+                // registry for a v2.0.2-shaped tag.
+                r = assertEquals("(e) zero alias entries in the terminal state (post repair)",
+                        0, ItemIDManager.getItemIDAliasMap().size());
+                if (!r.passed()) return r;
+
+                return pass("v2.0.2 upgrade path is exception-free, seeds counter to one past "
+                        + "the largest surviving short, preserves fixture items, and leaves a "
+                        + "clean alias table");
             } catch (Throwable t) {
-                return fail("v2.0.2 upgrade load threw an exception: " + t.getClass().getSimpleName()
-                        + " — " + t.getMessage());
-            }
-
-            r = assertTrue("(a) load() returned true, no exception", loaded);
-            if (!r.passed()) return r;
-
-            // (b) Counter seeded to max(loaded shorts) + 1. Dynamic against the actual
-            // loaded map instead of the fixture's known max — the fixture builder operates
-            // on static class-level maps in ItemIDManager, and isolation via
-            // replaceState_forTesting() is not perfectly hermetic against a live production
-            // world's state. What matters semantically is that legacy migration seeds the
-            // counter one past the largest short present in the loaded state, so the
-            // allocator cannot re-issue a currently-referenced short. Comparing against a
-            // hardcoded fixture max would be brittle without buying additional coverage.
-            int seededCounter = ItemIDManager.getNextShortCounter_forTesting();
-            Map<ItemID, ItemStack> loadedMap = ItemIDManager.getItemIDMap();
-            int loadedMaxShort = loadedMap.keySet().stream()
-                    .mapToInt(id -> Short.toUnsignedInt(id.getShort()))
-                    .max().orElse(0);
-            r = assertEquals("(b) counter seeded to max(loaded map shorts) + 1",
-                    loadedMaxShort + 1, seededCounter);
-            if (!r.passed()) return r;
-
-            // (c) Fixture ItemIDs preserved. Each of our curated entries must survive the
-            // round-trip through save / v2.0.2-strip / load. Exact-count check is dropped
-            // on purpose: the isolation caveat noted on (b) may cause piggybacked
-            // live-state entries to appear in the loaded map — the invariant we test is
-            // that OUR fixture entries are there, not that they're alone.
-            for (ItemID id : List.of(id1, id2, id3)) {
-                r = assertTrue("(c) fixture entry preserved: " + id, loadedMap.containsKey(id));
-                if (!r.passed()) return r;
-            }
-
-            // (d) appliedComponentSet recorded. The startup merge guard calls
-            // dataHandler.setAppliedEffectiveComponentSet(currentSet) after every successful
-            // load. We inspect that field via the test-only accessor and match it against the
-            // current effective set — a positive proof that the guard's write happened.
-            if (BankSystemModBackend.getInstances_forTesting() != null
-                    && BankSystemModBackend.getInstances_forTesting().SERVER_DATA_HANDLER != null) {
-                List<String> applied = BankSystemModBackend.getInstances_forTesting().SERVER_DATA_HANDLER
-                        .getAppliedEffectiveComponentSet_forTesting();
-                r = assertNotNull("(d) appliedComponentSet assigned after load", applied);
-                if (!r.passed()) return r;
-                r = assertEquals("(d) appliedComponentSet equals the current effective set",
-                        VolatileItemComponents.getEffectiveComponentIds(), applied);
-                if (!r.passed()) return r;
-            }
-
-            // (e) Terminal alias-map state is empty after the load-time repair pass. The
-            // repair count itself is intentionally NOT asserted: a healing merge inside
-            // the load-time renormalizeAndMerge() can create-then-flatten aliases in the
-            // same pass, and any live-state leakage the fixture picks up (see the
-            // isolation note on (b)) may contribute orphans that repair correctly cleans
-            // up. What matters is the terminal state — no dangling aliases in the loaded
-            // registry for a v2.0.2-shaped tag.
-            r = assertEquals("(e) zero alias entries in the terminal state (post repair)",
-                    0, ItemIDManager.getItemIDAliasMap().size());
-            if (!r.passed()) return r;
-
-            return pass("v2.0.2 upgrade path is exception-free, seeds counter to one past "
-                    + "the largest surviving short, preserves fixture items, and leaves a "
-                    + "clean alias table");
-        } catch (Throwable t) {
-            return fail("v2.0.2 upgrade test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
-        } finally {
-            // Restore live state — bit-exact snapshot so the rest of the suite continues on
-            // the original registry.
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            // Quarantined corruption evidence: bit-exact restore (see the snapshot comment).
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            // Restore the lastLoadRepairCount too so a follow-up test that reads it sees the
-            // pre-test value (currently no test reads it, but future-proof).
-            if (savedRepairCount > 0) {
-                // The counter is only mutated inside load() — we can't set it directly, but
-                // consuming it clears to 0 which is the safest default when we can't restore
-                // the exact value. Any test that needs it would have to invoke load() itself.
-                ItemIDManager.consumeLastLoadRepairCount();
-            } else {
-                ItemIDManager.consumeLastLoadRepairCount();
+                return fail("v2.0.2 upgrade test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
+            } finally {
+                // Restore live state — bit-exact snapshot so the rest of the suite continues on
+                // the original registry.
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                // Quarantined corruption evidence: bit-exact restore (see the snapshot comment).
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                // Restore the lastLoadRepairCount too so a follow-up test that reads it sees the
+                // pre-test value (currently no test reads it, but future-proof).
+                if (savedRepairCount > 0) {
+                    // The counter is only mutated inside load() — we can't set it directly, but
+                    // consuming it clears to 0 which is the safest default when we can't restore
+                    // the exact value. Any test that needs it would have to invoke load() itself.
+                    ItemIDManager.consumeLastLoadRepairCount();
+                } else {
+                    ItemIDManager.consumeLastLoadRepairCount();
+                }
             }
         }
     }
@@ -963,6 +976,133 @@ public class ItemIDMergeGuardTests extends TestSuite {
             // Belt-and-suspenders: if the guard somehow accepted the insert, clean up.
             ItemIDManager.removeAliasEntries_forTesting(List.of(a));
         }
+    }
+
+    /**
+     * BS-253: a receiver that still holds source short S as a live item gets the alias S→T
+     * from the master and follows it: alias installed (so the guard did not reject it),
+     * S gone from the item table, T untouched. Calls the receive-path helper directly —
+     * {@code receiveSyncPacket} on the master would also capture the tag snapshot and
+     * re-adopt the component lists, which a test must not touch on a live server.
+     */
+    private TestResult testReceiverFollowsMasterMerge() {
+        ItemID s = registerScratch(paperWithCustomData("receiver-merge-source"));
+        ItemID t = registerScratch(paperWithCustomData("receiver-merge-target"));
+        if (!s.isValid() || !t.isValid()) return fail("Could not register scratch templates");
+        try {
+            ItemIDManager.applyAliasesFromMaster(Map.of(s, t));
+            TestResult r = assertEquals("alias S -> T installed", t, ItemIDManager.getItemIDAliasMap().get(s));
+            if (!r.passed()) return r;
+            r = assertFalse("S dropped from itemIDMap", ItemIDManager.getItemIDMap().containsKey(s));
+            if (!r.passed()) return r;
+            r = assertTrue("T stays in itemIDMap", ItemIDManager.getItemIDMap().containsKey(t));
+            if (!r.passed()) return r;
+            return pass("receiver follows the master's merge without a guard rejection");
+        } finally {
+            ItemIDManager.removeAliasEntries_forTesting(List.of(s));
+        }
+    }
+
+    /**
+     * BS-259: a receiver that holds short N for item A gets N = item B from the master and
+     * ends with N → B; A no longer resolves to N. Same direct-helper reason as
+     * {@link #testReceiverFollowsMasterMerge()}. The suite's state guard restores N in teardown.
+     */
+    private TestResult testReceiverTakesMasterItemOnShortClash() {
+        ItemStack a = paperWithCustomData("receiver-clash-old");
+        ItemStack b = paperWithCustomData("receiver-clash-new");
+        ItemID n = registerScratch(a);
+        if (!n.isValid()) return fail("Could not register scratch template A");
+        TestResult r = assertTrue("different item under N is replaced", ItemIDManager.adoptMasterItem(n, b.copy()));
+        if (!r.passed()) return r;
+        r = assertEquals("B resolves to N", n, ItemIDManager.getItemID(b));
+        if (!r.passed()) return r;
+        r = assertFalse("A no longer resolves to N", n.equals(ItemIDManager.getItemID(a)));
+        if (!r.passed()) return r;
+        r = assertFalse("same item again is a no-op", ItemIDManager.adoptMasterItem(n, b.copy()));
+        if (!r.passed()) return r;
+        return pass("receiver takes the master's item on a short clash");
+    }
+
+    /**
+     * BS-260: a receiver holds K and N for item B; a sync carrying every other short but not K
+     * drops K only when it is a FULL sync. Calls the prune step directly (see
+     * {@link #testReceiverFollowsMasterMerge()}); only the packet's keys matter to it, so the
+     * item tags are empty. The packet carries every live short except K so nothing else is
+     * dropped; the suite's state guard restores the registry in teardown.
+     */
+    private TestResult testReceiverFullSyncDropsStaleShort() {
+        ItemStack b = paperWithCustomData("receiver-full-sync");
+        ItemID n = registerScratch(b);
+        short base = pickUnusedShortBase(1);
+        if (!n.isValid() || base < 0) return fail("Could not set up N and K");
+        ItemID k = new ItemID(base, null);
+        ItemIDManager.adoptMasterItem(k, b.copy());
+        Map<ItemID, CompoundTag> items = new HashMap<>();
+        for (ItemID id : ItemIDManager.getItemIDMap().keySet())
+            if (!id.equals(k)) items.put(id, new CompoundTag());
+        List<String> vol = VolatileItemComponents.getConfigComponentIdStrings();
+        List<String> gated = VolatileItemComponents.getGatedConfigComponentIdStrings();
+        Map<ItemID, ItemID> aliases = ItemIDManager.getItemIDAliasMap();
+
+        TestResult r = assertEquals("incremental sync drops nothing", 0,
+                ItemIDManager.dropShortsMissingFromFullSync(new SyncItemIDsPacket(items, vol, gated, aliases, false)));
+        if (!r.passed()) return r;
+        r = assertTrue("K stays after an incremental sync", ItemIDManager.getItemIDMap().containsKey(k));
+        if (!r.passed()) return r;
+        r = assertEquals("full sync drops only K", 1,
+                ItemIDManager.dropShortsMissingFromFullSync(new SyncItemIDsPacket(items, vol, gated, aliases, true)));
+        if (!r.passed()) return r;
+        r = assertFalse("K gone after the full sync", ItemIDManager.getItemIDMap().containsKey(k));
+        if (!r.passed()) return r;
+        r = assertEquals("B resolves to N", n, ItemIDManager.getItemID(b));
+        if (!r.passed()) return r;
+        return pass("a full sync drops the stale short, an incremental one does not");
+    }
+
+    /**
+     * BS-263: an entry that cannot be serialized (here an empty stack) is left out of the
+     * packet, so a full sync built from that table must go out as an incremental update.
+     * Builds the packets only; nothing is sent.
+     */
+    private TestResult testIncompleteFullSyncIsSentAsUpdate() {
+        short base = pickUnusedShortBase(2);
+        if (base < 0) return fail("Could not pick unused shorts");
+        Map<ItemID, ItemStack> complete = new HashMap<>();
+        complete.put(new ItemID(base, null), new ItemStack(Items.PAPER));
+        TestResult r = assertTrue("complete full sync stays full",
+                new SyncItemIDsPacket(complete, true).isFullSync());
+        if (!r.passed()) return r;
+        Map<ItemID, ItemStack> incomplete = new HashMap<>(complete);
+        incomplete.put(new ItemID((short) (base + 1), null), ItemStack.EMPTY);
+        SyncItemIDsPacket packet = new SyncItemIDsPacket(incomplete, true);
+        r = assertFalse("incomplete full sync is downgraded", packet.isFullSync());
+        if (!r.passed()) return r;
+        r = assertEquals("serializable entry still sent", 1, packet.getItems().size());
+        if (!r.passed()) return r;
+        return pass("an incomplete full sync goes out as an update");
+    }
+
+    /**
+     * BS-264: an item registered inside a fixture window is not broadcast incrementally; one
+     * registered outside it is (control, proves the counter is live). The window's close sends
+     * a full sync, which is not counted. The suite's state guard drops both items in teardown.
+     */
+    private TestResult testFixtureWindowSuppressesNewItemBroadcast() {
+        long before = ItemIDManager.getNewItemBroadcastCount_forTesting();
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) {
+            if (!registerScratch(paperWithCustomData("fixture-window-inside")).isValid())
+                return fail("Could not register the scratch template inside the window");
+        }
+        TestResult r = assertEquals("no incremental broadcast inside the window", before,
+                ItemIDManager.getNewItemBroadcastCount_forTesting());
+        if (!r.passed()) return r;
+        if (!registerScratch(paperWithCustomData("fixture-window-outside")).isValid())
+            return fail("Could not register the scratch template outside the window");
+        r = assertEquals("one incremental broadcast outside the window", before + 1,
+                ItemIDManager.getNewItemBroadcastCount_forTesting());
+        if (!r.passed()) return r;
+        return pass("a fixture window keeps new items off the wire");
     }
 
     /**
@@ -1070,92 +1210,94 @@ public class ItemIDMergeGuardTests extends TestSuite {
         final short persistedShort = 7;
         final int persistedCounter = 2901;
 
-        try {
-            // Register P once in the live map to obtain a correctly normalized template + name,
-            // then re-key that template at the persisted short (7) in a curated fixture.
-            ItemStack pStack = paperWithCustomData("startup-reconcile-P");
-            ItemID tempId = registerScratch(pStack);
-            if (!tempId.isValid())
-                return fail("Could not register the synthetic template P to obtain its normalized form");
-            ItemStack pTemplate = ItemIDManager.getItemStackTemplate(tempId).copy();
-            ItemID p = new ItemID(persistedShort, tempId.getName());
-
-            Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
-            fixture.put(p, pTemplate);
-
-            // Install the fixture as the live state, then persist it through save().
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), persistedCounter);
-            CompoundTag tag = new CompoundTag();
-            if (!new ItemIDManager().save(tag))
-                return fail("Could not serialize the drifted-world fixture");
-
-            // Clear and re-load through the real persistence path (exercises load_itemIDs's core).
-            ItemIDManager.clear();
-            boolean loaded;
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
             try {
-                loaded = new ItemIDManager().load(tag);
+                // Register P once in the live map to obtain a correctly normalized template + name,
+                // then re-key that template at the persisted short (7) in a curated fixture.
+                ItemStack pStack = paperWithCustomData("startup-reconcile-P");
+                ItemID tempId = registerScratch(pStack);
+                if (!tempId.isValid())
+                    return fail("Could not register the synthetic template P to obtain its normalized form");
+                ItemStack pTemplate = ItemIDManager.getItemStackTemplate(tempId).copy();
+                ItemID p = new ItemID(persistedShort, tempId.getName());
+
+                Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
+                fixture.put(p, pTemplate);
+
+                // Install the fixture as the live state, then persist it through save().
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), persistedCounter);
+                CompoundTag tag = new CompoundTag();
+                if (!new ItemIDManager().save(tag))
+                    return fail("Could not serialize the drifted-world fixture");
+
+                // Clear and re-load through the real persistence path (exercises load_itemIDs's core).
+                ItemIDManager.clear();
+                boolean loaded;
+                try {
+                    loaded = new ItemIDManager().load(tag);
+                } catch (Throwable t) {
+                    return fail("load() of the drifted fixture threw: " + t.getClass().getSimpleName()
+                            + " — " + t.getMessage());
+                }
+                TestResult r = assertTrue("load() returned true (no merge abort, no exception)", loaded);
+                if (!r.passed()) return r;
+
+                // Persisted identity restored: P resolves to short 7, counter restored to 2901.
+                r = assertEquals("P is restored at the persisted short 7",
+                        persistedShort, ItemIDManager.getItemID(pStack).getShort());
+                if (!r.passed()) return r;
+                r = assertEquals("counter restored to the persisted value",
+                        persistedCounter, ItemIDManager.getNextShortCounter_forTesting());
+                if (!r.passed()) return r;
+
+                // --- Register-if-absent: default registration of an already-persisted item ---
+                int counterBeforeReRegister = ItemIDManager.getNextShortCounter_forTesting();
+                // Inside the fixture window: register DIRECTLY. registerScratch()'s residue
+                // eviction would delete the fixture row for P (a marked paper template) and the
+                // re-registration would mint a fresh short instead of returning the persisted 7.
+                ItemID reRegistered = ItemIDManager.registerItemStackServerSide_direct(pStack);
+                r = assertEquals("register-if-absent returns the persisted short 7 for P",
+                        persistedShort, reRegistered.getShort());
+                if (!r.passed()) return r;
+                r = assertEquals("re-registering an existing item does NOT advance the counter",
+                        counterBeforeReRegister, ItemIDManager.getNextShortCounter_forTesting());
+                if (!r.passed()) return r;
+                r = assertFalse("no alias entry was created keyed at the persisted short 7",
+                        ItemIDManager.getItemIDAliasMap().containsKey(new ItemID(persistedShort)));
+                if (!r.passed()) return r;
+
+                // --- Brand-new item: mints the counter value and advances it ---
+                ItemStack brandNew = paperWithCustomData("startup-reconcile-NEW");
+                // Fixture window: direct. The short minted here belongs to the fixture counter
+                // space and may collide with a real live short in the guard's snapshot.
+                ItemID newId = ItemIDManager.registerItemStackServerSide_direct(brandNew);
+                r = assertTrue("brand-new item registered as a valid ID", newId.isValid());
+                if (!r.passed()) return r;
+                r = assertEquals("brand-new item gets the counter's short (2901)",
+                        (short) persistedCounter, newId.getShort());
+                if (!r.passed()) return r;
+                r = assertEquals("counter advanced to 2902 after minting the new short",
+                        persistedCounter + 1, ItemIDManager.getNextShortCounter_forTesting());
+                if (!r.passed()) return r;
+
+                return pass("persisted short 7 survives register-if-absent (no counter advance, no alias), "
+                        + "and a brand-new item mints 2901 and advances the counter to 2902");
             } catch (Throwable t) {
-                return fail("load() of the drifted fixture threw: " + t.getClass().getSimpleName()
+                return fail("startup-reconciliation test threw: " + t.getClass().getSimpleName()
                         + " — " + t.getMessage());
+            } finally {
+                // Restore live state bit-exact so the rest of the suite continues unaffected.
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                // Quarantined corruption evidence: bit-exact restore (see the snapshot comment).
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                // clear() above armed the LIVE latch; the fixture load() normally releases it,
+                // but an early throw in between must not leave the live master latched.
+                ItemIDManager.markRegistryReady();
+                // load() above mutated lastLoadRepairCount; drain it back toward the pre-test value.
+                if (savedRepairCount == 0)
+                    ItemIDManager.consumeLastLoadRepairCount();
             }
-            TestResult r = assertTrue("load() returned true (no merge abort, no exception)", loaded);
-            if (!r.passed()) return r;
-
-            // Persisted identity restored: P resolves to short 7, counter restored to 2901.
-            r = assertEquals("P is restored at the persisted short 7",
-                    persistedShort, ItemIDManager.getItemID(pStack).getShort());
-            if (!r.passed()) return r;
-            r = assertEquals("counter restored to the persisted value",
-                    persistedCounter, ItemIDManager.getNextShortCounter_forTesting());
-            if (!r.passed()) return r;
-
-            // --- Register-if-absent: default registration of an already-persisted item ---
-            int counterBeforeReRegister = ItemIDManager.getNextShortCounter_forTesting();
-            // Inside the fixture window: register DIRECTLY. registerScratch()'s residue
-            // eviction would delete the fixture row for P (a marked paper template) and the
-            // re-registration would mint a fresh short instead of returning the persisted 7.
-            ItemID reRegistered = ItemIDManager.registerItemStackServerSide_direct(pStack);
-            r = assertEquals("register-if-absent returns the persisted short 7 for P",
-                    persistedShort, reRegistered.getShort());
-            if (!r.passed()) return r;
-            r = assertEquals("re-registering an existing item does NOT advance the counter",
-                    counterBeforeReRegister, ItemIDManager.getNextShortCounter_forTesting());
-            if (!r.passed()) return r;
-            r = assertFalse("no alias entry was created keyed at the persisted short 7",
-                    ItemIDManager.getItemIDAliasMap().containsKey(new ItemID(persistedShort)));
-            if (!r.passed()) return r;
-
-            // --- Brand-new item: mints the counter value and advances it ---
-            ItemStack brandNew = paperWithCustomData("startup-reconcile-NEW");
-            // Fixture window: direct. The short minted here belongs to the fixture counter
-            // space and may collide with a real live short in the guard's snapshot.
-            ItemID newId = ItemIDManager.registerItemStackServerSide_direct(brandNew);
-            r = assertTrue("brand-new item registered as a valid ID", newId.isValid());
-            if (!r.passed()) return r;
-            r = assertEquals("brand-new item gets the counter's short (2901)",
-                    (short) persistedCounter, newId.getShort());
-            if (!r.passed()) return r;
-            r = assertEquals("counter advanced to 2902 after minting the new short",
-                    persistedCounter + 1, ItemIDManager.getNextShortCounter_forTesting());
-            if (!r.passed()) return r;
-
-            return pass("persisted short 7 survives register-if-absent (no counter advance, no alias), "
-                    + "and a brand-new item mints 2901 and advances the counter to 2902");
-        } catch (Throwable t) {
-            return fail("startup-reconciliation test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            // Restore live state bit-exact so the rest of the suite continues unaffected.
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            // Quarantined corruption evidence: bit-exact restore (see the snapshot comment).
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            // clear() above armed the LIVE latch; the fixture load() normally releases it,
-            // but an early throw in between must not leave the live master latched.
-            ItemIDManager.markRegistryReady();
-            // load() above mutated lastLoadRepairCount; drain it back toward the pre-test value.
-            if (savedRepairCount == 0)
-                ItemIDManager.consumeLastLoadRepairCount();
         }
     }
 
@@ -1198,71 +1340,73 @@ public class ItemIDMergeGuardTests extends TestSuite {
         Map<ItemID, ItemID> savedQuarantine = ItemIDManager.getQuarantinedAliases_forTesting();
         Set<ItemID> savedPersisted = ItemIDManager.getPersistedShorts_forTesting();
 
-        try {
-            // Fixture registry serialized through save() — load()ing it later is the
-            // production latch release for existing worlds.
-            ItemID tempId = registerScratch(
-                    paperWithCustomData("latch-fixture"));
-            if (!tempId.isValid())
-                return fail("Could not register the fixture template (latch should be released on a live server)");
-            Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
-            fixture.put(new ItemID((short) 7, tempId.getName()),
-                    ItemIDManager.getItemStackTemplate(tempId).copy());
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
-            CompoundTag tag = new CompoundTag();
-            if (!new ItemIDManager().save(tag))
-                return fail("Could not serialize the latch fixture");
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                // Fixture registry serialized through save() — load()ing it later is the
+                // production latch release for existing worlds.
+                ItemID tempId = registerScratch(
+                        paperWithCustomData("latch-fixture"));
+                if (!tempId.isValid())
+                    return fail("Could not register the fixture template (latch should be released on a live server)");
+                Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
+                fixture.put(new ItemID((short) 7, tempId.getName()),
+                        ItemIDManager.getItemStackTemplate(tempId).copy());
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
+                CompoundTag tag = new CompoundTag();
+                if (!new ItemIDManager().save(tag))
+                    return fail("Could not serialize the latch fixture");
 
-            // ==== Arm: clear() (the world-start reset) ====
-            ItemIDManager.clear();
-            TestResult r = assertTrue("latch is armed after clear()",
-                    ItemIDManager.isRegistrationLatchArmed_forTesting());
-            if (!r.passed()) return r;
+                // ==== Arm: clear() (the world-start reset) ====
+                ItemIDManager.clear();
+                TestResult r = assertTrue("latch is armed after clear()",
+                        ItemIDManager.isRegistrationLatchArmed_forTesting());
+                if (!r.passed()) return r;
 
-            // ==== Pre-load registration is rejected: INVALID result, no map mutation ====
-            ItemStack newStack = paperWithCustomData("latch-new");
-            // Fixture window (latch armed): direct, so the guard neither evicts fixture rows
-            // nor purges the fixture-space short from the live snapshot.
-            ItemID rejected = ItemIDManager.registerItemStackServerSide_direct(newStack);
-            r = assertFalse("pre-load registration returns an INVALID ItemID", rejected.isValid());
-            if (!r.passed()) return r;
-            // No map mutation for OUR stack. (Not asserting map emptiness: in singleplayer a
-            // queued sync packet from the fixture registration above can putIfAbsent its
-            // entry back concurrently — the suite's known, harmless isolation caveat.)
-            r = assertFalse("pre-load registration did not insert the stack into the map",
-                    ItemIDManager.getItemID(newStack).isValid());
-            if (!r.passed()) return r;
+                // ==== Pre-load registration is rejected: INVALID result, no map mutation ====
+                ItemStack newStack = paperWithCustomData("latch-new");
+                // Fixture window (latch armed): direct, so the guard neither evicts fixture rows
+                // nor purges the fixture-space short from the live snapshot.
+                ItemID rejected = ItemIDManager.registerItemStackServerSide_direct(newStack);
+                r = assertFalse("pre-load registration returns an INVALID ItemID", rejected.isValid());
+                if (!r.passed()) return r;
+                // No map mutation for OUR stack. (Not asserting map emptiness: in singleplayer a
+                // queued sync packet from the fixture registration above can putIfAbsent its
+                // entry back concurrently — the suite's known, harmless isolation caveat.)
+                r = assertFalse("pre-load registration did not insert the stack into the map",
+                        ItemIDManager.getItemID(newStack).isValid());
+                if (!r.passed()) return r;
 
-            // ==== Release the production way: load() the fixture tag ====
-            boolean loaded = new ItemIDManager().load(tag);
-            r = assertTrue("fixture load() returned true", loaded);
-            if (!r.passed()) return r;
-            r = assertFalse("latch is released after a successful load()",
-                    ItemIDManager.isRegistrationLatchArmed_forTesting());
-            if (!r.passed()) return r;
+                // ==== Release the production way: load() the fixture tag ====
+                boolean loaded = new ItemIDManager().load(tag);
+                r = assertTrue("fixture load() returned true", loaded);
+                if (!r.passed()) return r;
+                r = assertFalse("latch is released after a successful load()",
+                        ItemIDManager.isRegistrationLatchArmed_forTesting());
+                if (!r.passed()) return r;
 
-            // ==== The same registration now succeeds and mints from the loaded counter ====
-            ItemID accepted = ItemIDManager.registerItemStackServerSide_direct(newStack); // fixture window
-            r = assertTrue("post-load registration returns a valid ItemID", accepted.isValid());
-            if (!r.passed()) return r;
-            r = assertTrue("post-load registration landed in the map",
-                    ItemIDManager.getItemIDMap().containsKey(accepted));
-            if (!r.passed()) return r;
+                // ==== The same registration now succeeds and mints from the loaded counter ====
+                ItemID accepted = ItemIDManager.registerItemStackServerSide_direct(newStack); // fixture window
+                r = assertTrue("post-load registration returns a valid ItemID", accepted.isValid());
+                if (!r.passed()) return r;
+                r = assertTrue("post-load registration landed in the map",
+                        ItemIDManager.getItemIDMap().containsKey(accepted));
+                if (!r.passed()) return r;
 
-            return pass("master-side registration is rejected while the latch is armed and "
-                    + "succeeds after the production load() release");
-        } catch (Throwable t) {
-            return fail("registration-latch test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            // The live server had completed its load long before this test — leave the
-            // latch released, exactly as production release left it.
-            ItemIDManager.markRegistryReady();
-            if (savedRepairCount == 0)
-                ItemIDManager.consumeLastLoadRepairCount();
+                return pass("master-side registration is rejected while the latch is armed and "
+                        + "succeeds after the production load() release");
+            } catch (Throwable t) {
+                return fail("registration-latch test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                // The live server had completed its load long before this test — leave the
+                // latch released, exactly as production release left it.
+                ItemIDManager.markRegistryReady();
+                if (savedRepairCount == 0)
+                    ItemIDManager.consumeLastLoadRepairCount();
+            }
         }
     }
 
@@ -1298,86 +1442,88 @@ public class ItemIDMergeGuardTests extends TestSuite {
         Map<ItemID, ItemID> savedQuarantine = ItemIDManager.getQuarantinedAliases_forTesting();
         Set<ItemID> savedPersisted = ItemIDManager.getPersistedShorts_forTesting();
 
-        try {
-            short base = pickUnusedShortBase(2);
-            if (base < 0) return fail("No free short range available");
-            final short persistedShort = (short) (base + 1); // S_file — HIGHER than the session short
-            final int sessionCounter = base;                 // S_session mints at base < S_file
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                short base = pickUnusedShortBase(2);
+                if (base < 0) return fail("No free short range available");
+                final short persistedShort = (short) (base + 1); // S_file — HIGHER than the session short
+                final int sessionCounter = base;                 // S_session mints at base < S_file
 
-            // Two variants that are distinct under the real set and collapse once
-            // repair_cost is treated as volatile (registerRepairCostPair shape).
-            String marker = "session-vs-persisted";
-            ItemStack plain = paperWithCustomData(marker);
-            ItemStack repairCostVariant = plain.copy();
-            repairCostVariant.set(DataComponents.REPAIR_COST, 7);
+                // Two variants that are distinct under the real set and collapse once
+                // repair_cost is treated as volatile (registerRepairCostPair shape).
+                String marker = "session-vs-persisted";
+                ItemStack plain = paperWithCustomData(marker);
+                ItemStack repairCostVariant = plain.copy();
+                repairCostVariant.set(DataComponents.REPAIR_COST, 7);
 
-            // Register the repair_cost variant live once to obtain its normalized template,
-            // then persist it at S_file through the real save()/clear()/load() round-trip.
-            ItemID tempId = registerScratch(repairCostVariant);
-            if (!tempId.isValid())
-                return fail("Could not register the repair_cost variant to obtain its template");
-            Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
-            fixture.put(new ItemID(persistedShort, tempId.getName()),
-                    ItemIDManager.getItemStackTemplate(tempId).copy());
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), sessionCounter);
-            CompoundTag tag = new CompoundTag();
-            if (!new ItemIDManager().save(tag))
-                return fail("Could not serialize the persisted-wins fixture");
-            ItemIDManager.clear();
-            boolean loaded = new ItemIDManager().load(tag);
-            TestResult r = assertTrue("fixture load() returned true", loaded);
-            if (!r.passed()) return r;
-            r = assertTrue("the loaded short is recorded as persisted",
-                    ItemIDManager.getPersistedShorts_forTesting().contains(new ItemID(persistedShort)));
-            if (!r.passed()) return r;
+                // Register the repair_cost variant live once to obtain its normalized template,
+                // then persist it at S_file through the real save()/clear()/load() round-trip.
+                ItemID tempId = registerScratch(repairCostVariant);
+                if (!tempId.isValid())
+                    return fail("Could not register the repair_cost variant to obtain its template");
+                Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
+                fixture.put(new ItemID(persistedShort, tempId.getName()),
+                        ItemIDManager.getItemStackTemplate(tempId).copy());
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), sessionCounter);
+                CompoundTag tag = new CompoundTag();
+                if (!new ItemIDManager().save(tag))
+                    return fail("Could not serialize the persisted-wins fixture");
+                ItemIDManager.clear();
+                boolean loaded = new ItemIDManager().load(tag);
+                TestResult r = assertTrue("fixture load() returned true", loaded);
+                if (!r.passed()) return r;
+                r = assertTrue("the loaded short is recorded as persisted",
+                        ItemIDManager.getPersistedShorts_forTesting().contains(new ItemID(persistedShort)));
+                if (!r.passed()) return r;
 
-            // Session-mint the plain variant — it gets the (lower) counter short.
-            ItemID sessionId = ItemIDManager.registerItemStackServerSide_direct(plain); // fixture window
-            r = assertTrue("session variant registered as a valid ID", sessionId.isValid());
-            if (!r.passed()) return r;
-            r = assertTrue("session short is LOWER than the persisted short (test precondition)",
-                    sessionId.getShort() < persistedShort);
-            if (!r.passed()) return r;
+                // Session-mint the plain variant — it gets the (lower) counter short.
+                ItemID sessionId = ItemIDManager.registerItemStackServerSide_direct(plain); // fixture window
+                r = assertTrue("session variant registered as a valid ID", sessionId.isValid());
+                if (!r.passed()) return r;
+                r = assertTrue("session short is LOWER than the persisted short (test precondition)",
+                        sessionId.getShort() < persistedShort);
+                if (!r.passed()) return r;
 
-            // APPLY the merge under the grown set: the two variants collapse. Under the old
-            // lowest-wins rule the session short would steal canonicality; under the
-            // provenance-aware rule the persisted short must win.
-            ItemIDManager.renormalizeAndMerge(withRepairCost(realSet));
+                // APPLY the merge under the grown set: the two variants collapse. Under the old
+                // lowest-wins rule the session short would steal canonicality; under the
+                // provenance-aware rule the persisted short must win.
+                ItemIDManager.renormalizeAndMerge(withRepairCost(realSet));
 
-            ItemID persistedId = new ItemID(persistedShort);
-            r = assertEquals("the session short resolves to the PERSISTED canonical",
-                    persistedId, ItemIDManager.resolveAlias(sessionId));
-            if (!r.passed()) return r;
-            Map<ItemID, ItemID> aliasSnapshot = ItemIDManager.getItemIDAliasMap();
-            r = assertTrue("alias entry session -> persisted exists",
-                    persistedId.equals(aliasSnapshot.get(sessionId)));
-            if (!r.passed()) return r;
-            r = assertFalse("NO alias exists for the persisted short",
-                    aliasSnapshot.containsKey(persistedId));
-            if (!r.passed()) return r;
-            r = assertTrue("the persisted short stays in itemIDMap",
-                    ItemIDManager.getItemIDMap().containsKey(persistedId));
-            if (!r.passed()) return r;
-            r = assertFalse("the session short was removed from itemIDMap",
-                    ItemIDManager.getItemIDMap().containsKey(sessionId));
-            if (!r.passed()) return r;
+                ItemID persistedId = new ItemID(persistedShort);
+                r = assertEquals("the session short resolves to the PERSISTED canonical",
+                        persistedId, ItemIDManager.resolveAlias(sessionId));
+                if (!r.passed()) return r;
+                Map<ItemID, ItemID> aliasSnapshot = ItemIDManager.getItemIDAliasMap();
+                r = assertTrue("alias entry session -> persisted exists",
+                        persistedId.equals(aliasSnapshot.get(sessionId)));
+                if (!r.passed()) return r;
+                r = assertFalse("NO alias exists for the persisted short",
+                        aliasSnapshot.containsKey(persistedId));
+                if (!r.passed()) return r;
+                r = assertTrue("the persisted short stays in itemIDMap",
+                        ItemIDManager.getItemIDMap().containsKey(persistedId));
+                if (!r.passed()) return r;
+                r = assertFalse("the session short was removed from itemIDMap",
+                        ItemIDManager.getItemIDMap().containsKey(sessionId));
+                if (!r.passed()) return r;
 
-            return pass("a persisted short wins merge canonicality against a lower "
-                    + "session-minted duplicate (alias session->persisted, none for persisted)");
-        } catch (Throwable t) {
-            return fail("persisted-wins test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            // The clear() above armed the LIVE latch; normally the fixture load() releases
-            // it, but if anything threw in between the live master would stay latched
-            // (every new registration refused until restart). The live server's own load
-            // completed long ago — released is the correct restored state.
-            ItemIDManager.markRegistryReady();
-            if (savedRepairCount == 0)
-                ItemIDManager.consumeLastLoadRepairCount();
+                return pass("a persisted short wins merge canonicality against a lower "
+                        + "session-minted duplicate (alias session->persisted, none for persisted)");
+            } catch (Throwable t) {
+                return fail("persisted-wins test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                // The clear() above armed the LIVE latch; normally the fixture load() releases
+                // it, but if anything threw in between the live master would stay latched
+                // (every new registration refused until restart). The live server's own load
+                // completed long ago — released is the correct restored state.
+                ItemIDManager.markRegistryReady();
+                if (savedRepairCount == 0)
+                    ItemIDManager.consumeLastLoadRepairCount();
+            }
         }
     }
 
@@ -1409,53 +1555,55 @@ public class ItemIDMergeGuardTests extends TestSuite {
         Set<ItemID> savedPersisted = ItemIDManager.getPersistedShorts_forTesting();
 
         final short fixtureShort = 7;
-        try {
-            // File side: a uniquely-tagged paper variant persisted at short 7.
-            ItemStack paperStack = paperWithCustomData("stale-key");
-            ItemID tempId = registerScratch(paperStack);
-            if (!tempId.isValid())
-                return fail("Could not register the paper fixture template");
-            String expectedName = tempId.getName();
-            Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
-            fixture.put(new ItemID(fixtureShort, expectedName),
-                    ItemIDManager.getItemStackTemplate(tempId).copy());
-            ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), fixtureShort + 1);
-            CompoundTag tag = new CompoundTag();
-            if (!new ItemIDManager().save(tag))
-                return fail("Could not serialize the stale-key fixture");
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) { // BS-264
+            try {
+                // File side: a uniquely-tagged paper variant persisted at short 7.
+                ItemStack paperStack = paperWithCustomData("stale-key");
+                ItemID tempId = registerScratch(paperStack);
+                if (!tempId.isValid())
+                    return fail("Could not register the paper fixture template");
+                String expectedName = tempId.getName();
+                Map<ItemID, ItemStack> fixture = new ConcurrentHashMap<>();
+                fixture.put(new ItemID(fixtureShort, expectedName),
+                        ItemIDManager.getItemStackTemplate(tempId).copy());
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), fixtureShort + 1);
+                CompoundTag tag = new CompoundTag();
+                if (!new ItemIDManager().save(tag))
+                    return fail("Could not serialize the stale-key fixture");
 
-            // Live side BEFORE the load: short 7 occupied by a key whose cached name is
-            // deliberately wrong and whose template is a different item entirely. This is
-            // the pre-load-registration shape (constructor warm-up) in miniature.
-            Map<ItemID, ItemStack> prePopulated = new ConcurrentHashMap<>();
-            prePopulated.put(new ItemID(fixtureShort, "banksystem_test:wrong_name"),
-                    new ItemStack(Items.STONE));
-            ItemIDManager.replaceState_forTesting(prePopulated, Collections.emptyMap(), fixtureShort + 1);
+                // Live side BEFORE the load: short 7 occupied by a key whose cached name is
+                // deliberately wrong and whose template is a different item entirely. This is
+                // the pre-load-registration shape (constructor warm-up) in miniature.
+                Map<ItemID, ItemStack> prePopulated = new ConcurrentHashMap<>();
+                prePopulated.put(new ItemID(fixtureShort, "banksystem_test:wrong_name"),
+                        new ItemStack(Items.STONE));
+                ItemIDManager.replaceState_forTesting(prePopulated, Collections.emptyMap(), fixtureShort + 1);
 
-            // Load WITHOUT clear() — exactly the retained-key hazard.
-            boolean loaded = new ItemIDManager().load(tag);
-            TestResult r = assertTrue("load() over the pre-populated map returned true", loaded);
-            if (!r.passed()) return r;
+                // Load WITHOUT clear() — exactly the retained-key hazard.
+                boolean loaded = new ItemIDManager().load(tag);
+                TestResult r = assertTrue("load() over the pre-populated map returned true", loaded);
+                if (!r.passed()) return r;
 
-            ItemID resolved = ItemIDManager.getItemID(paperStack);
-            r = assertEquals("the paper variant resolves at the file's short",
-                    fixtureShort, resolved.getShort());
-            if (!r.passed()) return r;
-            r = assertEquals("the returned key's name matches the file template (not the stale key)",
-                    expectedName, resolved.getName());
-            if (!r.passed()) return r;
+                ItemID resolved = ItemIDManager.getItemID(paperStack);
+                r = assertEquals("the paper variant resolves at the file's short",
+                        fixtureShort, resolved.getShort());
+                if (!r.passed()) return r;
+                r = assertEquals("the returned key's name matches the file template (not the stale key)",
+                        expectedName, resolved.getName());
+                if (!r.passed()) return r;
 
-            return pass("load() replaces pre-existing key objects — no stale cached name "
-                    + "survives on a correctly re-mapped short");
-        } catch (Throwable t) {
-            return fail("stale-key replacement test threw: " + t.getClass().getSimpleName()
-                    + " — " + t.getMessage());
-        } finally {
-            ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
-            ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
-            ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
-            if (savedRepairCount == 0)
-                ItemIDManager.consumeLastLoadRepairCount();
+                return pass("load() replaces pre-existing key objects — no stale cached name "
+                        + "survives on a correctly re-mapped short");
+            } catch (Throwable t) {
+                return fail("stale-key replacement test threw: " + t.getClass().getSimpleName()
+                        + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                ItemIDManager.restoreQuarantinedAliases_forTesting(savedQuarantine);
+                ItemIDManager.restorePersistedShorts_forTesting(savedPersisted);
+                if (savedRepairCount == 0)
+                    ItemIDManager.consumeLastLoadRepairCount();
+            }
         }
     }
 

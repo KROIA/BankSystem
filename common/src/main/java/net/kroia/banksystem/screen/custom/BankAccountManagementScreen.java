@@ -2,6 +2,7 @@ package net.kroia.banksystem.screen.custom;
 
 import com.mojang.datafixers.util.Pair;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
@@ -43,8 +44,18 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private static final Component CREATE_NEW_BANK = Component.translatable(PREFIX+"create_new_bank");
     private static final Component ADD_USER = Component.translatable(PREFIX+"add_user");
     private static final Component MUST_KEEP_MANAGER = Component.translatable(PREFIX+"must_keep_manager");
+    private static final String SHARE_PREFIX = PREFIX+"share_removal.";
     private static final Component BINDINGS_BUTTON = Component.translatable(PREFIX+"bindings_button");
     private static final Component PAYOUTS_BUTTON = Component.translatable(PREFIX+"payouts_button");
+    private static final Component HISTORY_BUTTON = Component.translatable(PREFIX+"history_button");
+    private static final Component FREEZE_BUTTON = Component.translatable(PREFIX+"freeze_button");
+    private static final Component UNFREEZE_BUTTON = Component.translatable(PREFIX+"unfreeze_button");
+    private static final Component AUDIT_BUTTON = Component.translatable(PREFIX+"audit_button");
+    private static final Component FROZEN_LABEL = Component.translatable(PREFIX+"frozen_label");
+    private static final Component FROZEN_TOOLTIP = Component.translatable(PREFIX+"frozen_tooltip");
+    /** Task #105: shown when the master refuses this server's writes (untrusted slave). */
+    public static final Component UNTRUSTED_SERVER = Component.translatable(PREFIX+"untrusted_server");
+    private static final int GRAY_TEXT_COLOR = 0xFF808080;
 
     private static class ItemViewButton extends Button{
 
@@ -100,6 +111,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private Button addUserButton;
     private Button bindingsButton;
     private Button payoutsButton;
+    private Button historyButton;
+    /** Task #117: admin freeze toggle / frozen indicator. */
+    private Button freezeButton;
+    /** BS-229: admin-only shortcut to the audit log of the shown account. */
+    private Button auditButton;
+    private boolean frozen = false;
+    private int pendingFrozen = -1; // -1 = unchanged, else 0/1 sent with Save
     private Integer companyIdForPayouts = null;
     private ListView userElementListView;
     private ListView bankElementListView;
@@ -111,7 +129,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     private final List<BankUserWidget> toRemoveUserWidgets = new ArrayList<>();
     private final boolean isAdminMode;
     private boolean canManage = false;
+    /** Task #105: false on an untrusted slave; the screen is then read-only. */
+    private boolean serverTrusted = true;
+    private Label untrustedNoteLabel;
     private static boolean screenIsOpen = false;
+    private boolean dirty = false;          // name / user / permission edits (other edits are tracked in isDirty())
+    /** Runs once a save chosen in the unsaved-changes popup was accepted (close or account switch). */
+    private Runnable afterSave = null;
 
 
     public BankAccountManagementScreen(GuiScreen parent, int accountNumber, boolean isAdminMode) {
@@ -132,7 +156,27 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     private void setupGui(int accountNumber)
     {
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber).thenAccept(this::setupGui);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.getBankAccountDataAsync(accountNumber)
+                .thenCombine(BACKEND_INSTANCES.CLIENT_BANK_MANAGER.isServerTrustedAsync(), (data, trusted) -> {
+                    serverTrusted = Boolean.TRUE.equals(trusted);
+                    return data;
+                })
+                .thenAccept(this::setupGui);
+    }
+
+    /** Task #105: may the player change this account from this server? */
+    private boolean canEdit() {
+        return canManage && serverTrusted;
+    }
+
+    /** Task #105: greys out buttons whose action the master would refuse; the tooltip says why. */
+    private static void lockForUntrusted(Button... buttons) {
+        for (Button b : buttons) {
+            if (b == null) continue;
+            b.setClickable(false);
+            b.setTextColor(GRAY_TEXT_COLOR);
+            b.setHoverTooltipSupplier(UNTRUSTED_SERVER::getString);
+        }
     }
     private void setupGui(@Nullable BankAccountData bankAccountData)
     {
@@ -151,6 +195,10 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                 break;
             }
         }
+        dirty = false; // (re)loaded from the server
+        frozen = bankAccountData.frozen;
+        pendingFrozen = -1;
+        accountIconChangedFlag = false;
         personalBankOwnerData = bankAccountData.personalBankOwnerData;
         bankAccountName = bankAccountData.accountName;
         this.canManage = (personalBankOwnerData != null && personalBankOwnerData.userUUID().equals(thisPlayerUUID)) || isAdminMode || isEditingPlayer;
@@ -177,10 +225,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
         accountIconButton = new ItemViewButton(data.accountIcon);
         addElement(accountIconButton);
-        if(canManage) {
+        deleteBankAccountButton = null;
+        if(canEdit()) {
             accountIconButton.setOnFallingEdge(this::onIconButtonClicked);
             accountNameTextBox = new TextBox();
+            accountNameTextBox.setMaxChars(net.kroia.banksystem.banking.bankaccount.ServerBankAccount.MAX_ACCOUNT_NAME_LENGTH);
             accountNameTextBox.setText(data.accountName);
+            accountNameTextBox.setOnTextChanged(text -> dirty = true);
             addElement(accountNameTextBox);
 
             deleteBankAccountButton = new Button(DELETE_ACCOUNT.getString(), this::onDeleteAccountButtonClicked);
@@ -191,19 +242,41 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountNameLabel.setText(data.accountName);
             addElement(accountNameLabel);
 
-            addUserButton.setEnabled(false);
-            saveChangesButton.setEnabled(false);
+            if(canManage) {
+                // Task #105: manager on an untrusted slave: show the controls greyed out with the reason.
+                deleteBankAccountButton = new Button(DELETE_ACCOUNT.getString());
+                addElement(deleteBankAccountButton);
+                lockForUntrusted(deleteBankAccountButton, saveChangesButton, addUserButton, accountIconButton);
+            } else {
+                addUserButton.setEnabled(false);
+                saveChangesButton.setEnabled(false);
+            }
+        }
+        untrustedNoteLabel = null;
+        if(!serverTrusted) {
+            untrustedNoteLabel = new Label(UNTRUSTED_SERVER.getString());
+            untrustedNoteLabel.setTextColor(0xFFFFAA00);
+            untrustedNoteLabel.setHoverTooltipSupplier(UNTRUSTED_SERVER::getString);
+            addElement(untrustedNoteLabel);
         }
 
         selectAccountButton = new Button(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString());
         selectAccountButton.setOnFallingEdge(() -> {
+            // BS-225: admins pick from every account on the server, players from their own.
             BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(this, getThisPlayerUUID(), (accountNumber) -> {
                 if(!screenIsOpen)
                     return;
-                this.accountNumber = accountNumber;
-                setupGui(accountNumber);
-            });
-            minecraft.setScreen(selectionScreen);
+                if(isDirty())
+                {
+                    // Popup opens deferred, after the selection screen returned here.
+                    AskPopupScreen.openUnsavedChangesPopup(this,
+                            () -> switchAccount(accountNumber),
+                            () -> saveThen(() -> switchAccount(accountNumber)));
+                    return;
+                }
+                switchAccount(accountNumber);
+            }, BankPermission.getAllPermissions(), false, false, isAdminMode);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
         });
 
 
@@ -249,26 +322,59 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         bindingsButton = new Button(BINDINGS_BUTTON.getString(), this::onBindingsButtonClicked);
         addElement(bindingsButton);
 
+        // Task #101: balance history of the shown account (reads the field, so it follows switchAccount).
+        // The server gate (BalanceHistoryRequest, Task #100) allows members and BankSystem admins.
+        historyButton = new Button(HISTORY_BUTTON.getString(), () ->
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(new BalanceHistoryScreen(this, accountNumber)));
+        addElement(historyButton);
+
+        // Task #117: admins toggle the freeze (applied on Save); others see an indicator while frozen.
+        freezeButton = null;
+        if (isAdminMode) {
+            freezeButton = new Button(freezeButtonText(), () -> {
+                pendingFrozen = (pendingFrozen == -1 ? frozen : pendingFrozen == 1) ? 0 : 1;
+                if ((pendingFrozen == 1) == frozen) pendingFrozen = -1;
+                freezeButton.setLabel(freezeButtonText());
+            });
+            freezeButton.setHoverTooltipSupplier(FROZEN_TOOLTIP::getString);
+            if (!serverTrusted)
+                lockForUntrusted(freezeButton);
+        } else if (frozen) {
+            freezeButton = new Button(FROZEN_LABEL.getString());
+            freezeButton.setClickable(false);
+            freezeButton.setHoverTooltipSupplier(FROZEN_TOOLTIP::getString);
+        }
+        if (freezeButton != null)
+            addElement(freezeButton);
+
         // Task #45a / Spec A.3 (v2.1.0) — Payouts entry on its own second row (the
         // "Share Visuals" button was removed; those settings live in the Company
         // screen's Shares tab). Visibility gated on company presence via async lookup.
+        // BS-244: companyIdForPayouts survives a reload of the same account (switchAccount clears it),
+        // so the first layout after Save already has the Payouts row and nothing jumps.
         payoutsButton = new Button(PAYOUTS_BUTTON.getString(), this::onPayoutsButtonClicked);
-        payoutsButton.setEnabled(false);
         addElement(payoutsButton);
-        companyIdForPayouts = null;
+        applyCompanyState();
 
+        Button payouts = payoutsButton;
+        int lookupAccount = accountNumber;
         net.kroia.banksystem.banking.company.AsyncCompanyManager
-                .getCompanyInfoByAccountAsync(accountNumber)
-                .thenAccept(info -> {
-                    if (!screenIsOpen || info == null || !info.present()) return;
-                    companyIdForPayouts = info.companyId();
-                    boolean visible = canManage || isAdminMode;
-                    payoutsButton.setEnabled(visible);
-                    // ServerBankManager.deleteBankAccount() rejects accounts still owned by a
-                    // company, so grey the button out here rather than letting the click fail silently.
-                    if (deleteBankAccountButton != null)
-                        deleteBankAccountButton.setEnabled(false);
-                });
+                .getCompanyInfoByAccountAsync(lookupAccount)
+                .thenAccept(info -> runLater(() -> {
+                    // BS-244: client thread; skip if closed, rebuilt by a newer setupGui or switched away.
+                    if (!screenIsOpen || payouts != payoutsButton || lookupAccount != accountNumber || info == null) return;
+                    companyIdForPayouts = info.present() ? info.companyId() : null;
+                    applyCompanyState();
+                    updateLayout(getGui());
+                }));
+    }
+
+    private void applyCompanyState() {
+        payoutsButton.setEnabled(companyIdForPayouts != null && (canManage || isAdminMode));
+        // ServerBankManager.deleteBankAccount() rejects accounts still owned by a
+        // company, so grey the button out here rather than letting the click fail silently.
+        if (companyIdForPayouts != null && deleteBankAccountButton != null)
+            deleteBankAccountButton.setEnabled(false);
     }
     private void setupAdminWindow()
     {
@@ -290,11 +396,18 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                         allowedItemStacks,
                         this::onCreateNewBank);
                 itemSelectionScreen.sortItems();
-                this.minecraft.setScreen(itemSelectionScreen);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(itemSelectionScreen);
             });
         });
 
         addElement(createNewBankButton);
+        if(!serverTrusted)
+            lockForUntrusted(createNewBankButton);
+
+        // Reads the field, so it follows switchAccount (like the History button).
+        auditButton = new Button(AUDIT_BUTTON.getString(), () ->
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(new AuditScreen(this, accountNumber)));
+        addElement(auditButton);
 
 
     }
@@ -307,13 +420,13 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
     {
         screenIsOpen = true;
         BankAccountManagementScreen screen = new BankAccountManagementScreen(parent, accountNumber, isAdminMode);
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
     }
     public static void openScreen(int accountNumber, boolean isAdminMode)
     {
         screenIsOpen = true;
         BankAccountManagementScreen screen = new BankAccountManagementScreen(accountNumber, isAdminMode);
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
     }
 
     @Override
@@ -326,6 +439,12 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         if(getElements().isEmpty() || closeButton == null)
             return; // Not initialized yet
 
+        if(untrustedNoteLabel != null) {
+            // Task #105: note row at the bottom, the lists end above it.
+            height -= Label.DEFAULT_HEIGHT + spacing;
+            untrustedNoteLabel.setBounds(padding, padding + height + spacing, width, Label.DEFAULT_HEIGHT);
+        }
+
         closeButton.setBounds(getWidth() - 20-padding, padding,20,20);
         int textWidth = closeButton.getTextWidth(SAVE_CHANGES.getString())+10;
         saveChangesButton.setBounds(closeButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
@@ -335,12 +454,36 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         // (Delete Account + Save Changes + Close) don't collide with Create/Bindings on the left.
         int leftWidth = (width - spacing) * 2 / 5;
         int rightWidth = width - spacing - leftWidth;
-        selectAccountButton.setBounds(padding, padding, leftWidth, 20);
-        int accountNameY = selectAccountButton.getBottom()+spacing;
-        accountIconButton.setBounds(padding, accountNameY, 20, 20);
-        if(canManage && deleteBankAccountButton != null && accountNameTextBox != null) {
+        if(deleteBankAccountButton != null) {
             textWidth = deleteBankAccountButton.getTextWidth(DELETE_ACCOUNT.getString())+10;
             deleteBankAccountButton.setBounds(saveChangesButton.getLeft()-spacing-textWidth, padding, textWidth, closeButton.getHeight());
+        }
+        // BS-229 header row: the account selector (never narrower than its label), then as many action
+        // buttons as fit before Delete Account / Save Changes. The rest wraps into the right column's
+        // second row next to Payouts.
+        List<Button> actionButtons = new ArrayList<>();
+        for (Button b : new Button[]{isAdminMode ? createNewBankButton : null, bindingsButton, historyButton, freezeButton, auditButton})
+            if (b != null) actionButtons.add(b);
+        int rightBlockLeft = deleteBankAccountButton != null ? deleteBankAccountButton.getLeft() : saveChangesButton.getLeft();
+        int headerEnd = rightBlockLeft - spacing;
+        int selectMinWidth = closeButton.getTextWidth(BankAccountSelectionScreen.TEXT.SELECT_ACCOUNT_BUTTON.getString()) + 10;
+        int headerButtonsWidth = 0;
+        int headerCount = 0;
+        while (headerCount < actionButtons.size()
+                && padding + selectMinWidth + headerButtonsWidth + spacing + headerButtonWidth(actionButtons.get(headerCount)) <= headerEnd) {
+            headerButtonsWidth += spacing + headerButtonWidth(actionButtons.get(headerCount));
+            headerCount++;
+        }
+        int selectWidth = Math.max(selectMinWidth, Math.min(leftWidth, headerEnd - padding - headerButtonsWidth));
+        selectAccountButton.setBounds(padding, padding, selectWidth, 20);
+        int headerX = selectAccountButton.getRight();
+        for (Button b : actionButtons.subList(0, headerCount)) {
+            b.setBounds(headerX + spacing, padding, headerButtonWidth(b), closeButton.getHeight());
+            headerX = b.getRight();
+        }
+        int accountNameY = selectAccountButton.getBottom()+spacing;
+        accountIconButton.setBounds(padding, accountNameY, 20, 20);
+        if(canEdit() && accountNameTextBox != null) {
             accountNameTextBox.setBounds(accountIconButton.getRight()+spacing, accountNameY, leftWidth-(accountIconButton.getRight()), 20);
         }else if(accountNameLabel != null) {
             accountNameLabel.setBounds(accountIconButton.getRight()+spacing, accountNameY, leftWidth-(accountIconButton.getRight()), 20);
@@ -349,35 +492,36 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         addUserButton.setBounds(padding, selectAccountButton.getBottom()+accountNameY, leftWidth, closeButton.getHeight());
         userElementListView.setBounds(padding, addUserButton.getBottom()+spacing, leftWidth, height-(addUserButton.getBottom()+spacing)+padding);
 
-        // Spec A.3 (v2.1.0) — company-specific "Payouts" button on its own second row
-        // above the bank list; the bank list is pushed down by the row's height (20 + 4).
+        // Second row(s) above the bank list: Payouts (Spec A.3, company accounts only) and the header
+        // buttons that did not fit; wraps when the right column is full. Each row pushes the list down 20 + 4.
+        List<Button> secondRow = new ArrayList<>();
+        if (payoutsButton != null) {
+            if (companyIdForPayouts != null) secondRow.add(payoutsButton);
+            else payoutsButton.setBounds(userElementListView.getRight() + spacing, closeButton.getBottom() + spacing, 0, 0);
+        }
+        secondRow.addAll(actionButtons.subList(headerCount, actionButtons.size()));
+        int rowLeft = userElementListView.getRight() + spacing;
         int bankListTop = closeButton.getBottom() + spacing;
-        if (payoutsButton != null && companyIdForPayouts != null) {
-            int payoutsTextWidth = closeButton.getTextWidth(PAYOUTS_BUTTON.getString()) + 10;
-            payoutsButton.setBounds(userElementListView.getRight() + spacing, bankListTop,
-                    payoutsTextWidth, 20);
-            bankListTop += 24;
-        } else if (payoutsButton != null) {
-            payoutsButton.setBounds(userElementListView.getRight() + spacing, bankListTop, 0, 0);
+        int rowX = rowLeft;
+        for (Button b : secondRow) {
+            int w = headerButtonWidth(b);
+            if (rowX > rowLeft && rowX + w > rowLeft + rightWidth) {
+                bankListTop += 24;
+                rowX = rowLeft;
+            }
+            b.setBounds(rowX, bankListTop, w, 20);
+            rowX += w + spacing;
         }
-        bankElementListView.setBounds(userElementListView.getRight()+spacing, bankListTop, rightWidth, height-bankListTop+padding);
+        if (!secondRow.isEmpty()) bankListTop += 24;
+        bankElementListView.setBounds(rowLeft, bankListTop, rightWidth, height-bankListTop+padding);
+    }
 
-        if(isAdminMode)
-        {
-            textWidth = createNewBankButton.getTextWidth(CREATE_NEW_BANK.getString())+10;
-            createNewBankButton.setBounds(selectAccountButton.getRight()+spacing, padding, textWidth, closeButton.getHeight());
-        }
-
-        // Bindings button — placed in the header row, after "Create new Bank" in admin mode (or at
-        // selectAccountButton.getRight() in non-admin mode where createNewBankButton doesn't exist).
-        if(bindingsButton != null) {
-            int bindingsTextWidth = closeButton.getTextWidth(BINDINGS_BUTTON.getString()) + 10;
-            int bindingsLeft = isAdminMode && createNewBankButton != null
-                    ? createNewBankButton.getRight() + spacing
-                    : selectAccountButton.getRight() + spacing;
-            bindingsButton.setBounds(bindingsLeft, padding, bindingsTextWidth, closeButton.getHeight());
-        }
-
+    /** Width of a header / second-row button; the freeze button fits all of its labels so it does not jump. */
+    private int headerButtonWidth(Button b) {
+        if (b == freezeButton)
+            return Math.max(closeButton.getTextWidth(FREEZE_BUTTON.getString()),
+                    Math.max(closeButton.getTextWidth(UNFREEZE_BUTTON.getString()), closeButton.getTextWidth(FROZEN_LABEL.getString()))) + 20;
+        return closeButton.getTextWidth(b.getText()) + 10;
     }
 
     private void onPayoutsButtonClicked() {
@@ -387,16 +531,100 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
 
     @Override
     public void onClose() {
+        if (isDirty()) {
+            AskPopupScreen.openUnsavedChangesPopup(this, this::closeScreen, () -> saveThen(this::closeScreen));
+            return;
+        }
+        closeScreen();
+    }
+
+    /** Loads another account into this screen; unsaved edits are dropped by the reload. */
+    private void switchAccount(int accountNumber) {
+        this.accountNumber = accountNumber;
+        companyIdForPayouts = null;
+        setupGui(accountNumber);
+    }
+
+    /** Saves, then runs {@code action} only if the save was accepted (see {@link #onSaveResult}). */
+    private void saveThen(Runnable action) {
+        afterSave = action;
+        onSaveChangesButtonClicked();
+    }
+
+    /** Task #117: label shows the action; a pending (unsaved) change shows its target state. */
+    private String freezeButtonText() {
+        boolean target = pendingFrozen == -1 ? frozen : pendingFrozen == 1;
+        return (target ? UNFREEZE_BUTTON : FREEZE_BUTTON).getString() + (pendingFrozen == -1 ? "" : " *");
+    }
+
+    /** True while there are edits that Save would send. */
+    private boolean isDirty() {
+        if (dirty || accountIconChangedFlag || !createBankData.isEmpty() || pendingFrozen != -1)
+            return true;
+        for (BankAccountManagementItem item : bankAccountManagementItems.values()) {
+            if (item.balanceHasChanged() || item.deleteAccount() || item.freeLockedBalance())
+                return true;
+        }
+        return false;
+    }
+
+    private void closeScreen() {
         screenIsOpen = false;
         if(parent != null && this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(parent);
         }
         else
             super.onClose();
     }
 
 
+    /** BS-234: asks what happens to removed shares (one popup per share item), then saves. */
     private void onSaveChangesButtonClicked()
+    {
+        Deque<BankAccountManagementItem> todo = new ArrayDeque<>();
+        if (canManage) {
+            for (BankAccountManagementItem item : bankAccountManagementItems.values())
+                if (removedShares(item) > 0) todo.add(item);
+        }
+        askShareRemoval(todo, new HashMap<>());
+    }
+
+    /** Raw share amount this save takes out of {@code item}'s bank (0 for non-share items). */
+    private long removedShares(BankAccountManagementItem item)
+    {
+        if (item.getShareCompanyId() == null) return 0;
+        if (item.deleteAccount()) return item.getFreeBalance();
+        if (isAdminMode && item.balanceHasChanged()) return item.getTotalBalance() - item.getBalance();
+        return 0;
+    }
+
+    private void askShareRemoval(Deque<BankAccountManagementItem> todo, Map<ItemID, Integer> choices)
+    {
+        BankAccountManagementItem item = todo.poll();
+        if (item == null) {
+            sendSave(choices);
+            return;
+        }
+        ItemID id = item.getItemID();
+        boolean companyAccount = item.getShareCompanyId().equals(companyIdForPayouts);
+        int yesChoice = companyAccount ? UpdateBankAccountRequest.SHARE_DESTROY : UpdateBankAccountRequest.SHARE_RETURN_TO_COMPANY;
+        String count = String.valueOf(removedShares(item) / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+        AskPopupScreen popup = AskPopupScreen.warningPopup(this,
+                () -> runLater(() -> { choices.put(id, yesChoice); askShareRemoval(todo, choices); }),
+                () -> runLater(() -> { choices.put(id, UpdateBankAccountRequest.SHARE_GIVE_TO_ME); askShareRemoval(todo, choices); }),
+                Component.translatable(SHARE_PREFIX+"title", id.getName()).getString(),
+                Component.translatable(SHARE_PREFIX+(companyAccount ? "message_company" : "message"), count).getString());
+        popup.setButtonLabels(Component.translatable(SHARE_PREFIX+(companyAccount ? "destroy" : "return")).getString(),
+                Component.translatable(SHARE_PREFIX+"give").getString());
+        popup.addCancelButton(Component.translatable(SHARE_PREFIX+"cancel").getString(), () -> afterSave = null);
+        if (companyAccount && !isAdminMode)
+            popup.disableButton(true, Component.translatable(SHARE_PREFIX+"destroy_admin_only").getString());
+        if (!isMasterServer()) // ponytail: items only reach a player online on the master; slave delivery would need the transfer-id chain
+            popup.disableButton(false, Component.translatable(SHARE_PREFIX+"give_master_only").getString());
+        switchScreen(popup);
+    }
+
+    private void sendSave(Map<ItemID, Integer> shareChoices)
     {
         List<UpdateBankAccountRequest.InputData.BankData> bankData = new ArrayList<>();
         if(canManage) {
@@ -411,7 +639,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     balance = item.getBalance();
                 }
                 UpdateBankAccountRequest.InputData.BankData data = new UpdateBankAccountRequest.InputData.BankData(
-                        item.getItemID(), balance, setBalance, resetLockedBalance, item.deleteAccount(), false);
+                        item.getItemID(), balance, setBalance, resetLockedBalance, item.deleteAccount(), false,
+                        shareChoices.getOrDefault(item.getItemID(), UpdateBankAccountRequest.SHARE_NONE));
                 bankData.add(data);
             }
         }
@@ -440,8 +669,9 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             if(minecraft != null && minecraft.player != null)
             {
-                minecraft.player.sendSystemMessage(MUST_KEEP_MANAGER);
+                net.kroia.modutilities.PlayerCompat.sendMessage(minecraft.player, MUST_KEEP_MANAGER, false);
             }
+            afterSave = null; // rejected locally: stay on this account
             return;
         }
 
@@ -455,9 +685,50 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             accountName = accountNameLabel.getText();
         }
 
-        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers);
+        UpdateBankAccountRequest.InputData input = new UpdateBankAccountRequest.InputData(accountNumber, accountName, accountIconButton.itemView.getItemStack(), bankData, setUsers, pendingFrozen);
         accountIconChangedFlag = false;
-        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input).thenAccept(this::setupGui);
+        BACKEND_INSTANCES.CLIENT_BANK_MANAGER.requestUpdateBankAccount(input)
+                .whenComplete((data, ex) -> runLater(() -> onSaveResult(data, setUsers, ex != null)));
+    }
+
+    /**
+     * Reloads the screen from the save response. A popup-triggered save runs its
+     * pending action (close / account switch) only if the server accepted it:
+     * {@code null} means rejected, and a user list that differs from the request means
+     * the server refused or adjusted the user change (it already told the player why).
+     * Either way the screen stays open on the current account.
+     */
+    private void onSaveResult(@Nullable BankAccountData data, Map<UUID, Integer> requestedUsers, boolean noAnswer)
+    {
+        Runnable action = afterSave;
+        afterSave = null;
+        if (noAnswer || data == null)
+        {
+            // Issue #95: no answer (timeout) means the save may or may not have gone through
+            if (minecraft != null && minecraft.player != null)
+                net.kroia.modutilities.PlayerCompat.sendMessage(minecraft.player, noAnswer
+                        ? Component.translatable("gui.banksystem.request.no_answer")
+                        : AskPopupScreen.UNSAVED_SAVE_FAILED, false);
+            return;
+        }
+        setupGui(data);
+        if (action == null || !screenIsOpen)
+            return;
+        Map<UUID, Integer> savedUsers = new HashMap<>();
+        for (BankUserData userData : data.users.values())
+            savedUsers.put(userData.userUUID, userData.permissions);
+        if (savedUsers.equals(requestedUsers))
+            action.run();
+    }
+
+    private BankUserWidget createUserWidget(BankUserData userData)
+    {
+        BankUserWidget widget = new BankUserWidget(userData, (w) -> {
+            toRemoveUserWidgets.add(w);
+            dirty = true;
+        }, canEdit(), this);
+        widget.setOnPermissionChanged(() -> dirty = true);
+        return widget;
     }
     private void updateBankData(BankAccountData bankAccountData)
     {
@@ -475,7 +746,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         {
             deleteBankAccountButton.setEnabled(false);
         }
-        if(!this.canManage && accountNameLabel != null)
+        if(!canEdit() && accountNameLabel != null)
         {
             accountNameLabel.setText(bankAccountData.accountName);
         }
@@ -504,7 +775,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             BankData bankData = pair.getSecond();
             if(item == null)
             {
-                item = new BankAccountManagementItem(pair.getFirst(), accountNumber, isAdminMode, canManage);
+                item = new BankAccountManagementItem(pair.getFirst(), accountNumber, isAdminMode && serverTrusted, canEdit());
                 item.setBalance(bankData.balance());
                 bankAccountManagementItems.put(pair.getFirst(), item);
                 bankElementListView.addChild(item);
@@ -576,7 +847,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             if(userWidget == null)
             {
 
-                userWidget = new BankUserWidget(userData, toRemoveUserWidgets::add, canManage, this);
+                userWidget = createUserWidget(userData);
                 bankUserWidgets.put(userUUID, userWidget);
                 userElementListView.addChild(userWidget);
             }
@@ -618,7 +889,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         data.itemID = itemID;
         data.createBank = true;*/
 
-        BankAccountManagementItem accountItem = new BankAccountManagementItem(itemID, accountNumber, isAdminMode, canManage);
+        BankAccountManagementItem accountItem = new BankAccountManagementItem(itemID, accountNumber, isAdminMode && serverTrusted, canEdit());
         accountItem.setBalance(0);
         createBankData.put(itemID, accountItem);
         bankElementListView.addChild(accountItem);
@@ -642,7 +913,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                         if(bankUserWidgets.containsKey(userData.userUUID()))
                             return;
                         BankUserData bankUserData = new BankUserData(userData.userUUID(), userData.userName(), BankPermission.DEPOSIT.getValue());
-                        BankUserWidget userWidget = new BankUserWidget(bankUserData, toRemoveUserWidgets::add, canManage, this);
+                        BankUserWidget userWidget = createUserWidget(bankUserData);
+                        dirty = true;
                         bankUserWidgets.put(userData.userUUID(), userWidget);
                         userElementListView.addChild(userWidget);
                         refreshRemoveButtonStates();
@@ -657,7 +929,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             }
 
             userSelectionScreen.setUsers(userDataList);
-            minecraft.setScreen(userSelectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(userSelectionScreen);
         });
     }
 
@@ -673,12 +945,12 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
             {
                 accountIconChangedFlag = true;
                 accountIconButton.setItem(itemStack);
-                minecraft.setScreen(this);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(this);
             }, () ->
             {
-                minecraft.setScreen(this);
+                net.kroia.modutilities.gui.client.ClientCompat.setScreen(this);
             });
-            Minecraft.getInstance().setScreen(creativeModeItemSelectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(creativeModeItemSelectionScreen);
         }
         else
         {
@@ -689,11 +961,11 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     (itemStack)->{
                         accountIconChangedFlag = true;
                         accountIconButton.setItem(itemStack);
-                        minecraft.setScreen(this);
+                        net.kroia.modutilities.gui.client.ClientCompat.setScreen(this);
                     }
             );
             itemSelectionScreen.sortItems();
-            Minecraft.getInstance().setScreen(itemSelectionScreen);
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(itemSelectionScreen);
         }
     }
     /**
@@ -704,7 +976,7 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
      */
     private void onBindingsButtonClicked()
     {
-        BankAccountBindingsScreen.openScreen(this, accountNumber, isAdminMode);
+        BankAccountBindingsScreen.openScreen(this, accountNumber, isAdminMode, serverTrusted);
     }
     private void onDeleteAccountButtonClicked()
     {
@@ -720,8 +992,8 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
                     getBankManager().deleteBankAccountAsync(accountNumber).thenAccept((success) -> {
                         if(success)
                         {
-                            info("ServerBank account deleted successfully.");
-                            onClose();
+                            debug("ServerBank account deleted successfully.");
+                            closeScreen();
                         }
                         else
                         {
@@ -735,12 +1007,15 @@ public class BankAccountManagementScreen extends BankSystemGuiScreen {
         );
         askPopupScreen.setSize(460,140);
         askPopupScreen.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
-        minecraft.setScreen(askPopupScreen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(askPopupScreen);
     }
 
     @Override
     public void tick() {
         ++lastTickCount;
+        // BS-224: amber Save while there are unsaved edits; greyed (untrusted / no rights) buttons keep their look.
+        if (saveChangesButton != null)
+            setButtonColor(saveChangesButton, saveChangesButton.isClickable() && saveChangesButton.isEnabled() && isDirty() ? UNSAVED_COLOR : 0);
         if(!toRemoveUserWidgets.isEmpty())
         {
             for(BankUserWidget widget : toRemoveUserWidgets)

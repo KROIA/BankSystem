@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.menu.custom;
 
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IAsyncBank;
@@ -25,7 +26,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ClickType; // mc<=1.21.11
+//import net.minecraft.world.inventory.ContainerInput; // mc>=26.1
 import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.TransientCraftingContainer;
@@ -233,7 +235,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * never trusted by the server.
      */
     public void setClientCraftingSettings(boolean useBankItems, boolean depositOutputToBank) {
-        if (!player.level().isClientSide)
+        if (!player.level().isClientSide())
             return;
         this.useBankItems = useBankItems;
         this.depositOutputToBank = depositOutputToBank;
@@ -255,27 +257,25 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * apply it. Never trusted server-side — see {@link #applyGhostRecipe}.
      */
     public void requestGhostRecipe(RecipeHolder<CraftingRecipe> recipe) {
-        if (!player.level().isClientSide)
+        if (!player.level().isClientSide())
             return;
         this.ghostRecipe = recipe;
-        SetBankTerminalGhostRecipePacket.sendPacketToServer(getBlockPos(), recipe.id());
+        SetBankTerminalGhostRecipePacket.sendPacketToServer(getBlockPos(), BankCraftingRecipes.id(recipe));
     }
 
     /**
      * Resolves a recipe id to a 3x3-craftable {@link RecipeType#CRAFTING} recipe
      * holder, or null (with a log warning) when the id is unknown or ineligible.
      */
-    private @Nullable RecipeHolder<CraftingRecipe> resolveCraftingRecipe(net.minecraft.resources.ResourceLocation recipeId) {
-        var holder = player.level().getRecipeManager().byKey(recipeId).orElse(null);
-        if (holder == null || !(holder.value() instanceof CraftingRecipe craftingRecipe)
-                || !craftingRecipe.canCraftInDimensions(BankCraftingMatcher.GRID_WIDTH, BankCraftingMatcher.GRID_HEIGHT)) {
+    private @Nullable RecipeHolder<CraftingRecipe> resolveCraftingRecipe(net.minecraft.resources.ResourceLocation recipeId) { // mc<=1.21.10
+    //private @Nullable RecipeHolder<CraftingRecipe> resolveCraftingRecipe(net.minecraft.resources.Identifier recipeId) { // mc>=1.21.11
+        RecipeHolder<CraftingRecipe> holder = BankCraftingRecipes.byId(player.level(), recipeId);
+        if (holder == null || !BankCraftingRecipes.fits3x3(holder.value())) {
             warn("Rejected recipe " + recipeId + " for player " + player.getUUID()
                     + " (not a 3x3-craftable crafting recipe)");
             return null;
         }
-        @SuppressWarnings("unchecked")
-        RecipeHolder<CraftingRecipe> craftingHolder = (RecipeHolder<CraftingRecipe>) holder;
-        return craftingHolder;
+        return holder;
     }
 
     /**
@@ -295,8 +295,9 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * menu's snapshot may predate deposits made since the last refresh — the
      * immediate recompute gives instant feedback and the refresh converges it.
      */
-    public void applyGhostRecipe(net.minecraft.resources.ResourceLocation recipeId) {
-        if (player.level().isClientSide)
+    public void applyGhostRecipe(net.minecraft.resources.ResourceLocation recipeId) { // mc<=1.21.10
+    //public void applyGhostRecipe(net.minecraft.resources.Identifier recipeId) { // mc>=1.21.11
+        if (player.level().isClientSide())
             return;
         RecipeHolder<CraftingRecipe> craftingHolder = resolveCraftingRecipe(recipeId);
         if (craftingHolder == null)
@@ -327,8 +328,9 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * In bank mode the request routes to {@link #applyGhostRecipe} instead —
      * with "Use Bank Items" active, explicit selections are ghost layouts.
      */
-    public void applyPhysicalRecipeFill(net.minecraft.resources.ResourceLocation recipeId) {
-        if (player.level().isClientSide || craftInProgress)
+    public void applyPhysicalRecipeFill(net.minecraft.resources.ResourceLocation recipeId) { // mc<=1.21.10
+    //public void applyPhysicalRecipeFill(net.minecraft.resources.Identifier recipeId) { // mc>=1.21.11
+        if (player.level().isClientSide() || craftInProgress)
             return;
         if (useBankItems) {
             applyGhostRecipe(recipeId);
@@ -406,7 +408,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                 remainder = slot.safeInsert(remainder);
         }
         if (!remainder.isEmpty())
-            player.getInventory().placeItemBackInInventory(remainder);
+            player.getInventory().placeItemBackInInventory(remainder); // mc<=26.2
+            //player.getInventory().placeItemBackInInventory(remainder, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
     }
 
     /** Clears the ghost layout (both sides; the server recomputes the result). */
@@ -415,7 +418,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         if (ghostRecipe == null)
             return;
         ghostRecipe = null;
-        if (!player.level().isClientSide)
+        if (!player.level().isClientSide())
             updateCraftingResult();
     }
 
@@ -433,7 +436,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * never wipe the global preference).
      */
     public void applyCraftingSettings(boolean requestedUseBankItems, boolean requestedDepositOutput, int accountNumber) {
-        if (player.level().isClientSide)
+        if (player.level().isClientSide())
             return;
         final int requestId = ++settingsRequestId;
         if ((!requestedUseBankItems && !requestedDepositOutput) || accountNumber <= 0) {
@@ -524,7 +527,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
     @Override
     public void broadcastChanges() {
         super.broadcastChanges();
-        if (player.level().isClientSide || !useBankItems || craftingAccount == null || craftInProgress)
+        if (player.level().isClientSide() || !useBankItems || craftingAccount == null || craftInProgress)
             return;
         if (++snapshotRefreshTickCounter >= SNAPSHOT_REFRESH_INTERVAL_TICKS) {
             snapshotRefreshTickCounter = 0;
@@ -548,7 +551,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * slot via the vanilla menu sync).
      */
     private void updateCraftingResult() {
-        if (player.level().isClientSide || suppressRecipeUpdate)
+        if (player.level().isClientSide() || suppressRecipeUpdate)
             return;
         BankCraftingMatcher.Match match = BankCraftingMatcher.findMatch(
                 player.level(),
@@ -571,13 +574,15 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
     // ------------------------------------------------------------------
 
     @Override
-    public void clicked(int slotId, int button, ClickType clickType, Player clickPlayer) {
+    public void clicked(int slotId, int button, ClickType clickType, Player clickPlayer) { // mc<=1.21.11
+    //public void clicked(int slotId, int button, ContainerInput clickType, Player clickPlayer) { // mc>=26.1
         // Explicit ghost-layout clear: clicking an EMPTY grid slot with an EMPTY
         // cursor while a ghost recipe is set removes the whole layout. Runs
         // symmetrically on both sides (all inputs — slot content, carried stack,
         // ghost state — are mirrored), so no extra packet is needed.
         if (ghostRecipe != null
-                && clickType == ClickType.PICKUP
+                && clickType == ClickType.PICKUP // mc<=1.21.11
+                //&& clickType == ContainerInput.PICKUP // mc>=26.1
                 && slotId >= CRAFT_GRID_SLOT_START && slotId < CRAFT_GRID_SLOT_START + CRAFT_GRID_SLOT_COUNT
                 && getCarried().isEmpty()
                 && !getSlot(slotId).hasItem()) {
@@ -588,10 +593,12 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             // Custom bank-craft path: never let vanilla pickup logic run. The
             // client does nothing (result/grid state comes back via menu sync);
             // the server runs the asynchronous atomic craft flow.
-            if (!clickPlayer.level().isClientSide) {
-                if (clickType == ClickType.PICKUP)
+            if (!clickPlayer.level().isClientSide()) {
+                if (clickType == ClickType.PICKUP) // mc<=1.21.11
+                //if (clickType == ContainerInput.PICKUP) // mc>=26.1
                     handleCustomCraft(false);
-                else if (clickType == ClickType.QUICK_MOVE)
+                else if (clickType == ClickType.QUICK_MOVE) // mc<=1.21.11
+                //else if (clickType == ContainerInput.QUICK_MOVE) // mc>=26.1
                     handleCustomCraft(true);
                 // Other click types (PICKUP_ALL/THROW/SWAP/CLONE/QUICK_CRAFT) are
                 // ignored in this mode — PICKUP_ALL in particular would turn a
@@ -621,7 +628,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                 return ItemStack.EMPTY;
             ItemStack slotStack = slot.getItem();
             ItemStack original = slotStack.copy();
-            slotStack.getItem().onCraftedBy(slotStack, pPlayer.level(), pPlayer);
+            slotStack.getItem().onCraftedBy(slotStack, pPlayer.level(), pPlayer); // mc<=1.21.4
+            //slotStack.getItem().onCraftedBy(slotStack, pPlayer); // mc>=1.21.5
             if (!moveItemStackTo(slotStack, PLAYER_SLOT_START, PLAYER_SLOT_END, true))
                 return ItemStack.EMPTY;
             if (slot instanceof BankTerminalResultSlot resultSlot)
@@ -633,7 +641,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             if (slotStack.getCount() == original.getCount())
                 return ItemStack.EMPTY;
             slot.onTake(pPlayer, slotStack);
-            pPlayer.drop(slotStack, false);
+            net.kroia.modutilities.PlayerCompat.drop(pPlayer, slotStack);
             return original;
         }
         if (pIndex >= CRAFT_GRID_SLOT_START && pIndex < CRAFT_GRID_SLOT_START + CRAFT_GRID_SLOT_COUNT) {
@@ -668,7 +676,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
     public void removed(Player pPlayer) {
         super.removed(pPlayer);
         this.resultSlots.clearContent();
-        if (!pPlayer.level().isClientSide) {
+        if (!pPlayer.level().isClientSide()) {
             // Vanilla crafting-table behavior: hand the grid contents back to the
             // player (never deposit them into the bank).
             // This also covers a craft still in its async lock phase when the menu
@@ -702,7 +710,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * exception can never leak acquired locks or leave {@link #craftInProgress} set.
      */
     private void handleCustomCraft(boolean craftAll) {
-        if (player.level().isClientSide || craftInProgress)
+        if (player.level().isClientSide() || craftInProgress)
             return;
         // STRUCTURAL STALENESS GUARD (dupe fix): never act on a cached match.
         // The match is recomputed synchronously HERE, on the server thread, from
@@ -722,6 +730,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         // settings change must not split one craft's bank operations (permission
         // check, locks, withdrawals) across two different accounts.
         final IAsyncBankAccount account = this.craftingAccount;
+        final int craftAccountNr = this.craftingAccountNumber;
         final boolean needsWithdraw = match.usesBankItems();
         final boolean needsDeposit = depositOutputToBank;
         if ((needsWithdraw || needsDeposit) && account == null)
@@ -760,10 +769,19 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                         onCraftPermissionRevoked(account, canWithdraw, canDeposit);
                         return;
                     }
-                    if (rawNeeds.isEmpty())
-                        runOnMainThread(() -> guardedApplyCraftResults(match, craftCount, gridSnapshot, new ArrayList<>()));
-                    else
-                        lockSequentially(account, new ArrayList<>(rawNeeds.entrySet()), 0, new ArrayList<>(), match, craftCount, gridSnapshot);
+                    // Task #117: a frozen account refuses CRAFT_CONSUME / CRAFT_OUTPUT. Check before
+                    // locking: the withdraw runs after the output was delivered.
+                    craftStep(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isAccountFrozenAsync(craftAccountNr), List.of(), frozen -> {
+                        if (Boolean.TRUE.equals(frozen)) {
+                            ServerPlayerUtilities.printToClientConsole(playerUUID, BankSystemTextMessages.getAccountFrozenMessage(craftAccountNr));
+                            runOnMainThread(() -> craftInProgress = false);
+                            return;
+                        }
+                        if (rawNeeds.isEmpty())
+                            runOnMainThread(() -> guardedApplyCraftResults(match, craftCount, gridSnapshot, new ArrayList<>()));
+                        else
+                            lockSequentially(account, new ArrayList<>(rawNeeds.entrySet()), 0, new ArrayList<>(), match, craftCount, gridSnapshot);
+                    });
                 }));
     }
 
@@ -775,9 +793,14 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      */
     private void onCraftPermissionRevoked(IAsyncBankAccount account, boolean canWithdraw, boolean canDeposit) {
         final BankPermission missing = (useBankItems && !canWithdraw) ? BankPermission.WITHDRAW : BankPermission.DEPOSIT;
-        account.getAccountNameAsync().thenAccept(accountName ->
-                ServerPlayerUtilities.printToClientConsole(player.getUUID(),
-                        BankSystemTextMessages.getNoBankPermissionMessage(accountName, missing)));
+        UUID playerUUID = player.getUUID();
+        // BS-272: an untrusted slave also reads false; say that instead of "no permission"
+        net.kroia.banksystem.util.MultiServerUtils.notifyIfUntrustedSlave(playerUUID).thenAccept(untrusted -> {
+            if (untrusted) return;
+            account.getAccountNameAsync().thenAccept(accountName ->
+                    ServerPlayerUtilities.printToClientConsole(playerUUID,
+                            BankSystemTextMessages.getNoBankPermissionMessage(accountName, missing)));
+        });
         runOnMainThread(() -> craftInProgress = false);
         applyCraftingSettings(useBankItems && canWithdraw, depositOutputToBank && canDeposit, craftingAccountNumber);
     }
@@ -971,8 +994,7 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         CraftingInput virtualInput = positioned.input();
         int left = positioned.left();
         int top = positioned.top();
-        NonNullList<ItemStack> remainders = player.level().getRecipeManager()
-                .getRemainingItemsFor(RecipeType.CRAFTING, virtualInput, player.level());
+        NonNullList<ItemStack> remainders = match.recipe().value().getRemainingItems(virtualInput);
 
         suppressRecipeUpdate = true;
         try {
@@ -995,7 +1017,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                                 && inSlot.getCount() + remainder.getCount() <= inSlot.getMaxStackSize())
                             inSlot.grow(remainder.getCount());
                         else
-                            player.getInventory().placeItemBackInInventory(remainder);
+                            player.getInventory().placeItemBackInInventory(remainder); // mc<=26.2
+                            //player.getInventory().placeItemBackInInventory(remainder, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
                     }
                 }
             }
@@ -1012,49 +1035,58 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         // withdrawn locks if a later step (delivery/stats) throws.
         List<Map.Entry<IAsyncBank, Long>> locksToWithdraw = new ArrayList<>(acquiredLocks);
         acquiredLocks.clear();
+        final int ledgerAccount = craftingAccountNumber;
+        final java.util.UUID ledgerPlayer = player.getUUID();
+        final String ledgerNote = "craft " + match.result().getItem() + " x" + (match.result().getCount() * craftCount);
         for (Map.Entry<IAsyncBank, Long> lock : locksToWithdraw) {
             final IAsyncBank bank = lock.getKey();
             final long rawAmount = lock.getValue();
-            bank.withdrawLockedPreferedAsync(rawAmount).whenComplete((status, throwable) -> {
-                if (throwable == null && status == BankStatus.SUCCESS)
+            final net.kroia.banksystem.data.TransferJournal.Ref journal = net.kroia.banksystem.data.TransferJournal.ref("terminal");
+            net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, ledgerPlayer, ledgerNote,
+                    journal, () -> bank.withdrawLockedPreferedAsync(rawAmount))).whenComplete((status, throwable) -> { // BS-258
+                if (throwable == null && status == BankStatus.SUCCESS) {
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> {
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_CONSUME, bank.getItemIDAsync(), rawAmount,
+                                net.kroia.banksystem.banking.ledger.TransactionLedger.player(ledgerPlayer), null, ledgerNote);
+                        return null;
+                    });
                     return;
+                }
+                if (throwable != null) {
+                    // BS-267: outcome unknown after the status check: treated as applied (the output is delivered),
+                    // lock state unknown, left untouched; parked for the admin.
+                    net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(ledgerAccount, bank.getItemIDAsync(), rawAmount,
+                            journal.transferId(), ledgerPlayer, "craft ingredient withdraw", throwable);
+                    return;
+                }
                 // Un-debited craft: the output has already been delivered and may
                 // already be in use, so there is nothing safe to roll back here
                 // (unlike sendToBlock, which can simply remove the inserted stack).
                 // Log at ERROR with full context so admins can reconcile.
-                String itemName = bank.getItemIDAsync().getName();
-                String cause = throwable != null ? ("exception: " + throwable) : String.valueOf(status);
-                error("Un-debited craft: failed to withdraw locked crafting ingredients (item " + itemName
+                error("Un-debited craft: failed to withdraw locked crafting ingredients (item " + bank.getItemIDAsync().getName()
                         + ", raw amount " + rawAmount + ") from bank account " + craftingAccountNumber
-                        + " for player " + player.getUUID() + " (" + player.getName().getString() + ") : " + cause
+                        + " for player " + player.getUUID() + " (" + player.getName().getString() + ") : " + status
                         + " — the crafted output was already delivered; the bank was not debited.");
-                if (throwable != null)
-                    return; // request died mid-flight: lock state unknown, leave it untouched
-                // Release only what is verifiably still locked, never more than our
-                // own contribution. Residual (documented): the lock ledger is a
-                // single counter without per-owner tracking, so if the admin edit
-                // already consumed part of our lock, this min() may free amounts
-                // another mod locked — inherent to the ledger design (the same
-                // limitation exists in BankTerminalBlockEntity.sendToBlock's
-                // rollback path).
-                bank.getLockedBalanceAsync().thenAccept(lockedBalance -> {
-                    long toUnlock = Math.min(rawAmount, Math.max(0L, lockedBalance));
-                    if (toUnlock > 0)
-                        bank.unlockAmountAsync(toUnlock);
-                });
+                // Task #126: never sent / not applied on a slave. The output is already delivered, so keep the
+                // ingredients locked (frozen for the admin) instead of releasing a free craft.
+                if (status == BankStatus.FAILED_NO_MASTER_CONNECTION)
+                    return;
+                releaseOwnCraftLock(bank, rawAmount);
             });
         }
 
         // Deliver the output.
         ItemStack output = match.result().copy();
         output.setCount(match.result().getCount() * craftCount);
-        output.getItem().onCraftedBy(output, player.level(), player);
+        output.getItem().onCraftedBy(output, player.level(), player); // mc<=1.21.4
+        //output.getItem().onCraftedBy(output, player); // mc>=1.21.5
         if (depositOutputToBank)
             depositCraftedOutput(output);
         else
             // Known & accepted: with a full inventory the overflow of a shift-click
             // batch drops at the player's feet instead of stopping the batch early.
-            player.getInventory().placeItemBackInInventory(output);
+            player.getInventory().placeItemBackInInventory(output); // mc<=26.2
+            //player.getInventory().placeItemBackInInventory(output, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
 
         if (player instanceof ServerPlayer serverPlayer) {
             serverPlayer.awardStat(net.minecraft.stats.Stats.ITEM_CRAFTED.get(match.result().getItem()), match.result().getCount() * craftCount);
@@ -1066,6 +1098,28 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
         craftInProgress = false;
         updateCraftingResult();
         refreshBankSnapshot();
+    }
+
+    /**
+     * BS-267: after a refused craft withdraw, frees the lock this craft took ({@code ownLock}, one entry of
+     * acquiredLocks = a lock that succeeded), but only while the counter still holds at least that much. A refused
+     * withdraw moves nothing, so with {@code locked >= ownLock} our lock is intact and exactly {@code ownLock} is ours.
+     * With less, someone (admin set balance / reset) already took part of ours, and the rest can't be told apart from
+     * other holders' locks (e.g. a parked transfer's): nothing is freed, the admin settles it. Public for the in-game test.
+     *
+     * @return the amount freed (0 or {@code ownLock})
+     */
+    public static CompletableFuture<Long> releaseOwnCraftLock(IAsyncBank bank, long ownLock) {
+        return bank.getLockedBalanceAsync().thenApply(locked -> {
+            if (ownLock <= 0 || locked == null || locked < ownLock) {
+                if (ownLock > 0)
+                    error("Refused craft withdraw: only " + locked + " of the "
+                            + ownLock + " (raw) " + bank.getItemIDAsync() + " this craft locked is still locked; left locked for the admin");
+                return 0L;
+            }
+            bank.unlockAmountAsync(ownLock);
+            return ownLock;
+        });
     }
 
     /**
@@ -1108,7 +1162,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
             } else {
                 bankFuture = account.getOrCreateBankAsync(itemID);
             }
-            bankFuture.thenAccept(bank -> {
+            // Issue #79: a failed bank lookup sent no deposit yet, so it falls back like "not created" (null)
+            bankFuture.exceptionally(ex -> null).thenAccept(bank -> {
                 if (bank == null) {
                     ServerPlayerUtilities.printToClientConsole(player.getUUID(),
                             BankSystemTextMessages.getItemNotAllowedMessage(itemID.getName()));
@@ -1120,9 +1175,28 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
                     amountToDeposit = output.getCount() * ((MoneyItem) output.getItem()).worth();
                 else
                     amountToDeposit = BankManager.convertToRawAmountStatic(output.getCount());
-                bank.depositAsync(amountToDeposit).thenAccept(status -> {
+                final long finalAmountToDeposit = amountToDeposit;
+                final int ledgerAccount = craftingAccountNumber;
+                final net.kroia.banksystem.data.TransferJournal.Ref journal = net.kroia.banksystem.data.TransferJournal.ref("terminal");
+                net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, player.getUUID(),
+                        "craft output " + output.getItem() + " x" + output.getCount(), journal,
+                        () -> bank.depositAsync(finalAmountToDeposit))).whenComplete((status, ex) -> { // BS-258
+                    if (ex != null) {
+                        // BS-267: outcome unknown after the status check: treated as credited, the output stays
+                        // gone (no fallback hand-back); parked for the admin.
+                        net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(ledgerAccount, bank.getItemIDAsync(), finalAmountToDeposit,
+                                journal.transferId(), player.getUUID(), "craft output deposit", ex);
+                        return;
+                    }
                     if (status != BankStatus.SUCCESS)
-                        deliverDepositFallback(output, "deposit failed: " + status);
+                        deliverDepositFallback(output, "deposit failed: " + status, journal);
+                    else
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(blockEntity, () -> {
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(ledgerAccount, net.kroia.banksystem.api.ledger.LedgerType.CRAFT_OUTPUT, bank.getItemIDAsync(),
+                                    finalAmountToDeposit, net.kroia.banksystem.banking.ledger.TransactionLedger.player(player.getUUID()), null,
+                                    "craft output " + output.getItem() + " x" + output.getCount());
+                            return null;
+                        });
                 });
             });
         });
@@ -1134,11 +1208,21 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * warning — never block the craft, never silently drop the item.
      */
     private void deliverDepositFallback(ItemStack output, String reason) {
+        deliverDepositFallback(output, reason, null);
+    }
+
+    /** @param journal Task #124: the failed deposit's journal ref; RETURNED is written once the output is handed back */
+    private void deliverDepositFallback(ItemStack output, String reason, @Nullable net.kroia.banksystem.data.TransferJournal.Ref journal) {
         warn("Auto-deposit of crafted output " + output + " for player " + player.getUUID()
                 + " fell back to the player inventory: " + reason);
         ServerPlayerUtilities.printToClientConsole(player.getUUID(),
                 BankSystemTextMessages.getCraftingDepositFallbackMessage(output.getHoverName().getString()));
-        runOnMainThread(() -> player.getInventory().placeItemBackInInventory(output));
+        runOnMainThread(() -> {
+            player.getInventory().placeItemBackInInventory(output); // mc<=26.2
+            //player.getInventory().placeItemBackInInventory(output, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
+            if (journal != null)
+                net.kroia.banksystem.data.TransferJournal.step(journal.transferId(), net.kroia.banksystem.data.TransferJournal.RETURNED, null, reason);
+        });
     }
 
     /**
@@ -1148,8 +1232,8 @@ public class BankTerminalContainerMenu extends AbstractBankContainerMenu {
      * to the client (same pattern as {@link BankTerminalBlockEntity}).
      */
     private void runOnMainThread(Runnable action) {
-        if (player instanceof ServerPlayer serverPlayer && serverPlayer.getServer() != null)
-            serverPlayer.getServer().execute(action);
+        if (player instanceof ServerPlayer serverPlayer && serverPlayer.level().getServer() != null)
+            serverPlayer.level().getServer().execute(action);
         else
             action.run();
     }

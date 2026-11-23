@@ -7,7 +7,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -23,7 +24,8 @@ public class OpenStamperBindScreenPacket extends BankSystemNetworkPacket {
     public record Entry(int companyId, String name) {}
 
     public static final Type<OpenStamperBindScreenPacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "open_stamper_bind_screen"));
+            ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "open_stamper_bind_screen")); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "open_stamper_bind_screen")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, OpenStamperBindScreenPacket> STREAM_CODEC =
             StreamCodec.of(

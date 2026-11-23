@@ -19,11 +19,12 @@ import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
@@ -214,10 +215,13 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             Class<?> moneyAPIClass = Class.forName("io.github.lightman314.lightmanscurrency.api.money.MoneyAPI");
             Object moneyAPI = moneyAPIClass.getMethod("getApi").invoke(null);
             if (moneyAPI == null) return null;
-            net.minecraft.resources.ResourceLocation coinTypeId =
-                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin");
+            net.minecraft.resources.ResourceLocation coinTypeId = // mc<=1.21.10
+            //net.minecraft.resources.Identifier coinTypeId = // mc>=1.21.11
+                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin"); // mc<=1.21.10
+                    //net.minecraft.resources.Identifier.fromNamespaceAndPath("lightmanscurrency", "coin"); // mc>=1.21.11
             Object currencyType = moneyAPIClass
-                    .getMethod("GetRegisteredCurrencyType", net.minecraft.resources.ResourceLocation.class)
+                    .getMethod("GetRegisteredCurrencyType", net.minecraft.resources.ResourceLocation.class) // mc<=1.21.10
+                    //.getMethod("GetRegisteredCurrencyType", net.minecraft.resources.Identifier.class) // mc>=1.21.11
                     .invoke(moneyAPI, coinTypeId);
             if (currencyType == null) return null;
             net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
@@ -984,8 +988,9 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
                 return pass("Lightman's Currency provider not available — skipped");
             }
 
-            Item ironCoin = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_iron"));
+            Item ironCoin = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null); // mc>=1.21.11
             if (ironCoin == null || ironCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_iron not in item registry — skipped");
             }
@@ -1068,8 +1073,9 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
                 return pass("Lightman's Currency provider not available — skipped");
             }
 
-            Item ironCoin = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_iron"));
+            Item ironCoin = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_iron")).orElse(null); // mc>=1.21.11
             if (ironCoin == null || ironCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_iron not in item registry — skipped");
             }
@@ -1132,8 +1138,9 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             if (provider == null || !provider.isAvailable()) {
                 return pass("Lightman's Currency provider not available — skipped");
             }
-            Item goldCoin = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold"));
+            Item goldCoin = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc>=1.21.11
             if (goldCoin == null || goldCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_gold not in item registry — skipped");
             }
@@ -1160,6 +1167,7 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
 
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings == null) return fail("BankAccountBindings unavailable");
+            bindings.unbind(testAccountNr, goldSlot); // a row leaked by an earlier test's exception would refuse the bind (Task #147)
             BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, goldSlot, personalRef);
             if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
 
@@ -1226,8 +1234,9 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             if (provider == null || !provider.isAvailable()) {
                 return pass("Lightman's Currency provider not available — skipped");
             }
-            Item goldCoin = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold"));
+            Item goldCoin = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc>=1.21.11
             if (goldCoin == null || goldCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_gold not in item registry — skipped");
             }
@@ -1249,6 +1258,7 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
 
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings == null) return fail("BankAccountBindings unavailable");
+            bindings.unbind(testAccountNr, goldSlot); // a row leaked by an earlier test's exception would refuse the bind (Task #147)
             BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, goldSlot, personalRef);
             if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
 
@@ -1256,8 +1266,9 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
                     "coin_emerald", "coin_diamond", "coin_netherite"};
             long cumulativeExpected = 0L;
             for (String variantName : variantNames) {
-                Item variantItem = BuiltInRegistries.ITEM.get(
-                        ResourceLocation.fromNamespaceAndPath("lightmanscurrency", variantName));
+                Item variantItem = BuiltInRegistries.ITEM.getOptional(
+                        ResourceLocation.fromNamespaceAndPath("lightmanscurrency", variantName)).orElse(null); // mc<=1.21.10
+                        //Identifier.fromNamespaceAndPath("lightmanscurrency", variantName)).orElse(null); // mc>=1.21.11
                 if (variantItem == null || variantItem == Items.AIR) {
                     continue;
                 }
@@ -1317,10 +1328,12 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             if (provider == null || !provider.isAvailable()) {
                 return pass("Lightman's Currency provider not available — skipped");
             }
-            Item emeraldCoin = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_emerald"));
-            Item goldCoin = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold"));
+            Item emeraldCoin = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_emerald")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_emerald")).orElse(null); // mc>=1.21.11
+            Item goldCoin = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc>=1.21.11
             if (emeraldCoin == null || emeraldCoin == Items.AIR
                     || goldCoin == null || goldCoin == Items.AIR) {
                 return pass("coin_emerald or coin_gold not in item registry — skipped");
@@ -1351,6 +1364,7 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             if (personalRef == null) return fail("No personal LC account");
             BankAccountBindings bindings = BankAccountBindings.get();
             if (bindings == null) return fail("BankAccountBindings unavailable");
+            bindings.unbind(testAccountNr, goldSlot); // a row leaked by an earlier test's exception would refuse the bind (Task #147)
             BankStatus bindStatus = manager.bindExternalAccount(testAccountNr, goldSlot, personalRef);
             if (bindStatus != BankStatus.SUCCESS) return fail("bind returned " + bindStatus);
 
@@ -1411,8 +1425,9 @@ public class LightmansCurrencyAdapterTests extends TestSuite {
             if (provider == null || !provider.isAvailable()) {
                 return pass("Lightman's Currency provider not available — skipped");
             }
-            Item goldCoin = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold"));
+            Item goldCoin = BuiltInRegistries.ITEM.getOptional(
+                    ResourceLocation.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc<=1.21.10
+                    //Identifier.fromNamespaceAndPath("lightmanscurrency", "coin_gold")).orElse(null); // mc>=1.21.11
             if (goldCoin == null || goldCoin == Items.AIR) {
                 return pass("lightmanscurrency:coin_gold not in item registry — skipped");
             }

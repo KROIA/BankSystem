@@ -7,7 +7,8 @@ import net.kroia.banksystem.api.currency.ExternalAccountRef;
 import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.api.currency.ProviderFeature;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -47,7 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * goes through reflection. This provider is only registered when
  * {@code Platform.isModLoaded("lightmanscurrency")} returns {@code true} at runtime.
  * <p>
- * <b>API mapping (verified against LC 2.3.0.5 in {@code .claude/reference/lc-api-2.3.0.5/api-dump.txt}):</b>
+ * <b>API mapping (verified against the Lightman's Currency 2.3.0.5 jar):</b>
  * <ul>
  *   <li>{@code BankAPI.getApi()} — singleton accessor (static method, no {@code API} field exists).</li>
  *   <li>{@code PlayerBankReference.of(UUID)} — canonical factory for a player's personal reference.</li>
@@ -88,14 +89,8 @@ public final class LightmansCurrencyProvider implements ExternalCurrencyProvider
     /** Dedup flag for class-resolution failure warnings. */
     private static final AtomicBoolean CLASS_RESOLUTION_WARNED = new AtomicBoolean(false);
 
-    /** Dedup flag for account enumeration failure warnings. */
-    private static final AtomicBoolean ACCOUNT_ENUM_WARNED = new AtomicBoolean(false);
-
     /** Dedup flag for open-account failure warnings. */
     private static final AtomicBoolean OPEN_ACCOUNT_WARNED = new AtomicBoolean(false);
-
-    /** Dedup flag for team enumeration failure warnings. */
-    private static final AtomicBoolean TEAM_ENUM_WARNED = new AtomicBoolean(false);
 
     /** Dedup flag for coin-variant reflection failure warnings. */
     private static final AtomicBoolean COIN_VALUE_WARNED = new AtomicBoolean(false);
@@ -152,7 +147,7 @@ public final class LightmansCurrencyProvider implements ExternalCurrencyProvider
         }
         try {
             // Verify the LC API surface we depend on is present.
-            // All entries are in api-dump.txt for LC 2.3.0.5. TeamAPI is required for
+            // All entries exist in LC 2.3.0.5. TeamAPI is required for
             // shared-account enumeration; if it's missing the provider still degrades
             // to personal-only behavior via the catch-and-log below.
             Class.forName("io.github.lightman314.lightmanscurrency.api.money.bank.BankAPI");
@@ -176,24 +171,24 @@ public final class LightmansCurrencyProvider implements ExternalCurrencyProvider
     @Override
     public @NotNull List<ExternalAccountRef> listBindableAccounts(@NotNull UUID player) {
         List<ExternalAccountRef> refs = new ArrayList<>();
-        if (!isAvailable()) return refs;
+        // Task #148: no answer throws (contract). One try for personal + teams: a half list would read as
+        // "not bindable" and suspend real bindings.
+        if (!isAvailable()) throw new IllegalStateException("Lightman's Currency is not available");
 
         try {
             // Build the player's personal BankReference: PlayerBankReference.of(UUID).
             Class<?> playerRefClass = Class.forName(
                     "io.github.lightman314.lightmanscurrency.api.money.bank.reference.builtin.PlayerBankReference");
             Object playerRef = playerRefClass.getMethod("of", UUID.class).invoke(null, player);
-            if (playerRef == null) return refs;
+            if (playerRef == null) throw new IllegalStateException("PlayerBankReference.of returned null");
 
             // Resolve reference to live account: BankReference.get().
             Class<?> bankRefClass = Class.forName(
                     "io.github.lightman314.lightmanscurrency.api.money.bank.reference.BankReference");
             Object account = bankRefClass.getMethod("get").invoke(playerRef);
-            if (account == null) {
-                // Player has no personal account yet (LC lazily creates them on first
-                // interaction). Nothing to bind to; return empty.
-                return refs;
-            }
+            // null: LC's bank data is not reachable (server-side LC creates a missing personal account
+            // on lookup). Reading that as "no personal account" would suspend every personal binding.
+            if (account == null) throw new IllegalStateException("BankReference.get returned null");
 
             // Get the account's display name via IBankAccount.getName() -> MutableComponent.
             String label = "Personal Account";
@@ -219,26 +214,18 @@ public final class LightmansCurrencyProvider implements ExternalCurrencyProvider
                     false // personal
             ));
 
-        } catch (ReflectiveOperationException e) {
-            if (ACCOUNT_ENUM_WARNED.compareAndSet(false, true)) {
-                logWarn("Failed to list bindable accounts for player " + player
-                        + " — LC API may have changed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
-            }
-        }
-
-        // Team accounts: enumerate teams the player is a member/admin/owner of, keep only
-        // those with a claimed bank account. Ordering: personal first (per SPI convention),
-        // teams after. Isolated in its own try/catch so a team-side failure never wipes the
-        // personal refs already collected.
-        try {
+            // Team accounts: enumerate teams the player is a member/admin/owner of, keep only
+            // those with a claimed bank account. Ordering: personal first (per SPI convention),
+            // teams after.
             Class<?> teamAPIClass = Class.forName("io.github.lightman314.lightmanscurrency.api.teams.TeamAPI");
             Object teamAPI = teamAPIClass.getMethod("getApi").invoke(null);
-            if (teamAPI == null) return refs;
+            if (teamAPI == null) throw new IllegalStateException("TeamAPI.getApi returned null");
 
             // Use GetAllTeams(boolean) — GetAllTeamsForPlayer(Player) requires a live Player,
             // which the SPI doesn't hand us. Server-side: pass false.
             Object allTeamsObj = teamAPIClass.getMethod("GetAllTeams", boolean.class).invoke(teamAPI, false);
-            if (!(allTeamsObj instanceof List<?> allTeams)) return refs;
+            if (!(allTeamsObj instanceof List<?> allTeams))
+                throw new IllegalStateException("TeamAPI.GetAllTeams did not return a List");
 
             Class<?> teamClass = Class.forName("io.github.lightman314.lightmanscurrency.api.teams.ITeam");
 
@@ -266,13 +253,8 @@ public final class LightmansCurrencyProvider implements ExternalCurrencyProvider
                         true // shared
                 ));
             }
-        } catch (ReflectiveOperationException e) {
-            if (TEAM_ENUM_WARNED.compareAndSet(false, true)) {
-                logWarn("Failed to enumerate team accounts for player " + player
-                        + " — LC team API may have changed: "
-                        + e.getClass().getSimpleName() + ": " + e.getMessage());
-            }
-            // Personal refs already returned; continue with what we have.
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            throw new IllegalStateException("Lightman's Currency: cannot list the bindable accounts of " + player, e);
         }
 
         return refs;
@@ -406,7 +388,8 @@ public final class LightmansCurrencyProvider implements ExternalCurrencyProvider
         if (!isAvailable() || stack.isEmpty()) return 0L;
         if (stack.isDamaged() || stack.isEnchanted()) return 0L;
 
-        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem()); // mc<=1.21.10
+        //Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem()); // mc>=1.21.11
         if (id == null || !id.toString().startsWith(COIN_ID_PREFIX)) return 0L;
 
         Item item = stack.getItem();

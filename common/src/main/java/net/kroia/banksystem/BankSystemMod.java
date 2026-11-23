@@ -5,10 +5,29 @@ import net.kroia.banksystem.api.BankSystemAPI;
 public final class BankSystemMod {
 
     public static final String MOD_ID = "banksystem";
-    public static final String VERSION = "2.1.3";
 
-    // Set to false for release builds to hide dev-only commands (exportrecipes, etc.)
-    public static final boolean ENABLE_DEV_FEATURES = true;
+    /** Registry id in the banksystem namespace. */
+    public static net.minecraft.resources.ResourceLocation id(String path) { // mc<=1.21.10
+    //public static net.minecraft.resources.Identifier id(String path) { // mc>=1.21.11
+        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MOD_ID, path); // mc<=1.21.10
+        //return net.minecraft.resources.Identifier.fromNamespaceAndPath(MOD_ID, path); // mc>=1.21.11
+    }
+    public static final String VERSION = "2.2.0";
+
+    // Dev-only code (unit tests, test commands) is switched by enable_dev_features in gradle.properties:
+    // Gradle compiles the testing package only when it is true, and this flag follows from its presence.
+    // It also gates the exportrecipes command and async debug logging.
+    public static final String DEV_BOOTSTRAP = "net.kroia.banksystem.testing.DevBootstrap";
+    public static final boolean ENABLE_DEV_FEATURES = devClassesPresent();
+
+    private static boolean devClassesPresent() {
+        try {
+            Class.forName(DEV_BOOTSTRAP, false, BankSystemMod.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
 
     /**
      * Maximum squared distance (in blocks²) between a player and a block-entity position
@@ -20,8 +39,12 @@ public final class BankSystemMod {
     private static volatile BankSystemModBackend backend;
 
     public static synchronized void init() {
-        if(backend == null)
+        if(backend == null) {
+            // Task #126: let ARRS requests fail (not sent / timeout / disconnect); transfers then check their status, see TransferStatusRequest.
+            net.kroia.modutilities.networking.client_server.arrs.RequestManager.ENABLE_REQUEST_FAILURES = true;
+            net.kroia.banksystem.util.BankSystemPermissions.register();
             backend = new BankSystemModBackend();
+        }
     }
 
 

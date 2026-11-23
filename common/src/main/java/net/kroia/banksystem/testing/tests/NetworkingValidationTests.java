@@ -3,9 +3,9 @@ package net.kroia.banksystem.testing.tests;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 /**
  * Tests for networking validation covering command bugs, permission ordinal vs getValue
@@ -19,6 +19,11 @@ public class NetworkingValidationTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.NETWORKING;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override

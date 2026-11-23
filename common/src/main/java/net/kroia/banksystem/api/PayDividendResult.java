@@ -39,7 +39,18 @@ public record PayDividendResult(Reason reason, long totalPaid, int holderCount) 
          * raised when {@code currencyItem != MONEY_CURRENCY} and no matching item
          * bank exists on the source account.
          */
-        CURRENCY_ITEM_MISSING
+        CURRENCY_ITEM_MISSING,
+        /**
+         * Task #117 — the company's bank account is frozen by an admin; nothing paid.
+         * @since 2.2.0
+         */
+        ACCOUNT_FROZEN,
+        /**
+         * BS-235 — more of the company's shares are banked than were stamped; dividends are paused
+         * until an admin acknowledges the alert. Nothing paid.
+         * @since 2.2.0
+         */
+        SHARES_UNDER_REVIEW
     }
 
     public boolean success() { return reason == Reason.OK; }

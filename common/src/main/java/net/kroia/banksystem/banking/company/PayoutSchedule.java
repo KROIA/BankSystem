@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.company;
 
+import net.kroia.modutilities.NbtCompat;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.UUID;
@@ -189,13 +190,13 @@ public final class PayoutSchedule {
 
     public void save(CompoundTag tag) {
         tag.putLong("scheduleId", scheduleId);
-        if (targetUUID != null) tag.putUUID("targetUUID", targetUUID);
+        if (targetUUID != null) NbtCompat.putUUID(tag, "targetUUID", targetUUID);
         tag.putLong("amount", amount);
         tag.putLong("intervalTicks", intervalTicks);
         tag.putLong("nextRunTick", nextRunTick);
         tag.putBoolean("paused", paused);
         tag.putLong("createdAt", createdAt);
-        if (createdBy != null) tag.putUUID("createdBy", createdBy);
+        if (createdBy != null) NbtCompat.putUUID(tag, "createdBy", createdBy);
         tag.putInt("targetAccountNr", targetAccountNr);
         tag.putString("targetPlayerName", targetPlayerName);
         tag.putString("targetAccountName", targetAccountName);
@@ -210,26 +211,26 @@ public final class PayoutSchedule {
         if (tag == null) return null;
         Mode mode = Mode.FIXED_PAYOUT;
         if (tag.contains("mode")) {
-            try { mode = Mode.valueOf(tag.getString("mode")); }
+            try { mode = Mode.valueOf(NbtCompat.getString(tag, "mode")); }
             catch (IllegalArgumentException ignored) { /* keep default */ }
         }
         return new PayoutSchedule(
-                tag.getLong("scheduleId"),
-                tag.hasUUID("targetUUID") ? tag.getUUID("targetUUID") : null,
-                tag.getLong("amount"),
-                tag.getLong("intervalTicks"),
-                tag.getLong("nextRunTick"),
-                tag.getBoolean("paused"),
-                tag.getLong("createdAt"),
-                tag.hasUUID("createdBy") ? tag.getUUID("createdBy") : null,
-                tag.contains("targetAccountNr") ? tag.getInt("targetAccountNr") : NO_TARGET_ACCOUNT,
-                tag.getString("targetPlayerName"),
-                tag.getString("targetAccountName"),
+                NbtCompat.getLong(tag, "scheduleId"),
+                NbtCompat.hasUUID(tag, "targetUUID") ? NbtCompat.getUUID(tag, "targetUUID") : null,
+                NbtCompat.getLong(tag, "amount"),
+                NbtCompat.getLong(tag, "intervalTicks"),
+                NbtCompat.getLong(tag, "nextRunTick"),
+                NbtCompat.getBoolean(tag, "paused"),
+                NbtCompat.getLong(tag, "createdAt"),
+                NbtCompat.hasUUID(tag, "createdBy") ? NbtCompat.getUUID(tag, "createdBy") : null,
+                tag.contains("targetAccountNr") ? NbtCompat.getInt(tag, "targetAccountNr") : NO_TARGET_ACCOUNT,
+                NbtCompat.getString(tag, "targetPlayerName"),
+                NbtCompat.getString(tag, "targetAccountName"),
                 mode,
-                tag.getShort("currencyItem"),
-                tag.getLong("missedAmount"),
-                tag.getInt("missedCount"),
-                tag.getBoolean("pausedByCurrencyBan") // missing → false (older NBT)
+                NbtCompat.getShort(tag, "currencyItem"),
+                NbtCompat.getLong(tag, "missedAmount"),
+                NbtCompat.getInt(tag, "missedCount"),
+                NbtCompat.getBoolean(tag, "pausedByCurrencyBan") // missing → false (older NBT)
         );
     }
 }

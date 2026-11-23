@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.item.custom.share;
 
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.ShareVisuals;
 import net.kroia.banksystem.client.cache.CompanyInfoCache;
@@ -12,7 +13,8 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.InteractionResultHolder; // mc<=1.21.1
+//import net.minecraft.world.InteractionResult; // mc>=1.21.2
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -45,7 +47,7 @@ public class StampedShareItem extends Item {
             "tooltip." + BankSystemMod.MOD_ID + ".stamped_share.supply";
 
     public StampedShareItem() {
-        super(new Properties());
+        super(RegistryCompat.itemProperties(new Properties(), BankSystemMod.id(NAME)));
     }
 
     /** Convenience accessor: reads the {@code company_id} component, or {@code null} if unstamped. */
@@ -114,29 +116,32 @@ public class StampedShareItem extends Item {
                 .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(tint & 0xFFFFFF)));
     }
 
-    @Override
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+    @Override // mc<=1.21.4
+    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) { addTooltipLines(stack, tooltip::add); super.appendHoverText(stack, context, tooltip, flag); } // mc<=1.21.4
+    //@Override // mc>=1.21.5
+    //public void appendHoverText(ItemStack stack, TooltipContext context, net.minecraft.world.item.component.TooltipDisplay display, java.util.function.Consumer<Component> tooltip, TooltipFlag flag) { addTooltipLines(stack, tooltip); super.appendHoverText(stack, context, display, tooltip, flag); } // mc>=1.21.5
+
+    /** Tooltip lines of a stamped share (version-neutral; called from the appendHoverText override). */
+    private static void addTooltipLines(ItemStack stack, java.util.function.Consumer<Component> tooltip) {
         Integer companyId = getCompanyId(stack);
         if (companyId == null) {
-            tooltip.add(Component.translatable("item." + BankSystemMod.MOD_ID + ".stamped_share.no_company")
+            tooltip.accept(Component.translatable("item." + BankSystemMod.MOD_ID + ".stamped_share.no_company")
                     .withStyle(ChatFormatting.DARK_GRAY));
-            super.appendHoverText(stack, context, tooltip, flag);
             return;
         }
 
         // Trigger a cache lookup on miss; tooltip re-runs each frame and self-heals.
         boolean missing = !ShareVisualCache.has(companyId);
         if (missing) {
-            tooltip.add(Component.literal("company#" + companyId).withStyle(ChatFormatting.DARK_GRAY));
+            tooltip.accept(Component.literal("company#" + companyId).withStyle(ChatFormatting.DARK_GRAY));
             ShareVisualCache.tryLookup(companyId);
-            super.appendHoverText(stack, context, tooltip, flag);
             return;
         }
 
         ShareVisuals visuals = ShareVisualCache.getVisualsOrPlaceholder(companyId);
         long issued = ShareVisualCache.getIssued(companyId);
         long max = ShareVisualCache.getMax(companyId);
-        tooltip.add(Component.translatable(SUPPLY_KEY, formatLong(issued), formatLong(max))
+        tooltip.accept(Component.translatable(SUPPLY_KEY, formatLong(issued), formatLong(max))
                 .withStyle(ChatFormatting.DARK_GRAY));
 
         // Shift-hold → expanded info (description + preset id, other-mod convention).
@@ -144,23 +149,21 @@ public class StampedShareItem extends Item {
             String desc = visuals.getDescription();
             if (desc != null && !desc.isBlank()) {
                 for (String line : desc.split("\\r?\\n")) {
-                    tooltip.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
+                    tooltip.accept(Component.literal(line).withStyle(ChatFormatting.GRAY));
                 }
             }
             if (visuals.getIconPresetId() != null && !visuals.getIconPresetId().isBlank()) {
-                tooltip.add(Component.literal("[" + visuals.getIconPresetId() + "]")
+                tooltip.accept(Component.literal("[" + visuals.getIconPresetId() + "]")
                         .withStyle(ChatFormatting.DARK_GRAY));
             }
         } else {
             String desc = visuals.getDescription();
             if (desc != null && !desc.isBlank()) {
-                tooltip.add(Component.translatable(
+                tooltip.accept(Component.translatable(
                                 "tooltip." + BankSystemMod.MOD_ID + ".stamped_share.hold_shift")
                         .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
             }
         }
-
-        super.appendHoverText(stack, context, tooltip, flag);
     }
 
     /**
@@ -169,19 +172,23 @@ public class StampedShareItem extends Item {
      * so no bogus interaction packet reaches the block/entity layer.
      */
     @Override
-    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) { // mc<=1.21.1
+    //public @NotNull InteractionResult use(Level level, Player player, InteractionHand hand) { // mc>=1.21.2
         ItemStack stack = player.getItemInHand(hand);
         Integer companyId = getCompanyId(stack);
-        if (companyId == null) return InteractionResultHolder.pass(stack);
+        if (companyId == null) return InteractionResultHolder.pass(stack); // mc<=1.21.1
+        //if (companyId == null) return InteractionResult.PASS; // mc>=1.21.2
 
-        if (level.isClientSide) {
+        if (level.isClientSide()) {
             // Send a C2S request so the server can resolve rights and push them back via
             // S2COpenCompanyManagementPacket. This avoids ARRS calls from the client that
             // may fail before the channel is fully established on dedicated servers.
             net.kroia.banksystem.networking.general.C2SRequestCompanyManagementScreen.send(companyId);
-            return InteractionResultHolder.success(stack);
+            return InteractionResultHolder.success(stack); // mc<=1.21.1
+            //return InteractionResult.SUCCESS; // mc>=1.21.2
         }
-        return InteractionResultHolder.pass(stack);
+        return InteractionResultHolder.pass(stack); // mc<=1.21.1
+        //return InteractionResult.PASS; // mc>=1.21.2
     }
 
     private static String formatLong(long value) {

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.data.table.record.BalanceHistoryRecord;
@@ -61,6 +62,8 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private record ToggleRow(GuiElement element, String name) {}
 
     private final int accountNumber;
+    /** Task #116: opened from an admin entry point; loads suspicion-flag markers. */
+    private final boolean adminView;
     private final BalanceHistoryChart chart;
     private final Label searchLabel;
     private final TextBox searchField;
@@ -95,6 +98,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private long anchorMs = 0L;
     /** True while a balance-history fetch is in flight — prevents overlapping requests. */
     private boolean fetchInFlight = false;
+    private Label loadFailedLabel;
     /** If the pan threshold is re-crossed while a fetch is in flight, remember it and
      *  dispatch exactly one follow-up fetch when the current response arrives. */
     private boolean pendingRefetch = false;
@@ -110,10 +114,22 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private final Map<Short, Long> ratioByItem = new HashMap<>();
 
     public BalanceHistoryScreen(Screen parent, int accountNumber) {
+        this(parent, accountNumber, false);
+    }
+
+    /**
+     * @param accountNumber account, or {@link BalanceHistoryRequest.Query#SERVER_WIDE_ACCOUNT} for
+     *                      the whole-server sum (Task #112, admin only)
+     * @param adminView     Task #116: also show the account's suspicion flags as markers (admin only)
+     */
+    public BalanceHistoryScreen(Screen parent, int accountNumber, boolean adminView) {
         super(Component.literal("Balance History"), parent);
         this.accountNumber = accountNumber;
+        this.adminView = adminView;
 
-        titleLabel = new Label("Balance History - Account #" + accountNumber);
+        titleLabel = new Label(isServerWide()
+                ? Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.server_title").getString()
+                : "Balance History - Account #" + accountNumber);
         titleLabel.setTextFontScale(1.0f);
         addElement(titleLabel);
 
@@ -136,8 +152,29 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         toggleListView.setLayout(toggleLayout);
         addElement(toggleListView);
 
-        fetchAccountName();
+        if (!isServerWide()) fetchAccountName();
         loadUserSettings();
+        if (adminView) fetchFlagMarkers();
+    }
+
+    private boolean isServerWide() {
+        return accountNumber == BalanceHistoryRequest.Query.SERVER_WIDE_ACCOUNT;
+    }
+
+    /** Task #116: flags of this account (server-wide: the account-0 money-supply flags) as chart markers. */
+    private void fetchFlagMarkers() {
+        net.kroia.banksystem.networking.BankSystemNetworking.FLAG_MARKERS_REQUEST
+                .sendRequestToServer(isServerWide() ? 0 : accountNumber)
+                .thenAccept(r -> Minecraft.getInstance().execute(() -> {
+                    if (r == null || r.denied()) return;
+                    java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm");
+                    List<BalanceHistoryChart.Marker> list = new ArrayList<>();
+                    for (var m : r.markers())
+                        list.add(new BalanceHistoryChart.Marker(m.time(),
+                                m.typeName() + "\n" + fmt.format(new Date(m.time()))
+                                        + (m.details() == null || m.details().isBlank() ? "" : "\n" + m.details())));
+                    chart.setMarkers(list);
+                }));
     }
 
     @Override
@@ -185,9 +222,10 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     // Saved on each toggle via updateUserCustomData() ARRS request.
 
     private void loadUserSettings() {
-        getBankManager().getUserCustomData().thenAccept(customData ->
+        // Issue #95: a failed load still shows the chart; userCustomData stays null so nothing is saved over it
+        getBankManager().getUserCustomData().whenComplete((customData, ex) ->
                 Minecraft.getInstance().execute(() -> {
-                    userCustomData = customData;
+                    if (ex == null) userCustomData = customData;
                     readDisabledItems(customData);
                     readViewport(customData);
                     requestData();
@@ -210,8 +248,8 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         chart.setClampBounds(null, null); // legacy clamp-to-data mode
         getBankManager()
                 .requestBalanceHistory(accountNumber)
-                .thenAccept(records -> onFetchResponse(records,
-                        BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL, now, gen, false));
+                .whenComplete((records, ex) -> onFetchResponse(records,
+                        BalanceHistoryRequest.Query.ALL_HISTORY_SENTINEL, now, gen, false, ex != null));
     }
 
     /**
@@ -267,7 +305,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         final long reqTo = toMs;
         getBankManager()
                 .requestBalanceHistory(accountNumber, fromMs, toMs, maxPoints)
-                .thenAccept(records -> onFetchResponse(records, reqFrom, reqTo, gen, false));
+                .whenComplete((records, ex) -> onFetchResponse(records, reqFrom, reqTo, gen, false, ex != null));
     }
 
     /**
@@ -326,7 +364,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
         getBankManager()
                 .requestBalanceHistory(accountNumber, fromMs, toMs, 1000)
-                .thenAccept(records -> onFetchResponse(records, reqFrom, reqTo, gen, true));
+                .whenComplete((records, ex) -> onFetchResponse(records, reqFrom, reqTo, gen, true, ex != null));
     }
 
     /**
@@ -352,7 +390,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
      */
     private void onFetchResponse(List<BalanceHistoryRecord> records,
                                   long reqFromMs, long reqToMs, int gen,
-                                  boolean preserveViewport) {
+                                  boolean preserveViewport, boolean failed) {
         if (gen != fetchGeneration) return;
         Minecraft.getInstance().execute(() -> {
             // Re-check on client thread — a newer request may have been dispatched
@@ -361,6 +399,12 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             fetchInFlight = false;
             if (windowMs > 0) {
                 chart.setClampBounds(null, System.currentTimeMillis());
+            }
+            // Issue #95: no answer. Keep the chart as it is; the next pan or timescale click fetches again.
+            if (failed) {
+                if (!preserveViewport) showLoadFailed();
+                pendingRefetch = false;
+                return;
             }
 
             // Empty response for a timescale click: still snap the viewport to the
@@ -398,6 +442,17 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
 
     private void applyData(List<BalanceHistoryRecord> records) {
         applyData(records, false);
+    }
+
+    /** Issue #95: "could not load" line at the end of the item list (applyData clears it). */
+    private void showLoadFailed() {
+        if (loadFailedLabel == null) {
+            loadFailedLabel = new Label(Component.translatable("gui.banksystem.request.could_not_load").getString());
+            loadFailedLabel.setHeight(15);
+            loadFailedLabel.setTextColor(0xFFe11d48);
+        }
+        toggleListView.removeChild(loadFailedLabel);
+        toggleListView.addChild(loadFailedLabel);
     }
 
     /**
@@ -508,14 +563,14 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             // Rolling fetch: leave viewport exactly where the user's drag put it. Y
             // is also left untouched (per spec — user can hit SPACE to auto-center Y).
         } else if (pendingViewport != null) {
-            double y = pendingViewport.getDouble("y");
-            double w = pendingViewport.getDouble("w");
-            double h = pendingViewport.getDouble("h");
-            if (pendingViewport.getBoolean("atPresent")) {
+            double y = NbtCompat.getDouble(pendingViewport, "y");
+            double w = NbtCompat.getDouble(pendingViewport, "w");
+            double h = NbtCompat.getDouble(pendingViewport, "h");
+            if (NbtCompat.getBoolean(pendingViewport, "atPresent")) {
                 chart.setView(0, y, w, h);
                 chart.scrollToLatestData();
             } else {
-                chart.setView(pendingViewport.getDouble("x"), y, w, h);
+                chart.setView(NbtCompat.getDouble(pendingViewport, "x"), y, w, h);
             }
             pendingViewport = null;
             // Saved-viewport restore: bootstrap rolling-fetch mode from the restored
@@ -526,7 +581,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             double restoredWidth = chart.getViewWidth();
             long allHistoryThresholdMs = 400L * 24L * 60L * 60L * 1000L;
             if (restoredWidth > 0 && restoredWidth < allHistoryThresholdMs) {
-                windowMs = (long) restoredWidth;
+                // Task #106: snap up to a timescale; the restored width becomes the
+                // zoom-out cap, so a persisted collapsed width would lock the view.
+                windowMs = BalanceHistoryChart.timescaleCeilMs(restoredWidth);
                 chart.setMaxViewWidthMs(windowMs);
                 pendingRefetch = false;
                 chart.setClampBounds(null, System.currentTimeMillis());
@@ -600,12 +657,12 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private void readDisabledItems(CompoundTag customData) {
         disabledItems.clear();
         if (customData == null || !customData.contains(CUSTOM_DATA_KEY)) return;
-        CompoundTag historyTag = customData.getCompound(CUSTOM_DATA_KEY);
+        CompoundTag historyTag = NbtCompat.getCompound(customData, CUSTOM_DATA_KEY);
         if (!historyTag.contains(DISABLED_ITEMS_KEY)) return;
-        ListTag list = historyTag.getList(DISABLED_ITEMS_KEY, Tag.TAG_SHORT);
+        ListTag list = NbtCompat.getList(historyTag, DISABLED_ITEMS_KEY, Tag.TAG_SHORT);
         for (Tag tag : list) {
             if (tag instanceof ShortTag shortTag) {
-                disabledItems.add(shortTag.getAsShort());
+                disabledItems.add(NbtCompat.asShort(shortTag));
             }
         }
     }
@@ -613,9 +670,9 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private void readViewport(CompoundTag customData) {
         pendingViewport = null;
         if (customData == null || !customData.contains(CUSTOM_DATA_KEY)) return;
-        CompoundTag historyTag = customData.getCompound(CUSTOM_DATA_KEY);
+        CompoundTag historyTag = NbtCompat.getCompound(customData, CUSTOM_DATA_KEY);
         if (historyTag.contains(VIEWPORT_KEY)) {
-            pendingViewport = historyTag.getCompound(VIEWPORT_KEY);
+            pendingViewport = NbtCompat.getCompound(historyTag, VIEWPORT_KEY);
         }
     }
 
@@ -625,7 +682,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
      * then sends the full customData via updateUserCustomData() ARRS request.
      */
     private void saveUserSettings() {
-        if (userCustomData == null) userCustomData = new CompoundTag();
+        if (userCustomData == null) return; // load failed (Issue #95): saving would overwrite the other screens' settings
         CompoundTag historyTag = new CompoundTag();
         ListTag list = new ListTag();
         for (short id : disabledItems) {
@@ -670,7 +727,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private String buildSearchableName(String displayName, ItemStack stack) {
         StringBuilder sb = new StringBuilder(displayName.toLowerCase());
         if (stack != null && !stack.isEmpty()) {
-            stack.getTags().forEach(tagKey -> {
+            stack.getItem().builtInRegistryHolder().tags().forEach(tagKey -> {
                 String path = tagKey.location().getPath();
                 sb.append(' ').append(path.replace('_', ' ').replace('/', ' '));
             });

@@ -132,7 +132,8 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
         // mutation from the CompletableFuture thread races with GUI init and CMEs
         // in VerticalListView.updateElementPositions / GuiElement.updateTransform.
         AsyncCompanyManager.listSchedulesAsync(companyId).thenAccept(out ->
-                Minecraft.getInstance().tell(() -> {
+                Minecraft.getInstance().tell(() -> { // mc<=1.21.1
+                //Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
                     if (!screenIsOpen) return;
                     List<PayoutSchedule> schedules = new ArrayList<>();
                     if (out != null) {
@@ -155,7 +156,8 @@ public class PayoutsOverviewScreen extends BankSystemGuiScreen {
                     emptyLabel.setText(schedules.isEmpty() ? NO_SCHEDULES.getString() : "");
                 }));
         AsyncCompanyManager.getFailureCount24hAsync(companyId).thenAccept(out ->
-                Minecraft.getInstance().tell(() -> {
+                Minecraft.getInstance().tell(() -> { // mc<=1.21.1
+                //Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
                     if (!screenIsOpen || out == null) return;
                     failedLabel.setText(Component.translatable(FAILED_KEY, out.failedCount()).getString());
                 }));

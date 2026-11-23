@@ -3,6 +3,8 @@ package net.kroia.banksystem.api;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.event.DividendPaidEvent;
 import net.kroia.banksystem.api.event.PayoutExecutedInfo;
+import net.kroia.banksystem.api.event.SuspicionFlaggedEvent;
+import net.kroia.banksystem.api.event.TransactionLoggedEvent;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.util.ItemID;
@@ -10,6 +12,7 @@ import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
 import java.util.Map;
+import java.util.Set;
 
 public interface IBankSystemEvents {
 
@@ -55,6 +58,18 @@ public interface IBankSystemEvents {
     DataEvent<Map<ItemID, ItemID>> getItemIDsMergedEvent();
 
     /**
+     * Emitted on the <b>master server</b> once per start in which the admin confirmed removing
+     * the ItemIDs of missing mods ({@code CONFIRM_ITEMID_REMOVE_MISSING}). BankSystem has
+     * already dropped their balances from every bank account and deleted the IDs (their numbers
+     * are never reused). Dependent mods should delete their own state keyed by these IDs
+     * (markets, orders, ...). Payload: <b>unmodifiable</b> set of the removed ItemIDs.
+     * Dispatched on the server thread right after {@link #getBanksystemSetupCompleteSignal()}.
+     *
+     * @return the ItemIDs-removed event.
+     */
+    DataEvent<Set<ItemID>> getItemIDsRemovedEvent();
+
+    /**
      * Signal gets emitted when bank data is saved to a file.
      */
     Signal getBankDataSavedToFileSignal();
@@ -74,8 +89,17 @@ public interface IBankSystemEvents {
      */
     Signal getSettingsLoadedFromFileSignal();
 
+    /**
+     * Signal emitted on every server once BankSystem finished its per-world setup (data loaded, managers ready).
+     * Fired on the server thread. Attach work that needs BankSystem's state here.
+     */
     Signal getBanksystemSetupCompleteSignal();
 
+    /**
+     * Signal emitted on the <b>master server</b> when a slave finished its handshake (version checked, ItemID sync
+     * sent). Parameterless; see {@link #getMasterServerSlaveDisconnected()} for the counterpart with the slave id.
+     * Fired from a network callback: do not block, and hop to the server thread before touching game state.
+     */
     Signal getMasterServerSlaveConnected();
 
     /**
@@ -176,8 +200,9 @@ public interface IBankSystemEvents {
 
     /**
      * Task #45 (v2.1.0) — event emitted on the <b>master server</b> every time a recurring
-     * payout schedule ticks. Fires for both successful transfers and every documented
-     * failure mode ({@code INSUFFICIENT_FUNDS}, {@code TARGET_MISSING}). See
+     * payout schedule ticks. Fires for both successful transfers and every failure status
+     * ({@code INSUFFICIENT_FUNDS}, {@code TARGET_MISSING}, {@code TARGET_NO_DEPOSIT_RIGHT},
+     * {@code CURRENCY_ITEM_MISSING}, {@code PAUSED}, {@code UNKNOWN}, {@code ACCOUNT_FROZEN}). See
      * {@link PayoutExecutedInfo}. Dispatched on the server thread after the bank transfer
      * and SQL history write have been submitted.
      */
@@ -191,6 +216,41 @@ public interface IBankSystemEvents {
      * submitted.
      */
     DataEvent<DividendPaidEvent> getDividendPaidEvent();
+
+    /**
+     * Task #117 — fires on the <b>master server</b> once per real freeze/unfreeze of a bank
+     * account, after the flag was written. See {@link net.kroia.banksystem.api.event.AccountFreezeChangedEvent}.
+     *
+     * @since 2.2.0
+     */
+    DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> getAccountFreezeChangedEvent();
+
+    /**
+     * Task #119 — fires on the <b>master server</b> once per transaction-ledger row, right after
+     * the row was queued for saving. Never fires on a slave (its rows are written by the master).
+     * See {@link TransactionLoggedEvent}.
+     * <p>
+     * <b>Threading:</b> listeners run on the writer's thread: the server thread, an ARRS/netty
+     * handler thread (slave-forwarded operations) or a DB worker. Listeners must be thread-safe
+     * and fast, and must hop to the server thread ({@code server.execute(...)}) before touching
+     * game state. A throwing listener is logged and does not stop the write.
+     *
+     * @since 2.2.0
+     */
+    DataEvent<TransactionLoggedEvent> getTransactionLoggedEvent();
+
+    /**
+     * Task #119 — fires on the <b>master server</b> once per raised suspicion flag, after the flag
+     * row was queued for saving. Never fires on a slave. See {@link SuspicionFlaggedEvent}.
+     * <p>
+     * <b>Threading:</b> listeners run on the raising thread: the server thread, an ARRS/netty
+     * handler thread or a DB worker (periodic wealth / money-supply checks). Listeners must be
+     * thread-safe and fast, and must hop to the server thread ({@code server.execute(...)})
+     * before touching game state.
+     *
+     * @since 2.2.0
+     */
+    DataEvent<SuspicionFlaggedEvent> getSuspicionFlaggedEvent();
 
     /**
      * Removes all listeners for the events and signals in this class.

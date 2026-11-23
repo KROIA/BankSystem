@@ -11,7 +11,8 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+//import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -31,7 +32,8 @@ public final class BankSystemColorHandlers {
     /** Concrete renderer instance handed out via the public API. Client-side only. */
     public static final IShareIconRenderer SHARE_ICON_RENDERER = new IShareIconRenderer() {
         @Override
-        public void renderInto(GuiGraphics gfx, int x, int y, int w, int h, ItemID itemId) {
+        public void renderInto(GuiGraphics gfx, int x, int y, int w, int h, ItemID itemId) { // mc<=1.21.11
+        //public void renderInto(GuiGraphicsExtractor gfx, int x, int y, int w, int h, ItemID itemId) { // mc>=26.1
             if (gfx == null || itemId == null || !itemId.isValid()) return;
             ItemStack template = ItemIDManager.getItemStack(itemId);
             if (template.isEmpty()) return;
@@ -55,15 +57,21 @@ public final class BankSystemColorHandlers {
             }
 
             // Preset path — render the tinted item stack (tint via ItemColor handler).
-            PoseStack pose = gfx.pose();
-            pose.pushPose();
-            pose.translate(x, y, 0.0f);
+            var pose = gfx.pose();
             float sx = w / 16.0f;
             float sy = h / 16.0f;
-            pose.scale(sx, sy, 1.0f);
-            gfx.renderItem(template, 0, 0);
-            gfx.renderItemDecorations(Minecraft.getInstance().font, template, 0, 0);
-            pose.popPose();
+            pose.pushPose(); // mc<=1.21.5
+            pose.translate(x, y, 0.0f); // mc<=1.21.5
+            pose.scale(sx, sy, 1.0f); // mc<=1.21.5
+            //pose.pushMatrix(); // mc>=1.21.6 (GUI pose is a Matrix3x2fStack)
+            //pose.translate(x, y); // mc>=1.21.6
+            //pose.scale(sx, sy); // mc>=1.21.6
+            gfx.renderItem(template, 0, 0); // mc<=1.21.11
+            //gfx.item(template, 0, 0); // mc>=26.1
+            gfx.renderItemDecorations(Minecraft.getInstance().font, template, 0, 0); // mc<=1.21.11
+            //gfx.itemDecorations(Minecraft.getInstance().font, template, 0, 0); // mc>=26.1
+            pose.popPose(); // mc<=1.21.5
+            //pose.popMatrix(); // mc>=1.21.6
         }
     };
 
@@ -73,7 +81,7 @@ public final class BankSystemColorHandlers {
      * the first letter of up to 2 words; if the name is a single word, take its
      * first 2 letters. Uppercased. Never returns null / empty.
      */
-    /** Task #53 (v2.1.0) — public delegate used by {@link StampedShareBadgePainter}. */
+    /** Task #53 (v2.1.0) — public monogram-initials delegate. */
     public static String resolveMonogramInitials(Integer companyId, ShareVisuals visuals) {
         return resolveInitials(companyId, visuals);
     }
@@ -107,7 +115,8 @@ public final class BankSystemColorHandlers {
      * 1-pixel darker border frames the badge so it reads as a chip even on similar
      * backgrounds.
      */
-    private static void paintMonogramBadge(GuiGraphics gfx, int x, int y, int w, int h,
+    private static void paintMonogramBadge(GuiGraphics gfx, int x, int y, int w, int h, // mc<=1.21.11
+    //private static void paintMonogramBadge(GuiGraphicsExtractor gfx, int x, int y, int w, int h, // mc>=26.1
                                            int tintARGB, String initials) {
         int r = (tintARGB >> 16) & 0xFF;
         int g = (tintARGB >>  8) & 0xFF;
@@ -130,15 +139,21 @@ public final class BankSystemColorHandlers {
         float scale = Math.min((w - 4f) / Math.max(textW, 1), (h - 4f) / Math.max(textH, 1));
         if (scale <= 0.0f) return;
 
-        PoseStack pose = gfx.pose();
-        pose.pushPose();
+        var pose = gfx.pose();
         float cx = x + w / 2.0f;
         float cy = y + h / 2.0f;
-        pose.translate(cx, cy, 0.0f);
-        pose.scale(scale, scale, 1.0f);
-        pose.translate(-textW / 2.0f, -textH / 2.0f, 0.0f);
-        gfx.drawString(font, initials, 0, 0, textColor, false);
-        pose.popPose();
+        pose.pushPose(); // mc<=1.21.5
+        pose.translate(cx, cy, 0.0f); // mc<=1.21.5
+        pose.scale(scale, scale, 1.0f); // mc<=1.21.5
+        pose.translate(-textW / 2.0f, -textH / 2.0f, 0.0f); // mc<=1.21.5
+        //pose.pushMatrix(); // mc>=1.21.6
+        //pose.translate(cx, cy); // mc>=1.21.6
+        //pose.scale(scale, scale); // mc>=1.21.6
+        //pose.translate(-textW / 2.0f, -textH / 2.0f); // mc>=1.21.6
+        gfx.drawString(font, initials, 0, 0, textColor, false); // mc<=1.21.11
+        //gfx.text(font, initials, 0, 0, textColor, false); // mc>=26.1
+        pose.popPose(); // mc<=1.21.5
+        //pose.popMatrix(); // mc>=1.21.6
     }
 
     private static int darken(int argb, float factor) {

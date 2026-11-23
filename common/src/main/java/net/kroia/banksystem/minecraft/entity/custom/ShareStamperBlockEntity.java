@@ -1,5 +1,7 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.banksystem.util.ItemStackNbt;
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -7,7 +9,9 @@ import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
-import net.kroia.banksystem.data.table.TransactionLogManager;
+import net.kroia.banksystem.banking.company.SlaveCompanyMirror;
+import net.kroia.banksystem.networking.general.S2CCompanyVisualBulkPacket;
+import org.jetbrains.annotations.Nullable;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -37,7 +41,8 @@ import java.util.UUID;
 
 /**
  * Task #47 (v2.1.0) — Share Stamper Block Entity. Two slots: input (0), output (1).
- * Master-only tick; slave BEs idle. Bound via {@code /company stamper-bind}.
+ * Bound via {@code /company stamper-bind}. On a slave (BS-262) each stamp/redeem is applied by the master
+ * (STAMPER_APPLY) while one input item is held back; the MANAGE gate is a cached STAMPER_GATE answer.
  */
 public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements MenuProvider, WorldlyContainer {
 
@@ -78,6 +83,22 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     // stamper screen open on this BE. Cleared on menu close, bind-screen close,
     // or BE removal. Concurrent right-clicks from other players get rejected.
     private UUID currentViewer = null;
+
+    // BS-262 — slave: the input item held back while the master applies its stamp/redeem. Saved with the
+    // request (transfer id, company, send time), so a pending request survives a chunk unload or restart.
+    private ItemStack reserved = ItemStack.EMPTY;
+    private String pendingTransferId = null;
+    private int pendingCompanyId = -1;
+    private long pendingSentMs = 0L;
+    private boolean pendingInFlight = false; // transient: this session awaits the reply / status of the pending request
+
+    // BS-262 — slave: last STAMPER_GATE answer. The single-viewer lock means one entry is enough.
+    public static final long GATE_REFRESH_MS = 5_000L;
+    private UUID gateViewer = null;
+    private int gateCompanyId = -1;
+    private boolean gateAllowed = false;
+    private long gateCheckedAt = 0L;
+    private long gateAskedAt = 0L;
 
     // ContainerData for menu sync.
     public final ContainerData data = new ContainerData() {
@@ -129,28 +150,52 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     public int getStampProgress() { return stampProgress; }
 
     public String getBoundCompanyName() {
+        return companyName(boundCompanyId);
+    }
+
+    /** Company name from the master's CompanyManager, or from the SlaveCompanyMirror on a slave (BS-262). */
+    private static String companyName(int companyId) {
+        if (companyId < 0) return String.valueOf(companyId);
         CompanyManager cm = CompanyManager.get();
-        if (cm == null || boundCompanyId < 0) return String.valueOf(boundCompanyId);
-        Company c = cm.getById(boundCompanyId);
-        return c != null ? c.getName() : "#" + boundCompanyId;
+        Company c = cm != null ? cm.getById(companyId) : null;
+        if (c != null) return c.getName();
+        S2CCompanyVisualBulkPacket.Entry e = cm == null ? SlaveCompanyMirror.get(companyId) : null;
+        return e != null && !e.internalName().isEmpty() ? e.internalName() : "#" + companyId;
     }
 
     private long getTotalIssued() {
+        if (boundCompanyId < 0) return 0L;
         CompanyManager cm = CompanyManager.get();
-        if (cm == null || boundCompanyId < 0) return 0L;
+        if (cm == null) {
+            S2CCompanyVisualBulkPacket.Entry e = SlaveCompanyMirror.get(boundCompanyId);
+            return e != null ? e.totalSharesIssued() : 0L;
+        }
         Company c = cm.getById(boundCompanyId);
         return c != null ? c.getTotalSharesIssued() : 0L;
     }
     private long getMaxSupply() {
+        if (boundCompanyId < 0) return 0L;
         CompanyManager cm = CompanyManager.get();
-        if (cm == null || boundCompanyId < 0) return 0L;
+        if (cm == null) {
+            S2CCompanyVisualBulkPacket.Entry e = SlaveCompanyMirror.get(boundCompanyId);
+            return e != null ? e.maxSupply() : 0L;
+        }
         Company c = cm.getById(boundCompanyId);
         return c != null ? c.getMaxSupply() : 0L;
     }
 
-    /** MANAGE gate check — founder OR MANAGE on bound account OR banksystem admin. Master-only meaningful. */
+    /** True on a slave server: company data lives on the master (BS-262). */
+    public static boolean isSlaveSide() {
+        return BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer;
+    }
+
+    /**
+     * MANAGE gate check — founder OR MANAGE on bound account OR banksystem admin. On a slave it reads the
+     * cached STAMPER_GATE answer for the current viewer (BS-262, see {@link #slaveGateAllows}).
+     */
     public boolean hasManagePermission(UUID uuid) {
         if (boundCompanyId < 0) return false;
+        if (isSlaveSide()) return slaveGateAllows(uuid);
         CompanyManager cm = CompanyManager.get();
         if (cm == null) return false;
         Company company = cm.getById(boundCompanyId);
@@ -167,6 +212,8 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     // -------- mutation from packet handler / command --------
     public void bind(int companyId, UUID linkedBy) {
         int prev = this.boundCompanyId;
+        if (prev >= 0 && prev != companyId)
+            ejectContents(); // shares of the previous company must not stay in the block
         this.boundCompanyId = companyId;
         this.linkedByUUID = linkedBy;
         this.linkedAt = System.currentTimeMillis();
@@ -182,6 +229,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     public void unbind() {
         int prev = this.boundCompanyId;
+        ejectContents(); // input and output (stamped shares) leave the block with the binding
         this.boundCompanyId = -1;
         this.linkedByUUID = null;
         this.linkedAt = 0L;
@@ -195,7 +243,8 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     /** Dimension key as a stable string; empty when level is unattached. */
     private String dimensionKey() {
-        return level == null ? "" : level.dimension().location().toString();
+        return level == null ? "" : level.dimension().location().toString(); // mc<=1.21.10
+        //return level == null ? "" : level.dimension().identifier().toString(); // mc>=1.21.11
     }
 
     // -------- viewer lock (Task #47, v2.1.0) --------
@@ -219,27 +268,37 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
 
     // -------- tick --------
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T t) {
-        if (level.isClientSide) return;
-        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer) return;
+        if (level.isClientSide()) return;
         if (!(t instanceof ShareStamperBlockEntity be)) return;
         be.serverTick();
     }
 
     private void serverTick() {
+        boolean slave = isSlaveSide();
+        if (slave && pendingTransferId != null) {
+            if (!pendingInFlight) sendPending(false); // loaded with a pending request: ask the master for its outcome
+            return;
+        }
         if (!processing) return;
         if (boundCompanyId < 0) { processing = false; return; }
         CompanyManager cm = CompanyManager.get();
-        if (cm == null) return;
-        Company company = cm.getById(boundCompanyId);
-        if (company == null) {
-            if (!idleLoggedOnce) {
-                if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
-                    BACKEND_INSTANCES.LOGGER.warn("[ShareStamper] bound company #" + boundCompanyId
-                            + " missing at " + worldPosition);
-                }
-                idleLoggedOnce = true;
-            }
-            return;
+        Company company = null;
+        long issued, maxSupply;
+        if (slave) {
+            // BS-262: the master counts every stamp; the mirror only pre-checks the supply.
+            if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem()) return; // link down: pause
+            S2CCompanyVisualBulkPacket.Entry e = SlaveCompanyMirror.get(boundCompanyId);
+            issued = e != null ? e.totalSharesIssued() : 0L;
+            maxSupply = e != null ? e.maxSupply() : 0L;
+            if (e == null) warnCompanyMissing();
+            if (e == null) return;
+        } else {
+            if (cm == null) return;
+            company = cm.getById(boundCompanyId);
+            issued = company != null ? company.getTotalSharesIssued() : 0L;
+            maxSupply = company != null ? company.getMaxSupply() : 0L;
+            if (company == null) warnCompanyMissing();
+            if (company == null) return;
         }
         idleLoggedOnce = false;
 
@@ -255,7 +314,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
             if (input.isEmpty() || !(input.getItem() instanceof BlankShareItem)) {
                 stampProgress = 0; processing = false; setChanged(); return;
             }
-            if (company.getTotalSharesIssued() + 1 > company.getMaxSupply()) {
+            if (issued + 1 > maxSupply) {
                 stampProgress = 0; processing = false; setChanged(); return;
             }
             ItemStack expected = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), boundCompanyId);
@@ -273,7 +332,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
             if (cid == null || cid != boundCompanyId) {
                 stampProgress = 0; processing = false; setChanged(); return;
             }
-            if (company.getTotalSharesIssued() <= 0L) {
+            if (issued <= 0L) {
                 stampProgress = 0; processing = false; setChanged(); return;
             }
             if (!output.isEmpty()) {
@@ -287,6 +346,16 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         stampProgress++;
         if (stampProgress >= STAMP_TICKS_PER_CYCLE) {
             stampProgress = 0;
+            if (slave) {
+                // BS-262: hold one input item back and let the master count the stamp/redeem.
+                reserved = input.split(1);
+                pendingCompanyId = boundCompanyId;
+                pendingTransferId = net.kroia.banksystem.data.TransferJournal.newTransferId();
+                pendingSentMs = System.currentTimeMillis();
+                sendPending(true);
+                setChanged();
+                return;
+            }
             if (mode == Mode.STAMP) {
                 if (!cm.stampShare(boundCompanyId)) { setChanged(); return; }
                 input.shrink(1);
@@ -294,79 +363,243 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
                 ItemStack made = StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), boundCompanyId);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, made);
                 else output.grow(1);
-                logLedger(company, TransactionLogRecord.Kind.SHARE_STAMP);
+                logStampRow(company, linkedByUUID, net.kroia.banksystem.api.ledger.LedgerType.SHARE_STAMP, null,
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos.of(this)); // BS-258
             } else {
                 if (!cm.redeemShare(boundCompanyId)) { setChanged(); return; }
                 input.shrink(1);
                 items.set(SLOT_INPUT, input);
                 if (output.isEmpty()) items.set(SLOT_OUTPUT, new ItemStack(BankSystemItems.BLANK_SHARE.get()));
                 else output.grow(1);
-                logLedger(company, TransactionLogRecord.Kind.SHARE_REDEEM);
+                logStampRow(company, linkedByUUID, net.kroia.banksystem.api.ledger.LedgerType.SHARE_REDEEM, null,
+                        net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos.of(this)); // BS-258
             }
             setChanged();
         }
     }
 
-    private void logLedger(Company company, TransactionLogRecord.Kind kind) {
-        TransactionLogManager mgr = BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null) return;
-        try {
-            mgr.save(new TransactionLogRecord(TransactionLogRecord.UNSAVED_ID,
-                    company.getBankAccountNr(), linkedByUUID, kind, (short) 0, 1L,
-                    null, company.getCompanyId(), System.currentTimeMillis(), null));
-        } catch (RuntimeException ignored) { }
+    private void warnCompanyMissing() {
+        if (idleLoggedOnce) return;
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.warn("[ShareStamper] bound company #" + boundCompanyId + " missing at " + worldPosition);
+        idleLoggedOnce = true;
+    }
+
+    /**
+     * One SHARE_STAMP / SHARE_REDEEM ledger row (master only). {@code ref} = the slave's transfer id (BS-262), else null;
+     * {@code pos} = the stamper block (BS-258).
+     */
+    public static void logStampRow(Company company, @Nullable UUID actor, net.kroia.banksystem.api.ledger.LedgerType kind, @Nullable String ref,
+                                   @Nullable net.kroia.banksystem.banking.ledger.TransactionLedger.LedgerPos pos) {
+        // via TransactionLedger.write so the row gets the audit hooks and the TRANSACTION_LOGGED event (Task #119)
+        net.kroia.banksystem.banking.ledger.TransactionLedger.write(TransactionLogRecord.of(company.getBankAccountNr(), kind, (short) 0, 1L,
+                actor == null ? net.kroia.banksystem.api.ledger.LedgerActor.system() : net.kroia.banksystem.banking.ledger.TransactionLedger.player(actor),
+                null, company.getCompanyId(), ref, null, null).withPos(pos));
+    }
+
+    // -------- BS-262: slave stamper (company data and the share count live on the master) --------
+
+    /**
+     * Slave: the cached STAMPER_GATE answer for {@code uuid}; refreshed about every {@link #GATE_REFRESH_MS} while
+     * asked (menu open: stillValid every tick), never one request per tick. Denies without a fresh answer for this
+     * viewer and company, while the master link is down or the company mirror is empty.
+     */
+    private boolean slaveGateAllows(UUID uuid) {
+        if (level == null || level.isClientSide() || uuid == null) return false;
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem() || SlaveCompanyMirror.isEmpty()) return false;
+        if (!uuid.equals(gateViewer) || gateCompanyId != boundCompanyId) return false;
+        long now = System.currentTimeMillis();
+        if (now - gateAskedAt >= GATE_REFRESH_MS) askGate(uuid, boundCompanyId, null);
+        return gateAllowed && now - gateCheckedAt < 3 * GATE_REFRESH_MS;
+    }
+
+    /** Slave: asks STAMPER_GATE, caches the answer and runs {@code then} with it (null = no answer) on the server thread. */
+    private void askGate(UUID uuid, int companyId, @Nullable java.util.function.Consumer<Integer> then) {
+        net.minecraft.server.MinecraftServer srv = level != null ? level.getServer() : null;
+        if (srv == null) return;
+        gateAskedAt = System.currentTimeMillis();
+        net.kroia.banksystem.banking.company.AsyncCompanyManager.stamperGateAsync(companyId, uuid).thenAccept(code -> srv.execute(() -> {
+            gateViewer = uuid;
+            gateCompanyId = companyId;
+            gateAllowed = code != null && code == net.kroia.banksystem.banking.company.AsyncCompanyManager.CODE_OK;
+            gateCheckedAt = System.currentTimeMillis();
+            if (then != null) then.accept(code);
+        }));
+    }
+
+    /** Slave: refusal message for a STAMPER_GATE answer. */
+    private static void gateRefused(net.minecraft.server.level.ServerPlayer player, @Nullable Integer code, int companyId) {
+        Component msg = code != null && code == net.kroia.banksystem.banking.company.AsyncCompanyManager.CODE_UNTRUSTED_SLAVE
+                ? Component.translatable("gui.banksystem.share_stamper.untrusted_slave")
+                : Component.translatable("gui.banksystem.share_stamper.no_permission", companyName(companyId));
+        player.sendSystemMessage(msg);
+        net.kroia.modutilities.gui.ScreenNotice.send(player, msg); // MU-168: chat is hidden behind an open GUI
+    }
+
+    /** Slave: opens the stamper menu once the master confirms the player may manage the bound company. */
+    public void openAfterGate(net.minecraft.server.level.ServerPlayer player) {
+        UUID uuid = player.getUUID();
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem(uuid)) return; // tells the player
+        if (!tryAcquireViewer(uuid)) {
+            player.sendSystemMessage(Component.translatable("gui.banksystem.share_stamper.in_use"));
+            return;
+        }
+        int companyId = boundCompanyId;
+        askGate(uuid, companyId, code -> {
+            boolean ok = code != null && code == net.kroia.banksystem.banking.company.AsyncCompanyManager.CODE_OK;
+            if (ok && !isRemoved() && !player.hasDisconnected() && boundCompanyId == companyId) {
+                dev.architectury.registry.menu.MenuRegistry.openExtendedMenu(player, this, buf -> buf.writeBlockPos(worldPosition));
+                return;
+            }
+            releaseViewer(uuid);
+            if (!ok) gateRefused(player, code, companyId);
+        });
+    }
+
+    /** Slave: binds to {@code companyId} once the master confirms MANAGE on it; optionally opens the menu after. */
+    public void bindAfterGate(net.minecraft.server.level.ServerPlayer player, int companyId, boolean openAfter) {
+        UUID uuid = player.getUUID();
+        if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem(uuid)) { releaseViewer(uuid); return; }
+        askGate(uuid, companyId, code -> {
+            if (code == null || code != net.kroia.banksystem.banking.company.AsyncCompanyManager.CODE_OK) {
+                releaseViewer(uuid);
+                gateRefused(player, code, companyId);
+                return;
+            }
+            if (isRemoved() || (boundCompanyId >= 0 && boundCompanyId != companyId)) { releaseViewer(uuid); return; }
+            bind(companyId, uuid);
+            if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+            if (openAfter && !player.hasDisconnected() && tryAcquireViewer(uuid))
+                dev.architectury.registry.menu.MenuRegistry.openExtendedMenu(player, this, buf -> buf.writeBlockPos(worldPosition));
+        });
+    }
+
+    /** Slave: sends the pending stamp/redeem ({@code send}) or only asks the master for its outcome (after a reload). */
+    private void sendPending(boolean send) {
+        net.minecraft.server.MinecraftServer srv = level != null ? level.getServer() : null;
+        if (srv == null) return;
+        pendingInFlight = true;
+        String tid = pendingTransferId;
+        net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, // BS-258: the position goes in the request
+                        () -> net.kroia.banksystem.banking.company.AsyncCompanyManager.stamperApplyAsync(pendingCompanyId,
+                                reserved.getItem() instanceof StampedShareItem, linkedByUUID, tid, pendingSentMs, send))
+                .whenComplete((code, ex) -> srv.execute(() -> finishPending(tid, ex != null ? null : code)));
+    }
+
+    /**
+     * Slave, server thread: APPLIED → the output item; refused / never sent → the reserved item back to the input
+     * (a refusal also stops processing); unknown ({@code code} null) → the item back AND processing stops.
+     */
+    private void finishPending(String tid, @Nullable Integer code) {
+        if (isRemoved() || !tid.equals(pendingTransferId)) return;
+        int ok = net.kroia.banksystem.banking.company.AsyncCompanyManager.CODE_OK;
+        if (code != null && code == ok) {
+            putOrDrop(SLOT_OUTPUT, reserved.getItem() instanceof StampedShareItem
+                    ? new ItemStack(BankSystemItems.BLANK_SHARE.get())
+                    : StampedShareItem.ofCompany(BankSystemItems.STAMPED_SHARE.get(), pendingCompanyId));
+        } else {
+            // ponytail: an unknown redeem gives the share back (user decision a); if the master did count it, the
+            // company shows a share excess of 1 that an admin acknowledges. Destroying it instead would lose the share.
+            putOrDrop(SLOT_INPUT, reserved);
+            if (code == null || code != net.kroia.banksystem.banking.company.AsyncCompanyManager.STAMPER_NOT_SENT) {
+                processing = false;
+                if (code == null && BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                    BACKEND_INSTANCES.LOGGER.warn("[ShareStamper] outcome of stamper request " + tid + " at " + worldPosition
+                            + " unknown; item returned to the input, stamper stopped");
+            }
+        }
+        reserved = ItemStack.EMPTY;
+        pendingTransferId = null;
+        pendingCompanyId = -1;
+        pendingInFlight = false;
+        stampProgress = 0;
+        setChanged();
+    }
+
+    /** Into {@code slot} when it fits and the stamper is still bound to the pending company, else dropped on top. */
+    private void putOrDrop(int slot, ItemStack stack) {
+        ItemStack cur = items.get(slot);
+        if (pendingCompanyId == boundCompanyId) {
+            if (cur.isEmpty()) { items.set(slot, stack); return; }
+            if (ItemStack.isSameItemSameComponents(cur, stack) && cur.getCount() + stack.getCount() <= cur.getMaxStackSize()) {
+                cur.grow(stack.getCount());
+                return;
+            }
+        }
+        if (level != null)
+            Containers.dropItemStack(level, worldPosition.getX() + 0.5, worldPosition.getY() + 1.0, worldPosition.getZ() + 0.5, stack);
     }
 
     // -------- NBT --------
-    @Override
-    public void loadAdditional(@NotNull CompoundTag tag, HolderLookup.Provider p) {
-        super.loadAdditional(tag, p);
+    @Override // mc<=1.21.5
+    public void loadAdditional(CompoundTag tag, HolderLookup.Provider p) { super.loadAdditional(tag, p); loadState(tag, p); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //public void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { super.loadAdditional(input); loadState(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup()); } // mc>=1.21.6
+
+    /** Version-neutral load of this block entity's data (called from loadAdditional). */
+    private void loadState(CompoundTag tag, HolderLookup.Provider p) {
         items.clear();
         NonNullList<ItemStack> tmp = NonNullList.withSize(items.size(), ItemStack.EMPTY);
-        net.minecraft.world.ContainerHelper.loadAllItems(tag, tmp, p);
+        ItemStackNbt.loadAllItems(tag, tmp, p);
         for (int i = 0; i < tmp.size(); i++) items.set(i, tmp.get(i));
-        boundCompanyId = tag.contains("BoundCompanyId") ? tag.getInt("BoundCompanyId") : -1;
-        linkedByUUID = tag.hasUUID("LinkedByUUID") ? tag.getUUID("LinkedByUUID") : null;
-        linkedAt = tag.getLong("LinkedAt");
-        stampProgress = tag.getInt("StampProgress");
-        mode = tag.getInt("Mode") == 1 ? Mode.REDEEM : Mode.STAMP;
+        boundCompanyId = tag.contains("BoundCompanyId") ? NbtCompat.getInt(tag, "BoundCompanyId") : -1;
+        linkedByUUID = NbtCompat.hasUUID(tag, "LinkedByUUID") ? NbtCompat.getUUID(tag, "LinkedByUUID") : null;
+        linkedAt = NbtCompat.getLong(tag, "LinkedAt");
+        stampProgress = NbtCompat.getInt(tag, "StampProgress");
+        mode = NbtCompat.getInt(tag, "Mode") == 1 ? Mode.REDEEM : Mode.STAMP;
         // Task v2.1.0 — NBT migration: legacy single `AllowHopperRedeem` flag maps to
         // both new autoInput / autoOutput toggles. Legacy `QueuedStamps` field discarded
         // (no back-compat needed beyond load — see COMPLETED_TASKS.md).
         if (tag.contains("AutoInput") || tag.contains("AutoOutput")) {
-            autoInput = tag.getBoolean("AutoInput");
-            autoOutput = tag.getBoolean("AutoOutput");
-        } else if (tag.getBoolean("AllowHopperRedeem")) {
+            autoInput = NbtCompat.getBoolean(tag, "AutoInput");
+            autoOutput = NbtCompat.getBoolean(tag, "AutoOutput");
+        } else if (NbtCompat.getBoolean(tag, "AllowHopperRedeem")) {
             autoInput = true;
             autoOutput = true;
         } else {
             autoInput = false;
             autoOutput = false;
         }
-        processing = tag.getBoolean("Processing");
+        processing = NbtCompat.getBoolean(tag, "Processing");
+        // BS-262: a slave request still pending at save time; serverTick asks the master for its outcome.
+        pendingTransferId = tag.contains("PendingTransferId") ? NbtCompat.getString(tag, "PendingTransferId") : null;
+        pendingCompanyId = pendingTransferId != null ? NbtCompat.getInt(tag, "PendingCompanyId") : -1;
+        pendingSentMs = NbtCompat.getLong(tag, "PendingSentMs");
+        reserved = tag.contains("Reserved") ? ItemStackNbt.parseOptional(p, NbtCompat.getCompound(tag, "Reserved")) : ItemStack.EMPTY;
+        pendingInFlight = false;
         // v2.1.0 Bug4 root cause — vanilla BE lifecycle invokes setLevel() BEFORE
         // loadAdditional() during chunk load, so the setLevel() reverse-index register
         // fired with boundCompanyId still at -1 (its default) and persisted bindings
         // were never re-added to CompanyManager's reverse index. Register here at the
         // end of load, once boundCompanyId is the persisted value. Master-only.
-        if (level != null && !level.isClientSide && boundCompanyId >= 0) {
+        if (level != null && !level.isClientSide() && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
             if (cm != null) cm.registerStamper(boundCompanyId, worldPosition, dimensionKey());
         }
     }
 
-    @Override
-    protected void saveAdditional(@NotNull CompoundTag tag, HolderLookup.Provider p) {
-        super.saveAdditional(tag, p);
-        net.minecraft.world.ContainerHelper.saveAllItems(tag, items, p);
+    @Override // mc<=1.21.5
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider p) { super.saveAdditional(tag, p); saveState(tag, p); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //protected void saveAdditional(net.minecraft.world.level.storage.ValueOutput output) { super.saveAdditional(output); CompoundTag tag = new CompoundTag(); saveState(tag, level != null ? level.registryAccess() : net.kroia.modutilities.UtilitiesPlatform.getRegistryAccess()); net.kroia.modutilities.NbtCompat.writeAll(output, tag); } // mc>=1.21.6
+
+    /** Version-neutral save of this block entity's data (called from saveAdditional). */
+    private void saveState(CompoundTag tag, HolderLookup.Provider p) {
+        ItemStackNbt.saveAllItems(tag, items, p);
         tag.putInt("BoundCompanyId", boundCompanyId);
-        if (linkedByUUID != null) tag.putUUID("LinkedByUUID", linkedByUUID);
+        if (linkedByUUID != null) NbtCompat.putUUID(tag, "LinkedByUUID", linkedByUUID);
         tag.putLong("LinkedAt", linkedAt);
         tag.putInt("StampProgress", stampProgress);
         tag.putInt("Mode", mode.ordinal());
         tag.putBoolean("AutoInput", autoInput);
         tag.putBoolean("AutoOutput", autoOutput);
         tag.putBoolean("Processing", processing);
+        if (pendingTransferId != null) {
+            tag.putString("PendingTransferId", pendingTransferId);
+            tag.putInt("PendingCompanyId", pendingCompanyId);
+            tag.putLong("PendingSentMs", pendingSentMs);
+        }
+        if (!reserved.isEmpty()) tag.put("Reserved", ItemStackNbt.save(reserved, p));
     }
 
     // -------- Container --------
@@ -394,23 +627,30 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
     }
     @Override public boolean stillValid(Player p) {
         if (level == null || level.getBlockEntity(worldPosition) != this) return false;
-        return p.distanceToSqr(worldPosition.getX()+0.5, worldPosition.getY()+0.5, worldPosition.getZ()+0.5) <= 64.0;
+        if (p.distanceToSqr(worldPosition.getX()+0.5, worldPosition.getY()+0.5, worldPosition.getZ()+0.5) > 64.0) return false;
+        // A bound stamper is only usable with MANAGE on its company (founder / MANAGE / banksystem admin).
+        // The server re-checks this every tick and before every slot click, so revoked rights close the
+        // menu and a modified client cannot keep interacting. Unbound stampers keep the old behaviour.
+        return boundCompanyId < 0 || level.isClientSide() || hasManagePermission(p.getUUID());
     }
     @Override public void clearContent() { items.clear(); }
 
-    // Task #47 (v2.1.0) — release viewer lock when the container menu closes and when
-    // the BE unloads. AbstractContainerMenu#removed calls Container#stopOpen(Player).
+    // Task #47 (v2.1.0) — release viewer lock if a caller runs Container#stopOpen.
+    // AbstractContainerMenu#removed does NOT call stopOpen, so the menu close is handled
+    // by ShareStamperContainerMenu#removed; setRemoved clears the lock on BE unload.
     @Override
-    public void stopOpen(Player p) {
+    public void stopOpen(Player p) { // mc<=1.21.8
+    //public void stopOpen(net.minecraft.world.entity.ContainerUser p) { // mc>=1.21.9
         super.stopOpen(p);
-        releaseViewer(p.getUUID());
+        releaseViewer(p.getUUID()); // mc<=1.21.8
+        //releaseViewer(p.getLivingEntity().getUUID()); // mc>=1.21.9
     }
 
     @Override
     public void setRemoved() {
         currentViewer = null;
         // Task #51 (v2.1.0) — drop reverse index entry on BE unload/removal (master-only meaningful).
-        if (level != null && !level.isClientSide && boundCompanyId >= 0) {
+        if (level != null && !level.isClientSide() && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
             if (cm != null) cm.unregisterStamper(boundCompanyId, worldPosition, dimensionKey());
         }
@@ -423,7 +663,7 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         // Task #51 (v2.1.0) — after NBT load + level attach, register this BE in the
         // Company reverse index. Master-only; on client and slave CompanyManager.get()
         // is null so this is a no-op there.
-        if (!lvl.isClientSide && boundCompanyId >= 0) {
+        if (!lvl.isClientSide() && boundCompanyId >= 0) {
             CompanyManager cm = CompanyManager.get();
             if (cm != null) cm.registerStamper(boundCompanyId, worldPosition, dimensionKey());
         }
@@ -469,9 +709,35 @@ public class ShareStamperBlockEntity extends BaseContainerBlockEntity implements
         return tag;
     }
 
+    //@Override // mc>=1.21.5
+    //public void preRemoveSideEffects(BlockPos pos, BlockState state) { dropContents(); } // mc>=1.21.5
+
     public void dropContents() {
         if (level == null) return;
         Containers.dropContents(level, worldPosition, items);
+        // BS-262: an item held back for a pending slave request drops like the slots; the request is dropped with the block
+        if (!reserved.isEmpty())
+            Containers.dropItemStack(level, worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(), reserved);
+        reserved = ItemStack.EMPTY;
+        pendingTransferId = null;
+    }
+
+    /**
+     * Drops every slot on top of the (still standing) block and empties the inventory.
+     * Server only; used when the binding is cleared or changed.
+     */
+    private void ejectContents() {
+        if (level == null || level.isClientSide()) return;
+        boolean any = false;
+        for (int i = 0; i < items.size(); i++) {
+            ItemStack stack = items.get(i);
+            if (stack.isEmpty()) continue;
+            Containers.dropItemStack(level, worldPosition.getX() + 0.5, worldPosition.getY() + 1.0,
+                    worldPosition.getZ() + 0.5, stack.copy());
+            items.set(i, ItemStack.EMPTY);
+            any = true;
+        }
+        if (any) setChanged();
     }
 
     @Override

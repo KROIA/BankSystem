@@ -1,5 +1,7 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.banksystem.util.ItemStackNbt;
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -59,6 +61,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         public static final String BANK_ACCOUNT_NUMBER = "A";
         public static final String INVENTORY_ITEMS = "I";
         public static final String BLOCK_IS_POWERED = "P";
+        public static final String OWNER = "U";
     }
     private class ControlledContainer extends SimpleContainer {
         public ControlledContainer(int size) {
@@ -170,15 +173,15 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                     !tag.contains(TAGS.CONDITION) ||
                     !tag.contains(TAGS.CONDITION_VALUE))
                 return null;
-            ItemID itemID = ItemID.createFromTag(tag.getCompound(TAGS.ITEM_ID));
-            int targetAmount = tag.getInt(TAGS.TARGET_AMOUNT);
+            ItemID itemID = ItemID.createFromTag(NbtCompat.getCompound(tag, TAGS.ITEM_ID));
+            int targetAmount = NbtCompat.getInt(tag, TAGS.TARGET_AMOUNT);
             WithdrawCondition condition;
             try {
-                condition = WithdrawCondition.valueOf(tag.getString(TAGS.CONDITION));
+                condition = WithdrawCondition.valueOf(NbtCompat.getString(tag, TAGS.CONDITION));
             } catch (IllegalArgumentException e) {
                 return null;
             }
-            long conditionValue = tag.getLong(TAGS.CONDITION_VALUE);
+            long conditionValue = NbtCompat.getLong(tag, TAGS.CONDITION_VALUE);
             return new WithdrawOrder(itemID, targetAmount, condition, conditionValue);
         }
     }
@@ -192,7 +195,11 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     private boolean blockIsPowered = false;
     private boolean currentlyReceiving = false;
 
-    //private UUID playerOwner = null;
+    /**
+     * Task #141: the player who connected the block; each withdraw needs their WITHDRAW permission.
+     * Blocks saved before 2.2.0 have none and stay idle until someone with WITHDRAW saves the settings again.
+     */
+    private @Nullable UUID playerOwner = null;
     //private ItemID itemID;
     //private int targetAmount;
     private int tickCounter = 0;
@@ -217,19 +224,25 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         this.inventory.stopOpen(null);
     }
 
-    @Override
-    public void loadAdditional(@NotNull CompoundTag tag, HolderLookup.Provider provider) {
-        super.loadAdditional(tag, provider);
+    @Override // mc<=1.21.5
+    public void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) { super.loadAdditional(tag, provider); loadState(tag, provider); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //public void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { super.loadAdditional(input); loadState(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup()); } // mc>=1.21.6
+
+    /** Version-neutral load of this block entity's data (called from loadAdditional). */
+    private void loadState(CompoundTag tag, HolderLookup.Provider provider) {
         bankAccountNumber = 0;
         withdrawOrders.clear();
+        playerOwner = null;
 
         if(tag.contains("PlayerOwner") && tag.contains("TargetAmount"))
         {
             // Compatibility, convert to new Block data
-            UUID playerOwner = tag.getUUID("PlayerOwner");
-            int targetAmount = tag.getInt("TargetAmount");
-            inventory.fromTag(tag.getList("Items", Tag.TAG_COMPOUND), provider);
-            blockIsPowered = tag.getBoolean("RecievingEnabled");
+            UUID playerOwner = NbtCompat.getUUID(tag, "PlayerOwner");
+            this.playerOwner = playerOwner; // Task #141: the old format drew from this player's own personal account
+            int targetAmount = NbtCompat.getInt(tag, "TargetAmount");
+            ItemStackNbt.fromTag(inventory, NbtCompat.getList(tag, "Items", Tag.TAG_COMPOUND), provider);
+            blockIsPowered = NbtCompat.getBoolean(tag, "RecievingEnabled");
 
             CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(playerOwner);
             account.thenAccept(bankAccount -> {
@@ -237,7 +250,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                     return;
                 bankAccountNumber = bankAccount.getAccountNumberAsync();
                 if(tag.contains("ItemID")) {
-                    ItemID itemID = ItemID.createFromTag(tag.getCompound("ItemID"));
+                    ItemID itemID = ItemID.createFromTag(NbtCompat.getCompound(tag, "ItemID"));
                     if(itemID != null) {
                         WithdrawOrder order = new WithdrawOrder(itemID, targetAmount, WithdrawCondition.NONE, 0);
                         withdrawOrders.add(order);
@@ -248,20 +261,23 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
 
         if(tag.contains(TAGS.INVENTORY_ITEMS))
-            inventory.fromTag(tag.getList(TAGS.INVENTORY_ITEMS, Tag.TAG_COMPOUND), provider);
+            ItemStackNbt.fromTag(inventory, NbtCompat.getList(tag, TAGS.INVENTORY_ITEMS, Tag.TAG_COMPOUND), provider);
 
         if(tag.contains(TAGS.BLOCK_IS_POWERED))
-            blockIsPowered = tag.getBoolean(TAGS.BLOCK_IS_POWERED);
+            blockIsPowered = NbtCompat.getBoolean(tag, TAGS.BLOCK_IS_POWERED);
 
         if(tag.contains(TAGS.BANK_ACCOUNT_NUMBER))
-            bankAccountNumber = tag.getInt(TAGS.BANK_ACCOUNT_NUMBER);
+            bankAccountNumber = NbtCompat.getInt(tag, TAGS.BANK_ACCOUNT_NUMBER);
         else
             bankAccountNumber = 0; // Reset account number if not present
 
+        if(tag.contains(TAGS.OWNER))
+            playerOwner = NbtCompat.getUUID(tag, TAGS.OWNER);
+
         if(tag.contains(TAGS.WITHDRAW_ORDERS)) {
-            ListTag ordersList = tag.getList(TAGS.WITHDRAW_ORDERS, Tag.TAG_COMPOUND);
+            ListTag ordersList = NbtCompat.getList(tag, TAGS.WITHDRAW_ORDERS, Tag.TAG_COMPOUND);
             for (int i = 0; i < ordersList.size(); i++) {
-                CompoundTag orderTag = ordersList.getCompound(i);
+                CompoundTag orderTag = NbtCompat.getCompound(ordersList, i);
                 WithdrawOrder order = WithdrawOrder.fromTag(orderTag);
                 if(order != null) {
                     withdrawOrders.add(order);
@@ -270,12 +286,18 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         }
     }
 
-    @Override
-    protected void saveAdditional(@NotNull CompoundTag tag, HolderLookup.Provider provider) {
-        super.saveAdditional(tag, provider);
-        tag.put(TAGS.INVENTORY_ITEMS, inventory.createTag(provider));
+    @Override // mc<=1.21.5
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) { super.saveAdditional(tag, provider); saveState(tag, provider); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //protected void saveAdditional(net.minecraft.world.level.storage.ValueOutput output) { super.saveAdditional(output); CompoundTag tag = new CompoundTag(); saveState(tag, level != null ? level.registryAccess() : net.kroia.modutilities.UtilitiesPlatform.getRegistryAccess()); net.kroia.modutilities.NbtCompat.writeAll(output, tag); } // mc>=1.21.6
+
+    /** Version-neutral save of this block entity's data (called from saveAdditional). */
+    private void saveState(CompoundTag tag, HolderLookup.Provider provider) {
+        tag.put(TAGS.INVENTORY_ITEMS, ItemStackNbt.createTag(inventory, provider));
         tag.putBoolean(TAGS.BLOCK_IS_POWERED, blockIsPowered);
         tag.putInt(TAGS.BANK_ACCOUNT_NUMBER, bankAccountNumber);
+        if(playerOwner != null)
+            NbtCompat.putUUID(tag, TAGS.OWNER, playerOwner);
         ListTag ordersList = new ListTag();
         for (WithdrawOrder order : withdrawOrders) {
             CompoundTag orderTag = order.toTag();
@@ -359,6 +381,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     }
 
+    //@Override // mc>=1.21.5
+    //public void preRemoveSideEffects(BlockPos pos, BlockState state) { dropContents(); } // mc>=1.21.5
+
     public void dropContents() {
         Containers.dropContents(this.getLevel(), this.getBlockPos(), this.inventory);
     }
@@ -437,25 +462,31 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     }
     public CompletableFuture<Boolean> hasPermissionToOpenBlock(ServerPlayer player)
     {
+        return hasPermissionToOpenBlock(player.getUUID());
+    }
+    /** WITHDRAW on the connected account; true while the block is not connected. Also gates every settings change (Task #141). */
+    public CompletableFuture<Boolean> hasPermissionToOpenBlock(UUID player)
+    {
         CompletableFuture<Boolean> future =  new CompletableFuture<>();
         if(bankAccountNumber <= 0) {
             future.complete(true);
             return future;
         }
+        // Task #169: master link down, the account cannot be checked. Deny, and keep the binding
+        // (a null answer below would otherwise unbind the block).
+        if(!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem()) {
+            future.complete(false);
+            return future;
+        }
         IAsyncBankManager asyncBankManager = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync();
-        CompletableFuture<IAsyncBankAccount> account = asyncBankManager.getBankAccountAsync(bankAccountNumber);
-        account.thenAccept((bankAccount) ->
+        return asyncBankManager.getBankAccountAsync(bankAccountNumber).thenCompose(bankAccount ->
         {
             if(bankAccount == null) {
                 bankAccountNumber = 0;
-                future.complete(true);
+                return CompletableFuture.completedFuture(true);
             }
-            else {
-                CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(player.getUUID(), BankPermission.WITHDRAW.getValue());
-                hasPermissionFuture.thenAccept(future::complete);
-            }
-        });
-        return future;
+            return bankAccount.hasPermissionAsync(player, BankPermission.WITHDRAW.getValue());
+        }).exceptionally(ex -> false); // failed request: deny, keep the binding
     }
 
     public void update()
@@ -467,7 +498,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
     public static <T extends BlockEntity> void tick(Level level, BlockPos blockPos, BlockState blockState, T t) {
         if(t instanceof BankDownloadBlockEntity blockEntity)
         {
-            if (!level.isClientSide) { // Ensure this only runs on the server
+            if (!level.isClientSide()) { // Ensure this only runs on the server
                 if(blockEntity.bankAccountNumber <= 0)
                     return;
                 blockEntity.tickCounter++;
@@ -484,30 +515,52 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     private void receiveItemsFromBank()
     {
-        if(!blockIsPowered || currentlyReceiving)
+        if(!blockIsPowered || currentlyReceiving || playerOwner == null)
+            return;
+        // Task #169: master link down -> getBankAccountAsync answers null, which must not count
+        // as "account missing" (that unbinds the block). Skip the cycle, keep the binding.
+        if(!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem())
             return;
 
-        CompletableFuture<IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber);
-        account.thenAccept(accountResult -> {
+        // Held across the account lookup and the owner check so a slow (slave) round trip cannot start a second cycle.
+        currentlyReceiving = true;
+        BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(bankAccountNumber).thenCompose(accountResult -> {
             if(accountResult == null) {
                 bankAccountNumber = 0; // Reset account number if it does not exist
                 setBockstate_connected(false);
-                return;
+                return CompletableFuture.completedFuture((IAsyncBankAccount) null);
             }
-
-            currentlyReceiving = true;
-            List<CompletableFuture<Boolean>> futures = new ArrayList<>();
-            for( WithdrawOrder order : withdrawOrders)
-            {
-                if(order != null) {
-                    futures.add(processWithdrawOrder(order, accountResult));
-                }
-            }
-
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
+            return ownerCanWithdraw(accountResult).thenApply(allowed -> allowed ? accountResult : null);
+        }).whenComplete((accountResult, ex) -> {
+            if(accountResult != null)
+                processWithdrawOrders(accountResult);
+            else
                 currentlyReceiving = false;
-                setChanged();
-            });
+        });
+    }
+
+    /** Task #141: the player who connected the block still holds WITHDRAW on the account. False without an owner. */
+    public CompletableFuture<Boolean> ownerCanWithdraw(IAsyncBankAccount account)
+    {
+        UUID owner = playerOwner;
+        return owner == null ? CompletableFuture.completedFuture(false)
+                : account.hasPermissionAsync(owner, BankPermission.WITHDRAW.getValue());
+    }
+
+    private void processWithdrawOrders(IAsyncBankAccount accountResult)
+    {
+        currentlyReceiving = true;
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+        for( WithdrawOrder order : withdrawOrders)
+        {
+            if(order != null) {
+                futures.add(processWithdrawOrder(order, accountResult));
+            }
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
+            currentlyReceiving = false;
+            setChanged();
         });
     }
 
@@ -525,6 +578,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             return CompletableFuture.completedFuture(false);
 
         CompletableFuture<@Nullable BankData> itemBankDataFuture = account.getBankDataAsync(item);
+        // Issue #79: a failed request completes the order as "nothing withdrawn"; a pending result would leave
+        // currentlyReceiving stuck and the block dead until reload. No unlock on any failure: the outcome is unknown.
+        itemBankDataFuture.exceptionally(ex -> { result.complete(false); return null; });
         itemBankDataFuture.thenAccept((itemBankData) -> {
             if (itemBankData == null) {
                 result.complete(false);
@@ -546,7 +602,9 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
 
             CompletableFuture<@Nullable IAsyncBank> itemBankFuture = account.getBankAsync(item);
+            itemBankFuture.exceptionally(ex -> { result.complete(false); return null; });
             itemBankFuture.thenAccept((itemBank) -> {
+                if (itemBank == null) { result.complete(false); return; }
                 CompletableFuture<Integer> filledAmountFuture = withdrawAndFillInventory(item, amountToFill, itemBank);
                 filledAmountFuture.thenAccept((filledAmount) -> {
                     result.complete(filledAmount > 0);
@@ -565,6 +623,7 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         // and the withdraw math produces exactly 1 physical coin with zero dust.
         final long ratio = BankAccountBindings.getRawUnitsPerItem(bankAccountNumber, item);
         CompletableFuture<Long>  currentBalanceFuture = itemBank.getBalanceAsync();
+        currentBalanceFuture.exceptionally(ex -> { result.complete(0); return null; }); // Issue #79: never leave result pending
         currentBalanceFuture.thenAccept((currentBalance) -> {
             int amountToFill = amountToFillIn;
             long amountToReserve = (long) amountToFill * ratio;
@@ -581,20 +640,46 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
             CompletableFuture<BankStatus> lockStatusFuture = itemBank.lockAmountAsync(amountToReserve);
             final int amountToFillFinal = amountToFill;
             final long amountToReserveFinal = amountToReserve;
-            lockStatusFuture.thenAccept((lockStatus) -> {
+            // Issue #87: whenComplete, so a failed lock still completes the block's result.
+            lockStatusFuture.whenComplete((lockStatus, lockError) -> {
+                if (lockError != null) {
+                    // Nothing inserted. No unlock: the master may have applied the lock, and the lock is one
+                    // counter (a blind unlock could free other holders' locks). Left for the admin.
+                    BACKEND_INSTANCES.LOGGER.error("[BankDownloadBlockEntity] Lock of " + amountToReserveFinal + " (raw) " + item
+                            + " at " + worldPosition.toShortString() + " has an unknown outcome; nothing withdrawn,"
+                            + " any applied lock is left for the admin", lockError);
+                    result.complete(0);
+                    return;
+                }
                 if(lockStatus != BankStatus.SUCCESS) // Lock the amount to prevent other transactions from interfering
                 {
                     result.complete(0);
                     return; // Failed to lock the amount, return 0
                 }
 
-                // Try to fill the inventory with the item
-                int filledAmount = tryFillInventory(item, amountToFillFinal);
+                // Try to fill the inventory with the item. Keep the exact stack we insert so a
+                // failed debit can take back the same (component-equal) items.
+                ItemStack withdrawalStack = item.getStack();
+                int filledAmount = (int) ContainerItemInsertion.insertWithdrawnItems(inventory, withdrawalStack, amountToFillFinal);
                 if(filledAmount > 0) {
                     long amountToWithdraw = (long) filledAmount * ratio;
-                    CompletableFuture<BankStatus> withdrawStatusFuture = itemBank.withdrawLockedPreferedAsync(amountToWithdraw);
-                    withdrawStatusFuture.thenAccept((withdrawStatus) -> {
+                    final net.kroia.banksystem.data.TransferJournal.Ref journal =
+                            net.kroia.banksystem.data.TransferJournal.ref("download_block " + net.kroia.banksystem.data.DiagnosticsDatabase.at(level, worldPosition));
+                    CompletableFuture<BankStatus> withdrawStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, // BS-258
+                            () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, playerOwner,
+                            "download block " + worldPosition.toShortString(), journal,
+                            () -> itemBank.withdrawLockedPreferedAsync(amountToWithdraw)));
+                    // whenComplete, not thenAccept: an exceptional (unknown) withdraw must be parked, not skipped.
+                    withdrawStatusFuture.whenComplete((withdrawStatus, withdrawError) -> {
                         if(withdrawStatus == BankStatus.SUCCESS) {
+                            // Task #109 / BS-235: actor = the block's owner (SYSTEM without one), position in the note.
+                            net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> { // BS-258
+                                net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.DOWNLOAD_WITHDRAW, item,
+                                        amountToWithdraw, playerOwner != null ? net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerOwner)
+                                                : net.kroia.banksystem.api.ledger.LedgerActor.system(), null,
+                                        "download block " + worldPosition.toShortString());
+                                return null;
+                            });
                             if(filledAmount != amountToFillFinal)
                             {
                                 // If we filled less than requested, unlock the remaining amount
@@ -604,8 +689,30 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
                             setChanged();
                             result.complete(filledAmount);
                             return; // Successfully withdrew and filled the inventory
+                        } else if (withdrawError != null) {
+                            // BS-267: still unknown after the master's status check: treated as applied. The items
+                            // stay in the block (as after a success) and the whole lock stays (the lock is one
+                            // counter; a blind unlock could free other holders' locks). Parked for the admin.
+                            net.kroia.banksystem.banking.ledger.AdminAudit.parkTransfer(bankAccountNumber, item, amountToWithdraw,
+                                    journal.transferId(), playerOwner, "download block " + worldPosition.toShortString()
+                                            + " withdraw (lock of " + amountToReserveFinal + " kept)", withdrawError);
+                            setChanged();
+                            result.complete(filledAmount); // the items are in the block, as after a success
                         } else {
-                            itemBank.unlockAmountAsync(amountToReserveFinal); // Unlock the amount if withdrawal failed
+                            // Issue #74: the debit was refused (not applied), so take the inserted items back out —
+                            // otherwise the block keeps items the account never paid for.
+                            long removed = ContainerItemInsertion.removeItems(inventory, withdrawalStack, filledAmount);
+                            // Items that already left the block (hopper) were not paid for: their part stays locked.
+                            long escapedRaw = Math.max(0L, filledAmount - removed) * ratio;
+                            if (removed < filledAmount)
+                                BACKEND_INSTANCES.LOGGER.error("[BankDownloadBlockEntity] Withdraw of " + filledAmount + " " + item
+                                        + " at " + worldPosition.toShortString() + " failed (" + withdrawStatus
+                                        + ") and only " + removed + " item(s) could be taken back out of the block; transfer "
+                                        + journal.transferId() + ", " + escapedRaw + " (raw) left locked for the admin");
+                            long unlock = Math.max(0L, amountToReserveFinal - escapedRaw);
+                            if (unlock > 0)
+                                itemBank.unlockAmountAsync(unlock); // not applied: release our lock, minus the escaped items
+                            setChanged();
                             result.complete(0);
                         }
                     });
@@ -621,25 +728,6 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
         return result;
     }
 
-    /**
-     * Materializes up to {@code amountToFill} withdrawn items into the block inventory and
-     * returns how many were actually placed (the remainder stays locked in the bank and is
-     * unlocked by the caller).
-     * <p>
-     * Placement must NOT merge by ItemID equality: identity deliberately ignores
-     * volatile/deposit-gated components, so an ItemID-equal stack in a slot can still be
-     * component-distinct (e.g. spoiled food) — merging onto it would silently rewrite the
-     * withdrawn items' state. {@link ContainerItemInsertion} merges only into
-     * component-equal stacks ({@code ItemStack.isSameItemSameComponents}) and places full
-     * template copies into empty slots (the previous {@code new ItemStack(item, count)}
-     * dropped the template's data components entirely).
-     */
-    private int tryFillInventory(ItemID item, int amountToFill)
-    {
-        if(item == null || amountToFill <= 0)
-            return 0;
-        return (int) ContainerItemInsertion.insertWithdrawnItems(inventory, item, amountToFill);
-    }
 
     /**
      * Counts how many items of the given ItemID the block inventory holds, to decide how
@@ -680,48 +768,56 @@ public class BankDownloadBlockEntity extends BaseContainerBlockEntity implements
 
     public void handlePacket(ServerPlayer sender, UpdateBankDownloadBlockEntityPacket packet)
     {
-        final int finalAccountNr = packet.getAccountNr();
-        if(finalAccountNr <= 0) {
-            this.bankAccountNumber = 0;
-            this.withdrawOrders.clear();
-            List<WithdrawOrder> orders = packet.getWithdrawOrders();
-            for (WithdrawOrder order : orders) {
-                if(order != null) {
-                    this.withdrawOrders.add(order);
-                }
-            }
-            setChanged();
-            setBockstate_connected(false);
-            SyncBankDownloadDataPacket.sendPacket(sender, this);
-            return;
-        }
-        UUID senderUUID = sender.getUUID();
-        CompletableFuture<@Nullable IAsyncBankAccount> account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(finalAccountNr);
-        account.thenAccept(bankAccount -> {
-            if(bankAccount == null) {
-                setBockstate_connected(false);
-                return;
-            }
-            CompletableFuture<Boolean> hasPermissionFuture = bankAccount.hasPermissionAsync(senderUUID, BankPermission.WITHDRAW.getValue());
-            hasPermissionFuture.thenAccept((hasPermission) -> {
-                if(!hasPermission) {
-                    setBockstate_connected(false);
-                    return; // Player does not have permission to withdraw from this bank account
-                }
-
-                this.bankAccountNumber = finalAccountNr;
-                this.withdrawOrders.clear();
-                List<WithdrawOrder> orders = packet.getWithdrawOrders();
-                for (WithdrawOrder order : orders) {
-                    if(order != null) {
-                        this.withdrawOrders.add(order);
-                    }
-                }
-
-                setChanged();
-                setBockstate_connected(true);
+        applySettings(sender.getUUID(), packet.getAccountNr(), packet.getWithdrawOrders()).thenAccept(applied -> {
+            if(applied)
                 SyncBankDownloadDataPacket.sendPacket(sender, this);
+        });
+    }
+
+    /**
+     * Applies new settings from {@code sender}. Task #141: any change needs WITHDRAW on the currently connected
+     * account (the same check that opens the menu); connecting also needs WITHDRAW on the new account and makes
+     * the sender the owner whose permission every later withdraw is checked against.
+     * @return true if the settings were applied
+     */
+    public CompletableFuture<Boolean> applySettings(UUID sender, int accountNr, List<WithdrawOrder> orders)
+    {
+        return hasPermissionToOpenBlock(sender).thenCompose(allowed -> {
+            if(!allowed)
+                return CompletableFuture.completedFuture(false);
+            if(accountNr <= 0) {
+                setSettings(0, null, orders);
+                setBockstate_connected(false);
+                return CompletableFuture.completedFuture(true);
+            }
+            return BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getBankAccountAsync(accountNr).thenCompose(bankAccount -> {
+                if(bankAccount == null) {
+                    setBockstate_connected(false);
+                    return CompletableFuture.completedFuture(false);
+                }
+                return bankAccount.hasPermissionAsync(sender, BankPermission.WITHDRAW.getValue()).thenApply(hasPermission -> {
+                    if(!hasPermission) {
+                        setBockstate_connected(false);
+                        return false; // Player does not have permission to withdraw from this bank account
+                    }
+                    setSettings(accountNr, sender, orders);
+                    setBockstate_connected(true);
+                    return true;
+                });
             });
         });
+    }
+
+    private void setSettings(int accountNr, @Nullable UUID owner, List<WithdrawOrder> orders)
+    {
+        this.bankAccountNumber = accountNr;
+        this.playerOwner = owner;
+        this.withdrawOrders.clear();
+        for (WithdrawOrder order : orders) {
+            if(order != null) {
+                this.withdrawOrders.add(order);
+            }
+        }
+        setChanged();
     }
 }

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.item.custom.software;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.bankaccount.IAsyncBankAccount;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
@@ -23,7 +24,7 @@ public class BankingSoftware extends Software {
     public static final String NAME = "banking_software";
     //private long cooldownTimer;
     public BankingSoftware() {
-        super();
+        super(BankSystemMod.id(NAME));
     }
 
     @Override
@@ -54,10 +55,14 @@ public class BankingSoftware extends Software {
         if (target instanceof Player && player instanceof ServerPlayer serverPlayer) {
             if (!level.isClientSide()) {
 
-                if(serverPlayer.hasPermissions(2) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+                if(net.kroia.modutilities.PermissionCompat.hasPermission(serverPlayer, net.kroia.banksystem.util.BankSystemPermissions.SOFTWARE, net.kroia.banksystem.util.BankSystemPermissions.FALLBACK_LEVEL) && serverPlayer.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
                     UUID targetUUID = target.getUUID();
-                    CompletableFuture<IAsyncBankAccount> bankAccountFuture = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(targetUUID);
-                    bankAccountFuture.thenAcceptAsync((bankAccount) -> {
+                    // Task #103: another player's account also requires the BankSystem admin flag.
+                    BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(serverPlayer.getUUID())
+                            .thenCompose(isAdmin -> Boolean.TRUE.equals(isAdmin)
+                                    ? BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().getPersonalBankAccountAsync(targetUUID)
+                                    : CompletableFuture.<IAsyncBankAccount>completedFuture(null))
+                            .thenAcceptAsync((bankAccount) -> {
                         if(bankAccount != null) {
                             SyncOpenGUIPacket.send_openBankAccountScreen(serverPlayer, targetUUID, bankAccount.getAccountNumberAsync(), true);
                         }

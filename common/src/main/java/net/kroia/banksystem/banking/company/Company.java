@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.company;
 
+import net.kroia.modutilities.NbtCompat;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -16,8 +17,7 @@ import java.util.UUID;
 /**
  * Company entity — Phase 1 (Task #43) foundation for the Company Feature program.
  * <p>
- * See {@code .claude/Features/CompanyFeature.md} §1 for the full spec. Fields listed in
- * spec §1 that are populated by later phases ({@link #totalSharesIssued},
+ * Fields populated by later phases ({@link #totalSharesIssued},
  * {@link #shareVisuals}, {@link #payoutSchedules}) exist here with empty defaults so
  * future tasks (#45, #46, #47) do not need to migrate the NBT schema.
  * <p>
@@ -57,6 +57,10 @@ public final class Company {
 
     /** v2.1.0 — ItemID short of the company's default currency (0 = money; {@link #CURRENCY_UNSET} = none). */
     private short companyCurrency = 0;
+    /** BS-235: share integrity state (see the getters). */
+    private long shareConsistentTs = 0L;
+    private long shareExcessLevel = 0L;
+    private boolean shareExcessOpen = false;
     /** Persisted set of BlockPos positions of Share Stamper blocks bound to this company. */
     private final Set<BlockPos> boundStampers = new HashSet<>();
 
@@ -80,6 +84,10 @@ public final class Company {
     // ------------------------------------------------------------------
     public int getCompanyId() { return companyId; }
     public String getName() { return name; }
+    /** BS-265: "Name(ID)" for console lines; just the ID when the name is empty. */
+    public String logLabel() {
+        return name == null || name.isEmpty() ? String.valueOf(companyId) : name + "(" + companyId + ")";
+    }
     public int getBankAccountNr() { return bankAccountNr; }
     public long getMaxSupply() { return maxSupply; }
     public long getCreatedAt() { return createdAt; }
@@ -89,6 +97,12 @@ public final class Company {
     public int getStatisticsTimeframe() { return statisticsTimeframe; }
     public void setStatisticsTimeframe(int tf) { this.statisticsTimeframe = (tf >= 0 && tf <= 4) ? tf : 1; }
     public short getCompanyCurrency() { return companyCurrency; }
+    /** BS-235: last check that found no more shares in banks than stamped (0 = never). */
+    public long getShareConsistentTs() { return shareConsistentTs; }
+    /** BS-235: excess last raised or acknowledged; only a larger excess raises the alert again. */
+    public long getShareExcessLevel() { return shareExcessLevel; }
+    /** BS-235: share-excess alert raised and not yet acknowledged; dividends are paused. */
+    public boolean isShareExcessOpen() { return shareExcessOpen; }
     public void setCompanyCurrency(short c) { this.companyCurrency = c; }
     public ShareVisuals getShareVisuals() { return shareVisuals; }
     public List<PayoutSchedule> getPayoutSchedules() { return java.util.Collections.unmodifiableList(payoutSchedules); }
@@ -120,6 +134,15 @@ public final class Company {
 
     void setTotalSharesIssued(long value) {
         this.totalSharesIssued = value;
+    }
+
+    /** BS-235: share integrity state, see {@link ShareIntegrity}. @return true when something changed. */
+    boolean setShareState(long consistentTs, long excessLevel, boolean excessOpen) {
+        boolean changed = consistentTs != shareConsistentTs || excessLevel != shareExcessLevel || excessOpen != shareExcessOpen;
+        shareConsistentTs = consistentTs;
+        shareExcessLevel = excessLevel;
+        shareExcessOpen = excessOpen;
+        return changed;
     }
 
     // ------------------------------------------------------------------
@@ -225,11 +248,14 @@ public final class Company {
         tag.putLong("nextScheduleId", nextScheduleId);
         tag.putInt("statisticsTimeframe", statisticsTimeframe);
         tag.putShort("companyCurrency", companyCurrency);
+        tag.putLong("shareConsistentTs", shareConsistentTs);
+        tag.putLong("shareExcessLevel", shareExcessLevel);
+        tag.putBoolean("shareExcessOpen", shareExcessOpen);
 
         ListTag foundersTag = new ListTag();
         for (UUID founder : founders) {
             CompoundTag entry = new CompoundTag();
-            entry.putUUID("uuid", founder);
+            NbtCompat.putUUID(entry, "uuid", founder);
             foundersTag.add(entry);
         }
         tag.put("founders", foundersTag);
@@ -266,33 +292,33 @@ public final class Company {
         if (!tag.contains("companyId") || !tag.contains("name") || !tag.contains("bankAccountNr")) {
             return null;
         }
-        int companyId = tag.getInt("companyId");
-        String name = tag.getString("name");
-        int bankAccountNr = tag.getInt("bankAccountNr");
-        long maxSupply = tag.getLong("maxSupply");
-        long createdAt = tag.getLong("createdAt");
-        String description = tag.contains("description") ? tag.getString("description") : "";
-        long totalSharesIssued = tag.contains("totalSharesIssued") ? tag.getLong("totalSharesIssued") : 0L;
+        int companyId = NbtCompat.getInt(tag, "companyId");
+        String name = NbtCompat.getString(tag, "name");
+        int bankAccountNr = NbtCompat.getInt(tag, "bankAccountNr");
+        long maxSupply = NbtCompat.getLong(tag, "maxSupply");
+        long createdAt = NbtCompat.getLong(tag, "createdAt");
+        String description = tag.contains("description") ? NbtCompat.getString(tag, "description") : "";
+        long totalSharesIssued = tag.contains("totalSharesIssued") ? NbtCompat.getLong(tag, "totalSharesIssued") : 0L;
 
         Set<UUID> founders = new HashSet<>();
-        if (tag.contains("founders", Tag.TAG_LIST)) {
-            ListTag foundersTag = tag.getList("founders", Tag.TAG_COMPOUND);
+        if (NbtCompat.contains(tag, "founders", Tag.TAG_LIST)) {
+            ListTag foundersTag = NbtCompat.getList(tag, "founders", Tag.TAG_COMPOUND);
             for (int i = 0; i < foundersTag.size(); i++) {
-                CompoundTag entry = foundersTag.getCompound(i);
-                if (entry.hasUUID("uuid")) founders.add(entry.getUUID("uuid"));
+                CompoundTag entry = NbtCompat.getCompound(foundersTag, i);
+                if (NbtCompat.hasUUID(entry, "uuid")) founders.add(NbtCompat.getUUID(entry, "uuid"));
             }
         }
 
         ShareVisuals visuals = ShareVisuals.EMPTY;
-        if (tag.contains("shareVisuals", Tag.TAG_COMPOUND)) {
-            visuals = ShareVisuals.load(tag.getCompound("shareVisuals"));
+        if (NbtCompat.contains(tag, "shareVisuals", Tag.TAG_COMPOUND)) {
+            visuals = ShareVisuals.load(NbtCompat.getCompound(tag, "shareVisuals"));
         }
 
         List<PayoutSchedule> schedules = new ArrayList<>();
-        if (tag.contains("payoutSchedules", Tag.TAG_LIST)) {
-            ListTag schedulesTag = tag.getList("payoutSchedules", Tag.TAG_COMPOUND);
+        if (NbtCompat.contains(tag, "payoutSchedules", Tag.TAG_LIST)) {
+            ListTag schedulesTag = NbtCompat.getList(tag, "payoutSchedules", Tag.TAG_COMPOUND);
             for (int i = 0; i < schedulesTag.size(); i++) {
-                PayoutSchedule schedule = PayoutSchedule.load(schedulesTag.getCompound(i));
+                PayoutSchedule schedule = PayoutSchedule.load(NbtCompat.getCompound(schedulesTag, i));
                 if (schedule != null) schedules.add(schedule);
             }
         }
@@ -302,18 +328,21 @@ public final class Company {
         // Task #45 — tolerant load of nextScheduleId. Fall back to max(scheduleId)+1
         // when the tag is absent (older Company NBT).
         long nextSchedId = 1L;
-        if (tag.contains("nextScheduleId")) nextSchedId = tag.getLong("nextScheduleId");
+        if (tag.contains("nextScheduleId")) nextSchedId = NbtCompat.getLong(tag, "nextScheduleId");
         for (PayoutSchedule s : schedules) {
             if (s.getScheduleId() >= nextSchedId) nextSchedId = s.getScheduleId() + 1;
         }
         loaded.nextScheduleId = nextSchedId;
-        if (tag.contains("statisticsTimeframe")) loaded.statisticsTimeframe = tag.getInt("statisticsTimeframe");
-        if (tag.contains("companyCurrency")) loaded.companyCurrency = tag.getShort("companyCurrency");
-        if (tag.contains("boundStampers", Tag.TAG_LIST)) {
-            ListTag sl = tag.getList("boundStampers", Tag.TAG_COMPOUND);
+        if (tag.contains("statisticsTimeframe")) loaded.statisticsTimeframe = NbtCompat.getInt(tag, "statisticsTimeframe");
+        if (tag.contains("companyCurrency")) loaded.companyCurrency = NbtCompat.getShort(tag, "companyCurrency");
+        if (tag.contains("shareConsistentTs")) loaded.shareConsistentTs = NbtCompat.getLong(tag, "shareConsistentTs");
+        if (tag.contains("shareExcessLevel")) loaded.shareExcessLevel = NbtCompat.getLong(tag, "shareExcessLevel");
+        if (tag.contains("shareExcessOpen")) loaded.shareExcessOpen = NbtCompat.getBoolean(tag, "shareExcessOpen");
+        if (NbtCompat.contains(tag, "boundStampers", Tag.TAG_LIST)) {
+            ListTag sl = NbtCompat.getList(tag, "boundStampers", Tag.TAG_COMPOUND);
             for (int i = 0; i < sl.size(); i++) {
-                CompoundTag se = sl.getCompound(i);
-                loaded.boundStampers.add(new BlockPos(se.getInt("x"), se.getInt("y"), se.getInt("z")));
+                CompoundTag se = NbtCompat.getCompound(sl, i);
+                loaded.boundStampers.add(new BlockPos(NbtCompat.getInt(se, "x"), NbtCompat.getInt(se, "y"), NbtCompat.getInt(se, "z")));
             }
         }
         return loaded;

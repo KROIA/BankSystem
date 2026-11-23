@@ -13,6 +13,9 @@ Adds a banking system to the game that allows players to store and withdraw mone
 '''
 #logoFile = ""
 
+[[mixins]]
+config = "banksystem.mixins.json"
+
 [[dependencies.banksystem]]
 modId = "neoforge"
 type = "required"
@@ -23,7 +26,7 @@ side = "BOTH"
 [[dependencies.banksystem]]
 modId = "minecraft"
 type = "required"
-versionRange = "[1.21.1,)"
+versionRange = "[${minecraft_version}]"
 ordering = "NONE"
 side = "BOTH"
 

@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.compat;
 
+import net.kroia.banksystem.util.BankCraftingRecipes;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.constants.RecipeTypes;
@@ -18,7 +19,8 @@ import net.kroia.banksystem.screen.custom.BankDownloadScreen;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.banksystem.screen.custom.ShareStamperScreen;
 import net.minecraft.client.renderer.Rect2i;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.crafting.CraftingRecipe;
@@ -96,10 +98,12 @@ public class BankSystemJeiPlugin implements IModPlugin {
     {
         //JEIIntegration.registerPlugin(new BankSystemJeiPlugin());
     }
-    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "jei_plugin");
+    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(BankSystemMod.MOD_ID, "jei_plugin"); // mc<=1.21.10
+    //private static final Identifier PLUGIN_UID = Identifier.fromNamespaceAndPath(BankSystemMod.MOD_ID, "jei_plugin"); // mc>=1.21.11
 
     @Override
-    public ResourceLocation getPluginUid() {
+    public ResourceLocation getPluginUid() { // mc<=1.21.10
+    //public Identifier getPluginUid() { // mc>=1.21.11
         return PLUGIN_UID;
     }
 
@@ -188,7 +192,8 @@ public class BankSystemJeiPlugin implements IModPlugin {
         }
 
         @Override
-        public mezz.jei.api.recipe.RecipeType<RecipeHolder<CraftingRecipe>> getRecipeType() {
+        public mezz.jei.api.recipe.RecipeType<RecipeHolder<CraftingRecipe>> getRecipeType() { // mc<=1.21.3
+        //public mezz.jei.api.recipe.types.IRecipeType<RecipeHolder<CraftingRecipe>> getRecipeType() { // mc>=1.21.4
             return RecipeTypes.CRAFTING;
         }
 
@@ -199,7 +204,7 @@ public class BankSystemJeiPlugin implements IModPlugin {
                                                              boolean maxTransfer, boolean doTransfer) {
             CraftingRecipe craftingRecipe = recipe.value();
             boolean bankCompletable = (craftingRecipe instanceof ShapedRecipe || craftingRecipe instanceof ShapelessRecipe)
-                    && craftingRecipe.canCraftInDimensions(3, 3);
+                    && BankCraftingRecipes.fits3x3(craftingRecipe);
             if (container.isUseBankItems() && bankCompletable) {
                 // Ghost mode: no items are moved, so there is nothing to
                 // pre-validate — the button is always available and the server

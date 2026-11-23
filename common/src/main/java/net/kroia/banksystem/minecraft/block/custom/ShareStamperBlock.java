@@ -2,6 +2,8 @@ package net.kroia.banksystem.minecraft.block.custom;
 
 // TODO_ART Task #47 (v2.1.0) — placeholder model reuses iron_block texture; dedicated art pending.
 
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.banksystem.minecraft.component.BankSystemDataComponents;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.ShareStamperBlockEntity;
@@ -25,7 +27,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
@@ -40,13 +42,13 @@ import static dev.architectury.registry.menu.MenuRegistry.openExtendedMenu;
 public class ShareStamperBlock extends Block implements EntityBlock {
 
     public static final String NAME = "share_stamper";
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
 
     public ShareStamperBlock() {
-        super(Properties.ofFullCopy(Blocks.IRON_BLOCK)
+        super(RegistryCompat.blockProperties(Properties.ofFullCopy(Blocks.IRON_BLOCK)
                 .requiresCorrectToolForDrops()
                 .strength(3.5f, 6.0f)
-                .isRedstoneConductor((s, l, p) -> false));
+                .isRedstoneConductor((s, l, p) -> false), BankSystemMod.id(NAME)));
         this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH));
     }
 
@@ -67,14 +69,12 @@ public class ShareStamperBlock extends Block implements EntityBlock {
         return new ShareStamperBlockEntity(pos, state);
     }
 
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!state.is(newState.getBlock())) {
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof ShareStamperBlockEntity s) s.dropContents();
-            super.onRemove(state, level, pos, newState, isMoving);
-        }
-    }
+    // Drops are done by the block entity (preRemoveSideEffects from 1.21.5).
+    @Override // mc<=1.21.4
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) { // mc<=1.21.4
+        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof ShareStamperBlockEntity be) be.dropContents(); // mc<=1.21.4
+        super.onRemove(state, level, pos, newState, isMoving); // mc<=1.21.4
+    } // mc<=1.21.4
 
     @Override
     protected final @NotNull InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
@@ -93,10 +93,14 @@ public class ShareStamperBlock extends Block implements EntityBlock {
             }
             return InteractionResult.SUCCESS;
         }
+        if (ShareStamperBlockEntity.isSlaveSide()) { // BS-262: the master decides, the menu opens on its answer
+            if (player instanceof ServerPlayer sPlayer) stamper.openAfterGate(sPlayer);
+            return InteractionResult.SUCCESS;
+        }
         if (!stamper.hasManagePermission(player.getUUID())) {
             String companyName = stamper.getBoundCompanyName();
-            player.sendSystemMessage(Component.translatable(
-                    "gui.banksystem.share_stamper.no_permission", companyName));
+            net.kroia.modutilities.PlayerCompat.sendMessage(player, Component.translatable(
+                    "gui.banksystem.share_stamper.no_permission", companyName), false);
             return InteractionResult.FAIL;
         }
         if (player instanceof ServerPlayer sPlayer) {
@@ -112,20 +116,32 @@ public class ShareStamperBlock extends Block implements EntityBlock {
     /**
      * Task #47 (v2.1.0) — Compute the set of companies the caller may bind {@code pos}
      * to (founder OR MANAGE OR banksystem admin) and dispatch the bind-screen open S2C.
-     * Master-only meaningful: on a slave the {@link net.kroia.banksystem.banking.company.CompanyManager}
-     * is null and we fall back to a chat hint.
+     * On a slave (BS-262) the master lists the caller's MANAGE companies by name; the
+     * {@link net.kroia.banksystem.banking.company.SlaveCompanyMirror} maps them to ids.
      */
     private static void openBindScreenFor(ServerPlayer player, BlockPos pos) {
         BlockEntity beRef = player.level().getBlockEntity(pos);
         ShareStamperBlockEntity stamperRef = beRef instanceof ShareStamperBlockEntity ssbe ? ssbe : null;
         net.kroia.banksystem.banking.company.CompanyManager cm =
                 net.kroia.banksystem.banking.company.CompanyManager.get();
+        java.util.UUID uuid = player.getUUID();
         if (cm == null) {
-            player.sendSystemMessage(Component.translatable("gui.banksystem.stamper_bind.master_only"));
-            if (stamperRef != null) stamperRef.releaseViewer(player.getUUID());
+            if (!net.kroia.banksystem.util.MultiServerUtils.canInteractWithBankSystem(uuid)) { // tells the player
+                if (stamperRef != null) stamperRef.releaseViewer(uuid);
+                return;
+            }
+            net.kroia.banksystem.banking.company.AsyncCompanyManager.listCompanyNamesForCallerAsync(uuid,
+                    net.kroia.banksystem.banking.company.AsyncCompanyManager.FILTER_MANAGE).thenAccept(names ->
+                    player.level().getServer().execute(() -> {
+                        List<net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry> entries = new ArrayList<>();
+                        for (var e : net.kroia.banksystem.banking.company.SlaveCompanyMirror.snapshot())
+                            if (names.contains(e.internalName()))
+                                entries.add(new net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry(
+                                        e.companyId(), e.internalName()));
+                        sendBindScreen(player, pos, entries, stamperRef);
+                    }));
             return;
         }
-        java.util.UUID uuid = player.getUUID();
         java.util.Set<net.kroia.banksystem.banking.company.Company> managed =
                 cm.listCompaniesManagedBy(uuid);
         // Union with founder set (founder implies manage but be defensive).
@@ -141,7 +157,13 @@ public class ShareStamperBlock extends Block implements EntityBlock {
             entries.add(new net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry(
                     c.getCompanyId(), c.getName()));
         }
-        if (entries.isEmpty()) {
+        sendBindScreen(player, pos, entries, stamperRef);
+    }
+
+    private static void sendBindScreen(ServerPlayer player, BlockPos pos,
+                                       List<net.kroia.banksystem.networking.entity.OpenStamperBindScreenPacket.Entry> entries,
+                                       @Nullable ShareStamperBlockEntity stamperRef) {
+        if (entries.isEmpty() || player.hasDisconnected()) {
             player.sendSystemMessage(Component.translatable("gui.banksystem.stamper_bind.no_companies"));
             if (stamperRef != null) stamperRef.releaseViewer(player.getUUID());
             return;
@@ -153,7 +175,7 @@ public class ShareStamperBlock extends Block implements EntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state,
                             @Nullable LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
-        if (level.isClientSide) return;
+        if (level.isClientSide()) return;
         Integer bound = stack.get(BankSystemDataComponents.STAMPER_BINDING.get());
         if (bound == null || bound <= 0) return;
         BlockEntity be = level.getBlockEntity(pos);

@@ -3,10 +3,11 @@ package net.kroia.banksystem.testing.tests;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
+import net.kroia.banksystem.api.MoneyFormat;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 /**
  * Tests for arithmetic/conversion utilities used throughout the bank system.
@@ -30,7 +31,13 @@ public class ArithmeticTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
+        addTest("placeholder_money_format", this::testPlaceholderMoneyFormat);
         addTest("convertToRawAmount_whole_number", this::testConvertToRawAmountWholeNumber);
         addTest("convertToRawAmount_with_decimal", this::testConvertToRawAmountWithDecimal);
         addTest("convertToRawAmount_single_decimal", this::testConvertToRawAmountSingleDecimal);
@@ -438,5 +445,23 @@ public class ArithmeticTests extends TestSuite {
             return fail("Round-trip broke: " + original + " -> " + real + " -> " + backToRaw);
         }
         return pass("Round-trip preserved: " + original + " -> " + real + " -> " + backToRaw);
+    }
+
+    /** Placeholder money formatting: separators, 2 decimals, MONEY_FORMAT pattern, raw variant. */
+    private TestResult testPlaceholderMoneyFormat() {
+        String[][] cases = {
+                {MoneyFormat.formatMoney(123456, "$%s"), "$1'234.56"},
+                {MoneyFormat.formatMoney(100, "%s €"), "1.00 €"},
+                {MoneyFormat.formatMoney(123456789012L, "$%s"), "$1'234'567'890.12"},
+                {MoneyFormat.formatMoney(-5, "$%s"), "$-0.05"},
+                {MoneyFormat.formatMoney(0, "no pattern"), "0.00"},
+                {MoneyFormat.formatMoneyRaw(123456), "1234.56"},
+                {MoneyFormat.formatMoneyRaw(7), "0.07"},
+        };
+        for (String[] c : cases) {
+            TestResult r = assertEquals("placeholder format", c[1], c[0]);
+            if (!r.passed()) return r;
+        }
+        return pass("placeholder money formatting ok");
     }
 }

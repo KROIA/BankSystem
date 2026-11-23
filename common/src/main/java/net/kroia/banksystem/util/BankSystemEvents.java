@@ -3,6 +3,8 @@ package net.kroia.banksystem.util;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.event.DividendPaidEvent;
 import net.kroia.banksystem.api.event.PayoutExecutedInfo;
+import net.kroia.banksystem.api.event.SuspicionFlaggedEvent;
+import net.kroia.banksystem.api.event.TransactionLoggedEvent;
 import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.api.IBankSystemEvents;
 import net.kroia.banksystem.banking.User;
@@ -10,6 +12,7 @@ import net.kroia.modutilities.event.DataEvent;
 import net.kroia.modutilities.event.Signal;
 
 import java.util.Map;
+import java.util.Set;
 
 public class BankSystemEvents implements IBankSystemEvents {
 
@@ -32,6 +35,9 @@ public class BankSystemEvents implements IBankSystemEvents {
      * Always dispatched on the server thread, master side only.
      */
     public final DataEvent<Map<ItemID, ItemID>> ITEM_IDS_MERGED = new DataEvent<>();
+
+    /** BS-195: see {@link IBankSystemEvents#getItemIDsRemovedEvent()}. Master-only. */
+    public final DataEvent<Set<ItemID>> ITEM_IDS_REMOVED = new DataEvent<>();
 
 
 
@@ -86,6 +92,15 @@ public class BankSystemEvents implements IBankSystemEvents {
     /** Task #49 (v2.1.0) — one event per successful dividend run. Master-only. */
     public final DataEvent<DividendPaidEvent> DIVIDEND_PAID = new DataEvent<>();
 
+    /** Task #117 (v2.2.0) — one event per real account freeze/unfreeze. Master-only. */
+    public final DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> ACCOUNT_FREEZE_CHANGED = new DataEvent<>();
+
+    /** Task #119 (v2.2.0) — one event per ledger row, on the writer's thread. Master-only. */
+    public final DataEvent<TransactionLoggedEvent> TRANSACTION_LOGGED = new DataEvent<>();
+
+    /** Task #119 (v2.2.0) — one event per raised suspicion flag, on the raising thread. Master-only. */
+    public final DataEvent<SuspicionFlaggedEvent> SUSPICION_FLAGGED = new DataEvent<>();
+
 
     @Override
     public void removeListeners() {
@@ -94,6 +109,7 @@ public class BankSystemEvents implements IBankSystemEvents {
         BANK_ACCOUNT_CREATED.removeListeners();
         BANK_ACCOUNT_DELETED.removeListeners();
         ITEM_IDS_MERGED.removeListeners();
+        ITEM_IDS_REMOVED.removeListeners();
         BANK_DATA_SAVED_TO_FILE.removeListeners();
         BANK_DATA_LOADED_FROM_FILE.removeListeners();
         SETTINGS_SAVED_TO_FILE.removeListeners();
@@ -106,6 +122,9 @@ public class BankSystemEvents implements IBankSystemEvents {
         TRUST_CHANGED.removeListeners();
         PAYOUT_EXECUTED.removeListeners();
         DIVIDEND_PAID.removeListeners();
+        ACCOUNT_FREEZE_CHANGED.removeListeners();
+        TRANSACTION_LOGGED.removeListeners();
+        SUSPICION_FLAGGED.removeListeners();
     }
 
 
@@ -138,6 +157,12 @@ public class BankSystemEvents implements IBankSystemEvents {
     public DataEvent<Map<ItemID, ItemID>> getItemIDsMergedEvent()
     {
         return ITEM_IDS_MERGED;
+    }
+
+    @Override
+    public DataEvent<Set<ItemID>> getItemIDsRemovedEvent()
+    {
+        return ITEM_IDS_REMOVED;
     }
 
     @Override
@@ -206,5 +231,23 @@ public class BankSystemEvents implements IBankSystemEvents {
     public DataEvent<DividendPaidEvent> getDividendPaidEvent()
     {
         return DIVIDEND_PAID;
+    }
+
+    @Override
+    public DataEvent<net.kroia.banksystem.api.event.AccountFreezeChangedEvent> getAccountFreezeChangedEvent()
+    {
+        return ACCOUNT_FREEZE_CHANGED;
+    }
+
+    @Override
+    public DataEvent<TransactionLoggedEvent> getTransactionLoggedEvent()
+    {
+        return TRANSACTION_LOGGED;
+    }
+
+    @Override
+    public DataEvent<SuspicionFlaggedEvent> getSuspicionFlaggedEvent()
+    {
+        return SUSPICION_FLAGGED;
     }
 }

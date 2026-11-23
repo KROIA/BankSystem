@@ -3,6 +3,9 @@ package net.kroia.banksystem.networking.multi_server;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.data.table.record.TransactionLogRecord;
+import net.kroia.banksystem.api.ledger.LedgerActor;
+import net.kroia.banksystem.api.ledger.LedgerType;
+import net.kroia.banksystem.banking.ledger.TransactionLedger;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -32,12 +35,35 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
 
 
 
-    public record InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items)
+    /**
+     * @param ledgerTypeCode Task #109: {@link LedgerType} code written to the ledger for each
+     *                       deposited item (e.g. CONVERTER_DEPOSIT); DEPOSIT by default. The master
+     *                       checks it against {@link TransactionLedger#SLAVE_DEPOSIT_CODES}.
+     * @param transferId     Task #125: the slave's transfer_id, written as the ledger rows' {@code ref};
+     *                       null from an older slave
+     * @param pos            BS-258: block of the deposit (the ATM of a converter commit); the shorter constructors take
+     *                       {@link TransactionLedger#currentPos()}. Last field on the wire
+     */
+    public record InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode,
+                            @Nullable String transferId, @Nullable TransactionLedger.LedgerPos pos)
     {
+        public InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode,
+                         @Nullable String transferId) {
+            this(bankAccount, executor, items, ledgerTypeCode, transferId, TransactionLedger.currentPos());
+        }
+        public InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items) {
+            this(bankAccount, executor, items, LedgerType.DEPOSIT.code());
+        }
+        public InputData(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, int ledgerTypeCode) {
+            this(bankAccount, executor, items, ledgerTypeCode, null);
+        }
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.INT, p->p.bankAccount,
                 ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC), p->p.executor,
                 ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.VAR_LONG, HashMap<ItemID, Long>::new), p -> p.items,
+                ByteBufCodecs.VAR_INT, p -> p.ledgerTypeCode,
+                net.kroia.banksystem.data.TransferJournal.ID_CODEC, p -> p.transferId, // Task #125
+                TransactionLedger.LedgerPos.STREAM_CODEC, p -> p.pos, // BS-258: keep last
                 InputData::new
         );
     }
@@ -55,27 +81,56 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
      * @param bankAccount target bank account
      * @param executor the player who has created this request
      * @param items list of items to deposit
-     * @return a future containing the items that have not been deposited
+     * @return a future containing the items that have not been deposited;
+     *         completes exceptionally when the outcome is unknown
      */
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items)
     {
-        DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items);
-        CompletableFuture<Map<ItemID, Long>> future = new CompletableFuture<>();
-        BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData).whenComplete((response, ex) -> {
-            if (ex != null || response == null) {
-                future.complete(new HashMap<>()); // Return empty map on error
-            } else {
-                future.complete(response.items);
-            }
-        });
-        return future;
+        return sendToMaster(bankAccount, executor, items, LedgerType.DEPOSIT);
+    }
+
+    /** Task #109: same as {@link #sendToMaster(int, UUID, Map)} with an explicit ledger row type. */
+    public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items, LedgerType ledgerType)
+    {
+        return sendToMaster(bankAccount, executor, items, ledgerType, null);
+    }
+
+    /** Task #125: same, plus the transfer_id of the caller's TransferJournal rows (the master's ledger ref). */
+    public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, @Nullable UUID executor, Map<ItemID, Long> items,
+                                                                    LedgerType ledgerType, @Nullable String transferId)
+    {
+        DepositItemsInBankRequest.InputData inputData = new DepositItemsInBankRequest.InputData(bankAccount, executor, items, ledgerType.code(), transferId);
+        final long sentMs = System.currentTimeMillis();
+        CompletableFuture<OutputData> sent;
+        try {
+            sent = BankSystemNetworking.DEPOSIT_ITEMS_IN_BANK_REQUEST.sendRequestToMaster(inputData);
+        } catch (RuntimeException e) {
+            BACKEND_INSTANCES.LOGGER.error("[DepositItemsInBankRequest] request not sent", e);
+            sent = CompletableFuture.completedFuture(null); // not sent = definitely not applied
+        }
+        return notDeposited(items, sent, transferId == null ? null : () -> TransferStatusRequest.ask(null, transferId, sentMs));
+    }
+
+    /**
+     * Task #121 / #126: maps the master's reply to the "not deposited" items. A null reply or a
+     * RequestNotSentException means the request was never sent, so everything comes back. Any other
+     * failure asks the master ({@code askStatus}): APPLIED → its not-deposited remainder, NOT_APPLIED →
+     * everything. If it stays unknown (or there is no id) the future fails: the master may have
+     * applied the deposit, so the caller must not refund.
+     */
+    public static CompletableFuture<Map<ItemID, Long>> notDeposited(Map<ItemID, Long> requested, CompletableFuture<OutputData> sent,
+                                                                    @Nullable java.util.function.Supplier<CompletableFuture<TransferStatusRequest.OutputData>> askStatus)
+    {
+        return TransferStatusRequest.resolve(sent.thenApply(r -> r == null ? null : r.items),
+                () -> new HashMap<>(requested), remainder -> new HashMap<>(remainder), askStatus);
     }
     /**
      * Deposits the requested amount of items onto the bank account
      * This does not check for bank account access permissions
      * @param bankAccount target bank account
      * @param items list of items to deposit
-     * @return a future containing the items that have not been deposited
+     * @return a future containing the items that have not been deposited;
+     *         completes exceptionally when the outcome is unknown
      */
     public static CompletableFuture<Map<ItemID, Long>> sendToMaster(int bankAccount, Map<ItemID, Long> items)
     {
@@ -90,6 +145,10 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
     public boolean needsRoutingToMaster() { return false; }
 
     public CompletableFuture<OutputData> handleOnMasterServer(DepositItemsInBankRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
+        return TransactionLedger.withPos(input.pos, () -> handle(input, slaveID, playerSender)); // BS-258
+    }
+
+    private CompletableFuture<OutputData> handle(DepositItemsInBankRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
         // Task #26 (security): untrusted-slave gate. WRITE-side requests that extend
         // BankSystemGenericRequest bypass the central AsyncForwardingRequest gate, so the
         // slave-trust check is enforced here. An untrusted slave could otherwise deposit
@@ -103,6 +162,11 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             warn("This request is not allowed to be sent from a client");
             return CompletableFuture.completedFuture(new OutputData(input.items));
         }
+        // Task #126 (B6): a repeated transfer gets the first reply; nothing is deposited twice.
+        final String transferId = slaveID == null || slaveID.isEmpty() ? null : input.transferId();
+        CompletableFuture<OutputData> seen = TransferStatusRequest.replay(slaveID, transferId);
+        if(seen != null)
+            return seen;
 
         IServerBankAccount account = getServerBankManager().getBankAccount(input.bankAccount);
         if(account == null)
@@ -127,6 +191,12 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             }
         }
 
+        // Task #109: validate the slave's type code once; a disallowed code is logged as 0 + note.
+        TransactionLedger.Resolved ledger = TransactionLedger.resolveSlaveCode(input.ledgerTypeCode,
+                TransactionLedger.SLAVE_DEPOSIT_CODES, false, null, slaveID, "DepositItemsInBankRequest");
+        if (net.kroia.banksystem.banking.ledger.AccountFreeze.blocks(input.bankAccount, ledger.type(), input.executor)) // Task #117
+            return CompletableFuture.completedFuture(new OutputData(input.items));
+        TransferStatusRequest.applying(slaveID, transferId);
         Map<ItemID, Long> notDepositedItems = new HashMap<>();
         BankAccountBindings bindings = BankAccountBindings.get();
         for(Map.Entry<ItemID, Long> entry : input.items.entrySet())
@@ -157,7 +227,10 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                                 continue;
                             }
                             IServerBank baseBank = account.getOrCreateBank(new ItemID(row.itemIdShort()));
-                            if (baseBank != null && baseBank.deposit(amount) == BankStatus.SUCCESS) {
+                            if (baseBank != null && TransactionLedger.withoutRawLog(() -> baseBank.deposit(amount)) == BankStatus.SUCCESS) { // BS-254: row below
+                                String coin = "coin " + itemID.getName() + " x" + toDeposit;
+                                TransactionLedger.logBank(baseBank, ledger.type(), amount, ledgerActor(input),
+                                        ledger.note() == null ? coin : ledger.note() + "; " + coin, input.transferId());
                                 continue;
                             }
                             notDepositedItems.put(itemID, toDeposit);
@@ -170,8 +243,10 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
             IServerBank itemBank = account.getOrCreateBank(itemID);
             if(itemBank != null)
             {
-                if(itemBank.deposit(toDeposit) == BankStatus.SUCCESS)
+                final long depositNow = toDeposit;
+                if(TransactionLedger.withoutRawLog(() -> itemBank.deposit(depositNow)) == BankStatus.SUCCESS) // BS-254: row below
                 {
+                    logDeposit(input, ledger, itemBank, toDeposit);
                     toDeposit = 0;
                 }
             }
@@ -180,45 +255,30 @@ public class DepositItemsInBankRequest extends BankSystemGenericRequest<DepositI
                 notDepositedItems.put(itemID, toDeposit);
             }
         }
-        // Task #44 (v2.1.0) — Transaction Ledger. One DEPOSIT row per ItemID whose net
-        // deposited amount was > 0. Best-effort: manager is null on slaves / pre-init,
-        // and a save failure must never fail the deposit. Runs async on the DB worker.
-        logDeposits(input, notDepositedItems);
-        return CompletableFuture.completedFuture(new OutputData(notDepositedItems));
+        OutputData out = new OutputData(notDepositedItems);
+        TransferStatusRequest.remember(slaveID, transferId, !notDepositedItems.equals(input.items), notDepositedItems, out);
+        return CompletableFuture.completedFuture(out);
     }
 
-    private static void logDeposits(InputData input, Map<ItemID, Long> notDeposited) {
-        net.kroia.banksystem.data.table.TransactionLogManager mgr =
-                BankSystemModBackend.getTransactionLogManager();
-        if (mgr == null) return;
-        long now = System.currentTimeMillis();
-        for (Map.Entry<ItemID, Long> entry : input.items.entrySet()) {
-            long requested = Math.max(0, entry.getValue());
-            long remaining = notDeposited.getOrDefault(entry.getKey(), 0L);
-            long deposited = requested - remaining;
-            if (deposited <= 0) continue;
-            try {
-                // Task #48 (v2.1.0) — if this ItemID resolves to a stamped share, log a
-                // SHARE_TRADE row (with company id populated) instead of a plain DEPOSIT
-                // so the ledger records share flow distinctly. This is the placeholder
-                // hook until a StockMarket match-observer surface exists — see spec §4c.
-                Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
-                        .getCompanyIdForItemID(entry.getKey());
-                if (companyId != null) {
-                    mgr.save(TransactionLogRecord.shareTrade(
-                            input.bankAccount, input.executor,
-                            entry.getKey().getShort(), deposited, companyId, now));
-                } else {
-                    mgr.save(TransactionLogRecord.simple(
-                            input.bankAccount, input.executor,
-                            TransactionLogRecord.Kind.DEPOSIT,
-                            entry.getKey().getShort(), deposited, now));
-                }
-            } catch (RuntimeException ignored) {
-                // DB layer errors must not break the deposit path — the balance is already
-                // updated at this point and the log is a best-effort audit artefact.
-            }
+    /**
+     * Task #44 / #48 / #109 — one ledger row per deposited item. A stamped share is logged
+     * as SHARE_TRADE with its company id, anything else with the request's type code.
+     */
+    private static void logDeposit(InputData input, TransactionLedger.Resolved ledger, IServerBank bank, long amount) {
+        try {
+            ItemID itemID = bank.getItemID();
+            Integer companyId = net.kroia.banksystem.minecraft.item.custom.share.StampedShareItem
+                    .getCompanyIdForItemID(itemID);
+            LedgerType type = companyId != null ? LedgerType.SHARE_TRADE : ledger.type();
+            TransactionLedger.write(TransactionLogRecord.of(input.bankAccount, type, itemID.getShort(), amount,
+                    ledgerActor(input), null, companyId, input.transferId(), ledger.note(), bank.getTotalBalance()));
+        } catch (RuntimeException ignored) {
+            // best-effort: the balance is already updated
         }
+    }
+
+    private static LedgerActor ledgerActor(InputData input) {
+        return input.executor == null ? LedgerActor.system() : TransactionLedger.player(input.executor);
     }
 
 

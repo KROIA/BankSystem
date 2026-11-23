@@ -4,11 +4,13 @@ import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.banking.bank.ServerBank;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.lang.reflect.Constructor;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 
 /**
  * Tests for ServerBank balance, locking, and transfer operations.
@@ -21,6 +23,11 @@ public class ServerBankTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.ITEM_BANK;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -50,6 +57,8 @@ public class ServerBankTests extends TestSuite {
 
     @Override
     public void setup() {
+        SharedConstants.tryDetectVersion(); // offline JUnit run: registries for ItemID/ItemStack; no-op in game
+        Bootstrap.bootStrap();
         bankA = createTestBank((short) 1, "test:item_a", 1000);
         bankB = createTestBank((short) 1, "test:item_a", 500);
     }

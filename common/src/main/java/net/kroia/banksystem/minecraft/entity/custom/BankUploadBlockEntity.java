@@ -1,5 +1,7 @@
 package net.kroia.banksystem.minecraft.entity.custom;
 
+import net.kroia.banksystem.util.ItemStackNbt;
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
@@ -9,12 +11,15 @@ import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.banking.binding.BindingRow;
+import net.kroia.banksystem.data.DiagnosticsDatabase;
+import net.kroia.banksystem.data.TransferJournal;
 import net.kroia.banksystem.minecraft.block.custom.BankUploadBlock;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.minecraft.menu.custom.BankUploadContainerMenu;
 import net.kroia.banksystem.networking.entity.SyncBankUploadDataPacket;
 import net.kroia.banksystem.networking.entity.UpdateBankUploadBlockEntityPacket;
+import net.kroia.banksystem.util.ContainerItemInsertion;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.minecraft.core.BlockPos;
@@ -22,6 +27,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.Containers;
@@ -70,7 +76,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     private final SimpleContainer inventory = new ControlledContainer(27); // 27 slots like a chest
     private boolean sendingEnabled = false;
     private boolean dropIfNotBankable = false;
-    private int bankAccountNumber = 0; // Not used, but kept for compatibility
+    private int bankAccountNumber = 0; // target account for uploaded items (NBT "BankAccountNumber")
 
     private UUID playerOwner = null;
 
@@ -101,7 +107,7 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
     public static <T extends BlockEntity> void tick(Level level, BlockPos blockPos, BlockState blockState, T t) {
         if(t instanceof BankUploadBlockEntity blockEntity)
         {
-            if (!level.isClientSide) { // Ensure this only runs on the server
+            if (!level.isClientSide()) { // Ensure this only runs on the server
                 blockEntity.tickCounter++;
 
                 int targetTickCount = BACKEND_INSTANCES.SERVER_SETTINGS.BANK.BANK_UPLOAD_BLOCK_UPDATE_TICK_INTERVAL.get();
@@ -118,35 +124,43 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         this.inventory.stopOpen(null);
     }
 
-    @Override
-    public void loadAdditional(@NotNull CompoundTag tag, HolderLookup.Provider pRegistries) {
-        super.loadAdditional(tag, pRegistries);
-        inventory.fromTag(tag.getList("Items", 10), pRegistries);
-        sendingEnabled = tag.getBoolean("SendingEnabled");
-        dropIfNotBankable = tag.getBoolean("DropIfNotBankable");
+    @Override // mc<=1.21.5
+    public void loadAdditional(CompoundTag tag, HolderLookup.Provider pRegistries) { super.loadAdditional(tag, pRegistries); loadState(tag, pRegistries); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //public void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { super.loadAdditional(input); loadState(net.kroia.modutilities.NbtCompat.readAll(input), input.lookup()); } // mc>=1.21.6
+
+    /** Version-neutral load of this block entity's data (called from loadAdditional). */
+    private void loadState(CompoundTag tag, HolderLookup.Provider pRegistries) {
+        ItemStackNbt.fromTag(inventory, NbtCompat.getList(tag, "Items", 10), pRegistries);
+        sendingEnabled = NbtCompat.getBoolean(tag, "SendingEnabled");
+        dropIfNotBankable = NbtCompat.getBoolean(tag, "DropIfNotBankable");
         if(tag.contains("BankAccountNumber"))
         {
-            bankAccountNumber = tag.getInt("BankAccountNumber");
+            bankAccountNumber = NbtCompat.getInt(tag, "BankAccountNumber");
         }
         else
             bankAccountNumber = 0;
         playerOwner = null;
         if(tag.contains("PlayerOwner"))
         {
-            playerOwner = tag.getUUID("PlayerOwner");
+            playerOwner = NbtCompat.getUUID(tag, "PlayerOwner");
         }
     }
 
-    @Override
-    protected void saveAdditional(@NotNull CompoundTag tag, HolderLookup.Provider pRegistries) {
-        super.saveAdditional(tag, pRegistries);
-        tag.put("Items", inventory.createTag(pRegistries));
+    @Override // mc<=1.21.5
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider pRegistries) { super.saveAdditional(tag, pRegistries); saveState(tag, pRegistries); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //protected void saveAdditional(net.minecraft.world.level.storage.ValueOutput output) { super.saveAdditional(output); CompoundTag tag = new CompoundTag(); saveState(tag, level != null ? level.registryAccess() : net.kroia.modutilities.UtilitiesPlatform.getRegistryAccess()); net.kroia.modutilities.NbtCompat.writeAll(output, tag); } // mc>=1.21.6
+
+    /** Version-neutral save of this block entity's data (called from saveAdditional). */
+    private void saveState(CompoundTag tag, HolderLookup.Provider pRegistries) {
+        tag.put("Items", ItemStackNbt.createTag(inventory, pRegistries));
         tag.putBoolean("SendingEnabled", sendingEnabled);
         tag.putBoolean("DropIfNotBankable", dropIfNotBankable);
         tag.putInt("BankAccountNumber", bankAccountNumber);
         if(playerOwner != null)
         {
-            tag.putUUID("PlayerOwner", playerOwner);
+            NbtCompat.putUUID(tag, "PlayerOwner", playerOwner);
         }
     }
 
@@ -228,11 +242,51 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
         }*/
     }
 
+    //@Override // mc>=1.21.5
+    //public void preRemoveSideEffects(BlockPos pos, BlockState state) { dropContents(); } // mc>=1.21.5
+
     public void dropContents() {
         Containers.dropContents(this.getLevel(), this.getBlockPos(), this.inventory);
     }
     public void dropItem(ItemStack stack) {
         Containers.dropItemStack(Objects.requireNonNull(this.getLevel()), this.getBlockPos().getX(), this.getBlockPos().getY(), this.getBlockPos().getZ(), stack);
+    }
+
+    /**
+     * Issue #82: puts back a stack whose deposit failed. Its slot was cleared when the deposit
+     * started, so a hopper or player may have filled it meanwhile: never overwrite, merge or
+     * move instead, and drop at the block what does not fit (or everything once the block is
+     * gone). Deposit callbacks can complete off the server thread, so this hops onto it.
+     */
+    private void restore(int slot, ItemStack stack) {
+        restore(slot, stack, null, null);
+    }
+
+    /** @param journal Task #124: the failed deposit's journal ref; RETURNED is written once the stack is back */
+    private void restore(int slot, ItemStack stack, @Nullable TransferJournal.Ref journal, @Nullable BankStatus status) {
+        Runnable put = () -> {
+            ItemStack rest = isRemoved() ? stack : restoreInto(inventory, slot, stack);
+            if (!rest.isEmpty())
+                dropItem(rest);
+            setChanged();
+            if (journal != null)
+                TransferJournal.step(journal.transferId(), TransferJournal.RETURNED, null, String.valueOf(status));
+        };
+        MinecraftServer server = level == null ? null : level.getServer();
+        if (server != null)
+            server.execute(put); // queued onto the server thread when called from another thread
+        else
+            put.run();
+    }
+
+    /** Placement part of {@link #restore}, public as a test seam. @return what did not fit (to drop). */
+    public static ItemStack restoreInto(Container container, int slot, ItemStack stack) {
+        if (container.getItem(slot).isEmpty()) {
+            container.setItem(slot, stack);
+            return ItemStack.EMPTY;
+        }
+        long placed = ContainerItemInsertion.insertWithdrawnItems(container, stack, stack.getCount());
+        return stack.copyWithCount(stack.getCount() - (int) placed);
     }
 
     public void redstoneSignalChanged(boolean isPowered) {
@@ -365,24 +419,30 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                                 if (dropIfNotBankable) {
                                     dropItem(stack);
                                 } else {
-                                    inventory.setItem(finalI, stack);
+                                    restore(finalI, stack);
                                 }
                                 continue;
                             }
                             ItemID baseSlotId = new ItemID(variantBinding.itemIdShort());
                             final long finalDeposit = amountToDeposit;
-                            account.getOrCreateBankAsync(baseSlotId).thenAccept(baseBank -> {
+                            // Issue #79: a failed bank lookup sent no deposit yet, so it falls back like "not created" (null)
+                            account.getOrCreateBankAsync(baseSlotId).exceptionally(ex -> null).thenAccept(baseBank -> {
                                 if (baseBank == null) {
                                     if (dropIfNotBankable) {
                                         dropItem(stack);
                                     } else {
-                                        inventory.setItem(finalI, stack);
+                                        restore(finalI, stack);
                                     }
                                     return;
                                 }
-                                baseBank.depositAsync(finalDeposit).thenAccept(status -> {
+                                TransferJournal.Ref journal = journalRef();
+                                net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                        uploadNote("coin " + itemID.getName() + " x" + stack.getCount()), journal,
+                                        () -> baseBank.depositAsync(finalDeposit))).thenAccept(status -> {
                                     if (status != BankStatus.SUCCESS) {
-                                        inventory.setItem(finalI, stack);
+                                        restore(finalI, stack, journal, status);
+                                    } else {
+                                        logUpload(baseSlotId, finalDeposit, "coin " + itemID.getName() + " x" + stack.getCount());
                                     }
                                 });
                             });
@@ -415,13 +475,14 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             bankFuture = account.getOrCreateBankAsync(itemID);
                         }
 
-                        bankFuture.thenAccept(bank->{
+                        // Issue #79: a failed bank lookup sent no deposit yet, so it falls back like "not created" (null)
+                        bankFuture.exceptionally(ex -> null).thenAccept(bank->{
                             if(bank == null)
                             {
                                 if(dropIfNotBankable){
                                     dropItem(stack);
                                 } else {
-                                    inventory.setItem(finalI, stack); // Restore item on failure
+                                    restore(finalI, stack); // Restore item on failure
                                 }
                                 return;
                             }
@@ -429,19 +490,28 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
                             if(isMoney)
                             {
                                 long finalAmount = amount * ((MoneyItem)stack.getItem()).worth();
-                                CompletableFuture<BankStatus> depositStatusFuture = bank.depositAsync(finalAmount);
+                                TransferJournal.Ref journal = journalRef();
+                                CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                        uploadNote("banknote " + itemID.getName() + " x" + amount), journal, () -> bank.depositAsync(finalAmount)));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
-                                        inventory.setItem(finalI, stack); // Restore item on failure
+                                        restore(finalI, stack, journal, depositStatus); // Restore item on failure
+                                    } else {
+                                        logUpload(bank.getItemIDAsync(), finalAmount, "banknote " + itemID.getName() + " x" + amount);
                                     }
                                 });
                             }
                             else
                             {
-                                CompletableFuture<BankStatus> depositStatusFuture = bank.depositRealAsync((double)amount);
+                                TransferJournal.Ref journal = journalRef();
+                                CompletableFuture<BankStatus> depositStatusFuture = net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> net.kroia.banksystem.banking.ledger.TransactionLedger.tagged(net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, playerOwner,
+                                        uploadNote(null), journal, () -> bank.depositRealAsync((double)amount)));
                                 depositStatusFuture.thenAccept(depositStatus->{
                                     if(depositStatus != BankStatus.SUCCESS) {
-                                        inventory.setItem(finalI, stack); // Restore item on failure
+                                        restore(finalI, stack, journal, depositStatus); // Restore item on failure
+                                    } else {
+                                        logUpload(bank.getItemIDAsync(),
+                                                amount * net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, null);
                                     }
                                 });
                             }
@@ -454,6 +524,28 @@ public class BankUploadBlockEntity extends BaseContainerBlockEntity implements M
             });
         });
     }
+    /**
+     * Task #109 — UPLOAD_DEPOSIT ledger row on the master, actor = the block's owner. Best-effort;
+     * a no-op on a slave, where the tagged bank call carries the row to the master.
+     */
+    private void logUpload(ItemID bankItem, long amount, @Nullable String note) {
+        net.kroia.banksystem.banking.ledger.TransactionLedger.atBlock(this, () -> { // BS-258
+            net.kroia.banksystem.banking.ledger.TransactionLedger.logRow(bankAccountNumber, net.kroia.banksystem.api.ledger.LedgerType.UPLOAD_DEPOSIT, bankItem, amount,
+                    net.kroia.banksystem.banking.ledger.TransactionLedger.player(playerOwner), null, uploadNote(note));
+            return null;
+        });
+    }
+
+    /** Task #124: journal id + context ("upload_block <dim> x y z") for one deposit. */
+    private TransferJournal.Ref journalRef() {
+        return TransferJournal.ref("upload_block " + DiagnosticsDatabase.at(level, worldPosition));
+    }
+
+    private String uploadNote(@Nullable String note) {
+        String where = "upload block " + worldPosition.toShortString();
+        return note == null ? where : where + ", " + note;
+    }
+
     boolean hasItemsInInventory()
     {
         for (int i = 0; i < inventory.getContainerSize(); i++) {

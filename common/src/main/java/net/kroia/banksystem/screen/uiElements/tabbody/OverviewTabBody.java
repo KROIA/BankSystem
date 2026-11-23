@@ -42,6 +42,8 @@ public class OverviewTabBody extends TabBody {
     private final Button currencyButton;
     private final ItemView currencyIcon;
     private short currentCurrency = PayoutSchedule.MONEY_CURRENCY;
+    /** Unsaved description edit (the currency picker saves immediately). */
+    private boolean dirty = false;
 
     public OverviewTabBody(CompanyManagementScreen screen) {
         super(screen);
@@ -65,9 +67,10 @@ public class OverviewTabBody extends TabBody {
 
         descriptionBox = new MultiLineTextBox();
         descriptionBox.setMaxLength(512);
+        descriptionBox.setOnTextChanged(text -> dirty = true);
         descriptionLabel = new Label("");
         descriptionLabel.setAlignment(Label.Alignment.TOP_LEFT);
-        saveButton = new Button(Component.translatable(PREFIX + "save").getString(), this::onSave);
+        saveButton = new Button(Component.translatable(PREFIX + "save").getString(), () -> save(null));
         if (editable) {
             addChild(descriptionBox);
             addChild(saveButton);
@@ -111,15 +114,17 @@ public class OverviewTabBody extends TabBody {
 
         rowValues[0].setText(info.name());
         rowValues[1].setText(String.valueOf(info.companyId()));
-        rowValues[2].setText("#" + info.bankAccountNr());
-        fetchBankAccountName(info.bankAccountNr());
+        // Task #103: name comes with the company info; reading the account itself is members-only.
+        rowValues[2].setText(info.accountName() == null || info.accountName().isEmpty()
+                ? "#" + info.bankAccountNr()
+                : "#" + info.bankAccountNr() + " — " + info.accountName());
         rowValues[3].setText(formatNumber(info.maxSupply()));
         rowValues[4].setText(formatNumber(issued));
         rowValues[5].setText(String.valueOf(holders));
         rowValues[6].setText(formatFounders(info.founderNames()));
 
         if (editable) {
-            if (!descriptionBox.isFocused()) descriptionBox.setText(info.description());
+            if (!dirty && !descriptionBox.isFocused()) descriptionBox.setText(info.description());
         } else {
             descriptionLabel.setText(info.description());
         }
@@ -129,18 +134,6 @@ public class OverviewTabBody extends TabBody {
             currentCurrency = info.companyCurrency();
             applyCurrencyDisplay(currentCurrency);
         }
-    }
-
-    /** Lightweight follow-up lookup — CompanyInfoOutput only carries the account number,
-     *  so the account name is fetched async and patched into the row when it arrives. */
-    private void fetchBankAccountName(int accountNr) {
-        screen.clientBankManager().getBankAccountDataAsync(accountNr)
-                .thenAccept(data -> onClientThread(() -> {
-                    if (data == null || data.accountName == null || data.accountName.isEmpty()) return;
-                    var current = screen.info();
-                    if (current == null || !current.present() || current.bankAccountNr() != accountNr) return;
-                    rowValues[2].setText("#" + accountNr + " — " + data.accountName);
-                }));
     }
 
     private static String formatFounders(List<String> founders) {
@@ -183,7 +176,29 @@ public class OverviewTabBody extends TabBody {
                 .thenAccept(out -> onClientThread(screen::refreshInfo));
     }
 
-    private void onSave() {
+    public boolean hasUnsavedChanges() {
+        return dirty;
+    }
+
+    /** Drops the unsaved edit and shows the stored description again. */
+    public void discardChanges() {
+        dirty = false;
+        AsyncCompanyManager.CompanyInfoOutput info = screen.info();
+        if (info != null && info.present()) descriptionBox.setText(info.description());
+    }
+
+    /** Keeps an unsaved edit when the screen rebuilds its tab bodies. */
+    public void takeUnsavedChanges(OverviewTabBody previous) {
+        if (previous == null || !previous.dirty) return;
+        descriptionBox.setText(previous.descriptionBox.getText());
+        dirty = true;
+    }
+
+    /**
+     * Saves the description. {@code onSaved} (nullable) runs only when the server
+     * accepted it; on rejection the error popup is shown and the edit stays dirty.
+     */
+    public void save(Runnable onSaved) {
         AsyncCompanyManager.CompanyInfoOutput info = screen.info();
         if (info == null || !info.present()) return;
         String text = descriptionBox.getText();
@@ -197,6 +212,8 @@ public class OverviewTabBody extends TabBody {
                                 Component.translatable(PREFIX + "action_failed").getString()));
                         return;
                     }
+                    dirty = false;
+                    if (onSaved != null) onSaved.run();
                     screen.refreshInfo();
                 }));
     }

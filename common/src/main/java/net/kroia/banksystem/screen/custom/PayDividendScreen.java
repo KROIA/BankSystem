@@ -57,6 +57,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
     private static final Component RESULT_INVALID = Component.translatable(PREFIX + "result_invalid");
     private static final Component RESULT_INTERNAL = Component.translatable(PREFIX + "result_internal");
     private static final Component RESULT_NOT_FOUND = Component.translatable(PREFIX + "result_not_found");
+    private static final Component RESULT_UNCONFIRMED = Component.translatable("gui.banksystem.payment_unconfirmed");
 
     private static final int COLOR_OK = 0xFF10b981;
     private static final int COLOR_ERR = 0xFFe11d48;
@@ -120,7 +121,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
 
         payButton = new Button(PAY.getString(), this::onPayClicked);
         cancelButton = new Button(CANCEL.getString(), this::onClose);
-        statusLabel = new Label("");
+        statusLabel = new net.kroia.banksystem.screen.uiElements.WrappedLabel(""); // BS-241: long reasons wrap
 
         historyHeader = new Label(HISTORY_HEADER.getString());
         historyEmpty = new Label(HISTORY_EMPTY.getString());
@@ -176,7 +177,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         }
         payButton.setEnabled(false);
         if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null) {
-            BACKEND_INSTANCES.LOGGER.info("[PayDividendScreen] pay clicked: company="
+            BACKEND_INSTANCES.LOGGER.debug("[PayDividendScreen] pay clicked: company="
                     + companyId + " textInput='" + amountBox.getText() + "' parsedRaw=" + amount);
         }
         // Bug batch 3 #5 (v2.1.0) — paying dividends to the company's own account makes
@@ -184,9 +185,9 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         // has been removed from the UI and the server enforces exclusion in DividendPayer.
         AsyncCompanyManager.payDividendAsync(companyId, amount, false, caller, currencyItem).thenAccept(out -> {
             if (out == null) {
-                statusLabel.setText(RESULT_INTERNAL.getString());
+                // Issue #85: no answer (timeout, lost link): the dividend may have been paid, so no retry button.
+                statusLabel.setText(RESULT_UNCONFIRMED.getString());
                 statusLabel.setTextColor(COLOR_ERR);
-                payButton.setEnabled(true);
                 return;
             }
             switch (out.resultCode()) {
@@ -214,6 +215,14 @@ public class PayDividendScreen extends BankSystemGuiScreen {
                     statusLabel.setText(RESULT_INVALID.getString());
                     statusLabel.setTextColor(COLOR_ERR);
                     payButton.setEnabled(true);
+                }
+                case AsyncCompanyManager.CODE_ACCOUNT_FROZEN -> {
+                    statusLabel.setText(Component.translatable("gui.banksystem.company_account_frozen").getString());
+                    statusLabel.setTextColor(COLOR_ERR);
+                }
+                case AsyncCompanyManager.CODE_SHARES_UNDER_REVIEW -> {
+                    statusLabel.setText(Component.translatable("gui.banksystem.company_shares_under_review").getString());
+                    statusLabel.setTextColor(COLOR_ERR);
                 }
                 case AsyncCompanyManager.CODE_NOT_FOUND -> {
                     statusLabel.setText(RESULT_NOT_FOUND.getString());
@@ -255,7 +264,7 @@ public class PayDividendScreen extends BankSystemGuiScreen {
         amountBox.setBounds(p + col, y, col, 20);
         y += 26;
 
-        statusLabel.setBounds(p, y, fw, 16);
+        statusLabel.setBounds(p, y, fw, 40);
 
         int btnW = (fw - spacing) / 2;
         int btnY = frame.getHeight() - p - 20;

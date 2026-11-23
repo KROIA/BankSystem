@@ -1,14 +1,18 @@
 package net.kroia.banksystem.networking.currency;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.banksystem.api.currency.ExternalAccountRef;
+import net.kroia.banksystem.api.currency.ExternalCurrencyProvider;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
+import net.kroia.banksystem.banking.binding.BankAccountBindings;
 import net.kroia.banksystem.networking.BankSystemNetworking;
 import net.kroia.banksystem.util.BankSystemGenericRequest;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -27,6 +31,8 @@ import java.util.concurrent.CompletableFuture;
  *       {@link BankStatus#FAILED_EXTERNAL_UNAVAILABLE} without touching state.</li>
  *   <li>Per-player MANAGE permission on the target account (checked against the
  *       authenticated sender). Same discipline as {@code UpdateBankAccountRequest}.</li>
+ *   <li>The external account must be one the sender may bind
+ *       ({@code provider.listBindableAccounts(sender)}); admins are exempt.</li>
  * </ul>
  * The actual bind logic (zero-balance precondition, provider availability, shared-state match)
  * lives in {@link ServerBankManager#bindExternalAccount(int, ItemID, ExternalAccountRef)} and
@@ -54,15 +60,19 @@ public class BindExternalAccountRequest extends BankSystemGenericRequest<BindExt
      * Client-side entry point.
      *
      * @return future completing with the {@link BankStatus} returned by the master. On transport
-     *         failure the future completes with {@link BankStatus#FAILED_NO_MASTER_CONNECTION} so
-     *         callers can display a distinct diagnostic.
+     *         failure the future completes with {@link BankStatus#FAILED_NO_MASTER_CONNECTION} (not sent)
+     *         or {@code null} (sent, no answer: the outcome is unknown) so callers can display a
+     *         distinct diagnostic.
      */
     public static CompletableFuture<BankStatus> sendRequest(int accountId, ItemID itemId, ExternalAccountRef ref) {
         CompletableFuture<BankStatus> future = new CompletableFuture<>();
         BankSystemNetworking.BIND_EXTERNAL_ACCOUNT_REQUEST
                 .sendRequestToServer(new InputData(accountId, itemId, ref))
                 .whenComplete((response, ex) -> {
-                    if (ex != null || response == null || response.status == null) {
+                    if (ex instanceof net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException
+                            || (ex != null && ex.getCause() instanceof net.kroia.modutilities.networking.client_server.arrs.RequestOutcomeUnknownException)) {
+                        future.complete(null); // Issue #95: sent, then no answer; the outcome is unknown
+                    } else if (ex != null || response == null || response.status == null) {
                         future.complete(BankStatus.FAILED_NO_MASTER_CONNECTION);
                     } else {
                         future.complete(response.status);
@@ -112,8 +122,40 @@ public class BindExternalAccountRequest extends BankSystemGenericRequest<BindExt
             // implementation, but this cast keeps the compile-time coupling narrow.
             return CompletableFuture.completedFuture(new OutputData(BankStatus.FAILED_EXTERNAL_UNAVAILABLE));
         }
-        BankStatus status = sbm.bindExternalAccount(input.accountId, input.itemId, input.ref);
+        // The external account must be one the sender may bind; otherwise anyone with MANAGE on any
+        // account could bind (and then drain) another player's external account. Admins are exempt.
+        ExternalAccountRef ref = isAdmin ? input.ref : findBindableRef(sender, input.ref);
+        if (ref == null) {
+            warn("BindExternalAccountRequest refused: player " + sender + " may not bind external account " + input.ref);
+            return CompletableFuture.completedFuture(new OutputData(BankStatus.FAILED_INVALID_ITEM_ID));
+        }
+        BankStatus status = net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.slaveActor(sender), // BS-254: actor of the EXTERNAL_BIND row
+                () -> sbm.bindExternalAccount(input.accountId, input.itemId, ref));
+        // Task #146: record admin-made bindings so the start-up check never suspends them.
+        BankAccountBindings bindings = BankAccountBindings.get();
+        if (isAdmin && status == BankStatus.SUCCESS && bindings != null)
+            bindings.approve(input.accountId, ItemIDManager.resolveAlias(input.itemId));
         return CompletableFuture.completedFuture(new OutputData(status != null ? status : BankStatus.FAILED_EXTERNAL_UNAVAILABLE));
+    }
+
+    /**
+     * The provider's own ref for {@code ref} if it is among the accounts {@code player} may bind
+     * (matched on the durable identity providerId + accountKey), else null. The provider's ref
+     * replaces the client's, so its label and shared flag are authoritative.
+     */
+    private @Nullable ExternalAccountRef findBindableRef(UUID player, ExternalAccountRef ref) {
+        ExternalCurrencyProvider provider = BankSystemMod.getAPI().getCurrencyProvider(ref.providerId());
+        if (provider == null || !provider.isAvailable())
+            return null;
+        try {
+            for (ExternalAccountRef own : provider.listBindableAccounts(player))
+                if (own.providerId().equals(ref.providerId()) && own.accountKey().equals(ref.accountKey()))
+                    return own;
+        } catch (Throwable t) {
+            // Third-party adapter code: a failing list refuses the bind instead of failing open.
+            warn("provider '" + ref.providerId() + "' threw while listing bindable accounts: " + t);
+        }
+        return null;
     }
 
     @Override

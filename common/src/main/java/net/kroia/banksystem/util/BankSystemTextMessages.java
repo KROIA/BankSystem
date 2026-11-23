@@ -40,6 +40,13 @@ public class BankSystemTextMessages {
         BankSystemTextMessages.BACKEND_INSTANCES = backend;
     }
 
+    // Task #107: deop could not remove a LuckPerms group grant of banksystem.admin
+    private static final Component STILL_ADMIN_VIA_LUCKPERMS_GROUP = Component.translatable(prefix+"still_admin_via_luckperms_group");
+    public static String getStillAdminViaLuckPermsGroupMessage(String player)
+    {
+        return replaceVariable(STILL_ADMIN_VIA_LUCKPERMS_GROUP.getString(), Variables.PLAYER, player);
+    }
+
     private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transferred_to_user");
     public static String getTransferedMessage(String amount, String itemName, String receiver)
     {
@@ -301,6 +308,46 @@ public class BankSystemTextMessages {
     }
 
 
+    // Task #110 — audit / alerts
+    private static final Component AUDIT_ALERT = Component.translatable(prefix+"audit_alert");
+    private static final Component ALERTS_ON = Component.translatable(prefix+"alerts_on");
+    private static final Component ALERTS_OFF = Component.translatable(prefix+"alerts_off");
+    private static final Component AUDIT_TARGET_NOT_FOUND = Component.translatable(prefix+"audit_target_not_found");
+    public static String getAuditAlertMessage(String line) { return AUDIT_ALERT.getString().replace("{message}", line); }
+    public static String getAlertsOnMessage() { return ALERTS_ON.getString(); }
+    public static String getAlertsOffMessage() { return ALERTS_OFF.getString(); }
+    public static String getAuditTargetNotFoundMessage(String target) { return AUDIT_TARGET_NOT_FOUND.getString().replace("{target}", target); }
+    // Task #113 — audit report
+    private static final Component AUDIT_REPORT_WRITTEN = Component.translatable(prefix+"audit_report_written");
+    private static final Component AUDIT_REPORT_ON_MASTER = Component.translatable(prefix+"audit_report_on_master");
+    private static final Component AUDIT_REPORT_FAILED = Component.translatable(prefix+"audit_report_failed");
+    public static String getAuditReportWrittenMessage(String path, boolean onMaster) {
+        return AUDIT_REPORT_WRITTEN.getString().replace("{path}", path) + (onMaster ? " " + AUDIT_REPORT_ON_MASTER.getString() : "");
+    }
+    public static String getAuditReportFailedMessage() { return AUDIT_REPORT_FAILED.getString(); }
+
+    // Task #117 — account freeze
+    private static final Component ACCOUNT_FROZEN = Component.translatable(prefix+"account_frozen");
+    private static final Component ACCOUNT_FREEZE_SET = Component.translatable(prefix+"account_freeze_set");
+    private static final Component ACCOUNT_FREEZE_CLEARED = Component.translatable(prefix+"account_freeze_cleared");
+    private static final Component ACCOUNT_FREEZE_FAILED = Component.translatable(prefix+"account_freeze_failed");
+    public static String getAccountFrozenMessage(int accountNumber)
+    {
+        return replaceVariable(ACCOUNT_FROZEN.getString(), Variables.ACCOUNT, String.valueOf(accountNumber));
+    }
+    public static String getAccountFreezeSetMessage(int accountNumber)
+    {
+        return replaceVariable(ACCOUNT_FREEZE_SET.getString(), Variables.ACCOUNT, String.valueOf(accountNumber));
+    }
+    public static String getAccountFreezeClearedMessage(int accountNumber)
+    {
+        return replaceVariable(ACCOUNT_FREEZE_CLEARED.getString(), Variables.ACCOUNT, String.valueOf(accountNumber));
+    }
+    public static String getAccountFreezeFailedMessage(int accountNumber)
+    {
+        return replaceVariable(ACCOUNT_FREEZE_FAILED.getString(), Variables.ACCOUNT, String.valueOf(accountNumber));
+    }
+
     private static final Component ITEM_NOT_ALLOWED = Component.translatable(prefix+"item_not_allowed");
     public static String getItemNotAllowedMessage(String itemName)
     {
@@ -355,6 +402,17 @@ public class BankSystemTextMessages {
         String msg = CRAFTING_DEPOSIT_FALLBACK.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
+    }
+    // BS-267: a transfer whose outcome stayed unknown (parked for an admin)
+    private static final Component TRANSFER_UNCONFIRMED = Component.translatable(prefix+"transfer_unconfirmed");
+    public static String getTransferUnconfirmedMessage(String transferId) {
+        return TRANSFER_UNCONFIRMED.getString().replace("{transfer_id}", transferId);
+    }
+    // BS-267: admin reset of a locked balance on an account with open parked transfers
+    private static final Component RESET_LOCK_PARKED = Component.translatable(prefix+"reset_lock_parked_transfers");
+    public static String getResetLockParkedMessage(int accountNumber, int count, String transferIds) {
+        return RESET_LOCK_PARKED.getString().replace("{account_number}", String.valueOf(accountNumber))
+                .replace("{count}", String.valueOf(count)).replace("{transfer_ids}", transferIds);
     }
     private static final Component ITEM_NOT_ALLOWED_FAILED = Component.translatable(prefix+"item_not_allowed_failed");
     public static String getItemNotAllowedFailedMessage(String itemName)

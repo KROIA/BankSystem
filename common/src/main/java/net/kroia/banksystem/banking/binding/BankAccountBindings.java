@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.binding;
 
+import net.kroia.modutilities.NbtCompat;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.BankSystemModSettings;
@@ -50,9 +51,9 @@ public class BankAccountBindings {
     /** NBT key for the top-level list holding every {@link BindingRow}. */
     private static final String NBT_ROWS = "rows";
     /** NBT key stamping the on-disk schema version (currently 1). */
-    private static final String NBT_VERSION = "version";
-    /** Current on-disk schema version. */
-    private static final int SCHEMA_VERSION = 1;
+    public static final String NBT_VERSION = "version";
+    /** Current on-disk schema version; a higher saved one refuses start-up (BS-274, BankSystemDataHandler). */
+    public static final int SCHEMA_VERSION = 1;
 
     private static BankSystemModBackend.Instances BACKEND_INSTANCES;
 
@@ -227,6 +228,29 @@ public class BankAccountBindings {
         }
     }
 
+    /** Task #146: blocks every value path through the slot's binding. No-op if the slot is unbound. */
+    public void suspend(int accountId, @NotNull ItemID itemId) {
+        BindingRow row = getBinding(accountId, itemId);
+        if (row == null) return;
+        row.setFlags(true, false);
+        dirty = true;
+    }
+
+    /** Task #146: lifts a suspension and marks the binding admin-approved. No-op if the slot is unbound. */
+    public void approve(int accountId, @NotNull ItemID itemId) {
+        BindingRow row = getBinding(accountId, itemId);
+        if (row == null) return;
+        row.setFlags(false, true);
+        dirty = true;
+    }
+
+    /** Task #146: true when the slot's binding exists and is suspended (alias IDs resolve to their slot). */
+    public static boolean isSuspended(int accountId, @NotNull ItemID itemId) {
+        BankAccountBindings self = get();
+        BindingRow row = self == null ? null : self.getBinding(accountId, ItemIDManager.resolveAlias(itemId));
+        return row != null && row.suspended();
+    }
+
     /**
      * Convenience accessor: dust for the given slot, or 0 when unbound.
      */
@@ -379,9 +403,9 @@ public class BankAccountBindings {
     /**
      * Populates the state from a tag previously written by {@link #save(CompoundTag)}.
      * Rows whose NBT is unusable (missing keys, unknown provider id, malformed
-     * ref, ...) are skipped with a WARN; unknown schema versions abort the load
-     * with a WARN and leave the map empty (the file gets backed up aside by
-     * the data handler's usual recovery flow).
+     * ref, ...) are skipped with a WARN; a newer schema version leaves the map
+     * empty and returns false (the data handler refuses start-up before calling
+     * this, BS-274).
      *
      * @param tag source tag; may be {@code null}
      * @return {@code true} on successful load, {@code false} on version
@@ -392,22 +416,21 @@ public class BankAccountBindings {
         unavailableWarnedKeys.clear();
         dirty = false;
         if (tag == null) return false;
-        int version = tag.contains(NBT_VERSION) ? tag.getInt(NBT_VERSION) : 1;
+        int version = tag.contains(NBT_VERSION) ? NbtCompat.getInt(tag, NBT_VERSION) : 1;
         if (version > SCHEMA_VERSION) {
             warn("BankAccountBindings.nbt has schema version " + version
                     + ", but this build only supports up to " + SCHEMA_VERSION
-                    + ". Refusing to load — the file will be backed up aside "
-                    + "and a fresh (empty) one written in its place.");
+                    + ". Refusing to load.");
             return false;
         }
-        if (!tag.contains(NBT_ROWS, Tag.TAG_LIST)) {
+        if (!NbtCompat.contains(tag, NBT_ROWS, Tag.TAG_LIST)) {
             // Empty but well-formed file — treat as a clean-slate load.
             return true;
         }
-        ListTag rows = tag.getList(NBT_ROWS, Tag.TAG_COMPOUND);
+        ListTag rows = NbtCompat.getList(tag, NBT_ROWS, Tag.TAG_COMPOUND);
         int skipped = 0;
         for (int i = 0; i < rows.size(); i++) {
-            BindingRow row = BindingRow.fromNbt(rows.getCompound(i));
+            BindingRow row = BindingRow.fromNbt(NbtCompat.getCompound(rows, i));
             if (row == null) {
                 skipped++;
                 continue;

@@ -154,7 +154,8 @@ public class PayoutRowWidget extends BankSystemGuiElement {
         // with GUI init/layout iteration (VerticalListView.updateElementPositions).
         try {
             AsyncCompanyManager.getHistoryAsync(schedule.getScheduleId(), 1).thenAccept(out ->
-                    Minecraft.getInstance().tell(() -> {
+                    Minecraft.getInstance().tell(() -> { // mc<=1.21.1
+                    //Minecraft.getInstance().schedule(() -> { // mc>=1.21.2
                         if (out != null && !out.rows().isEmpty()) {
                             int s = out.rows().get(0).statusOrdinal();
                             statusLabel.setText(formatStatus(s));

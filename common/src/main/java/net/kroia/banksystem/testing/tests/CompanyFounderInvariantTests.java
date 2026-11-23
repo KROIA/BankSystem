@@ -4,9 +4,9 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,6 +28,11 @@ public class CompanyFounderInvariantTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.COMPANY;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override

@@ -15,15 +15,16 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.ItemUtilities;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -167,8 +168,8 @@ public class ItemIDIdentityTests extends TestSuite {
         if (server == null)
             return ItemStack.EMPTY;
         Holder<Enchantment> holder = server.registryAccess()
-                .registryOrThrow(Registries.ENCHANTMENT)
-                .getHolderOrThrow(key);
+                .lookupOrThrow(Registries.ENCHANTMENT)
+                .getOrThrow(key);
         ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
         ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
         mutable.set(holder, 1);
@@ -361,9 +362,11 @@ public class ItemIDIdentityTests extends TestSuite {
         // A stack differing only in the now-stripped component resolves to the canonical ID
         // once normalized under the grown set (queries additionally normalize under the real
         // set inside getItemID, which is a no-op for this stack).
-        Set<ResourceLocation> grownIds = new HashSet<>();
+        Set<ResourceLocation> grownIds = new HashSet<>(); // mc<=1.21.10
+        //Set<Identifier> grownIds = new HashSet<>(); // mc>=1.21.11
         for (String idStr : grownSet) {
-            ResourceLocation parsed = ResourceLocation.tryParse(idStr);
+            ResourceLocation parsed = ResourceLocation.tryParse(idStr); // mc<=1.21.10
+            //Identifier parsed = Identifier.tryParse(idStr); // mc>=1.21.11
             if (parsed != null)
                 grownIds.add(parsed);
         }

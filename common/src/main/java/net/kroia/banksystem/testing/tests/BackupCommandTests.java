@@ -3,9 +3,9 @@ package net.kroia.banksystem.testing.tests;
 import net.kroia.banksystem.data.DatabaseManager;
 import net.kroia.banksystem.data.DriverShim;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,6 +42,11 @@ public class BackupCommandTests extends TestSuite {
     }
 
     @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
+    }
+
+    @Override
     public void registerTests() {
         addTest("pause_blocks_worker_until_resume", this::pause_blocks_worker_until_resume);
         addTest("pause_is_idempotent_returns_false_when_active", this::pause_is_idempotent_returns_false_when_active);
@@ -56,13 +61,7 @@ public class BackupCommandTests extends TestSuite {
     @Override
     public void setup() {
         try {
-            Class<?> driverClass;
-            try {
-                driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
-            } catch (ClassNotFoundException e) {
-                driverClass = BackupCommandTests.class.getClassLoader().loadClass("org.sqlite.JDBC");
-            }
-            Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+            Driver driver = DatabaseManager.newSqliteDriver();
             try {
                 DriverManager.registerDriver(new DriverShim(driver));
             } catch (Exception ignored) { }

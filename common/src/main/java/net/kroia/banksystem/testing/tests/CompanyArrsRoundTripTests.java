@@ -4,9 +4,9 @@ import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
-import net.kroia.modutilities.testing.TestCategory;
-import net.kroia.modutilities.testing.TestResult;
-import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.testkit.TestCategory;
+import net.kroia.testkit.TestResult;
+import net.kroia.testkit.TestSuite;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
@@ -29,6 +29,11 @@ public class CompanyArrsRoundTripTests extends TestSuite {
     @Override
     public TestCategory getCategory() {
         return BankSystemTestCategories.NETWORKING;
+    }
+
+    @Override
+    public boolean needsGame() {
+        return false; // passes offline in gradlew :common:test
     }
 
     @Override
@@ -122,7 +127,7 @@ public class CompanyArrsRoundTripTests extends TestSuite {
     private TestResult testCompanyInfoCodecRoundTrip() {
         AsyncCompanyManager.CompanyInfoOutput out = new AsyncCompanyManager.CompanyInfoOutput(
                 true, 7, "Trip", 42, 12345L, 100L, "hello",
-                List.of("Alice", "Bob"), (short) 0);
+                List.of("Alice", "Bob"), (short) 0, "Trip Account");
         AsyncCompanyManager.CompanyInfoOutput outd =
                 roundTrip(AsyncCompanyManager.CompanyInfoOutput.STREAM_CODEC, out);
         if (outd.present() != true) return fail("present flag lost");
@@ -132,6 +137,7 @@ public class CompanyArrsRoundTripTests extends TestSuite {
         if (outd.maxSupply() != 12345L) return fail("maxSupply lost");
         if (outd.totalSharesIssued() != 100L) return fail("totalSharesIssued lost");
         if (!"hello".equals(outd.description())) return fail("description lost");
+        if (!"Trip Account".equals(outd.accountName())) return fail("accountName lost");
         if (outd.founderNames().size() != 2 || !"Alice".equals(outd.founderNames().get(0))
                 || !"Bob".equals(outd.founderNames().get(1))) return fail("founderNames lost");
 
@@ -191,6 +197,7 @@ public class CompanyArrsRoundTripTests extends TestSuite {
                 AsyncCompanyManager.CODE_NOT_FOUNDER,
                 AsyncCompanyManager.CODE_ALREADY_FOUNDER,
                 AsyncCompanyManager.CODE_MISSING_TARGET,
+                AsyncCompanyManager.CODE_NOT_A_WORKER,
                 AsyncCompanyManager.CODE_NO_PERMISSION,
                 AsyncCompanyManager.CODE_BANK_ACCOUNT_ERROR,
                 AsyncCompanyManager.CODE_INTERNAL,

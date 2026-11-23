@@ -4,6 +4,7 @@ import dev.architectury.platform.Platform;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.client.cache.CompanyInfoCache;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.CloseButton;
@@ -18,8 +19,7 @@ import java.util.UUID;
 /**
  * Task #51 (v2.1.0) — Dedicated company management UI.
  *
- * <p><b>Status: SKELETON.</b> Full implementation is spec'd in
- * {@code .claude/Features/CompanyManagementScreenSpec.md} and will be delivered
+ * <p><b>Status: SKELETON.</b> The full implementation will be delivered
  * by a subsequent implementation pass. This class currently ships:
  *
  * <ul>
@@ -89,6 +89,10 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     private CloseButton closeButton;
     private Label titleLabel;
     private TabElement tabs;
+    /** Current Overview body; the only tab with an unsaved-edit state (description). */
+    private net.kroia.banksystem.screen.uiElements.tabbody.OverviewTabBody overviewBody;
+    /** Current Market body; owns the StockMarket price chart that must be closed (BS-178). */
+    private net.kroia.banksystem.screen.uiElements.tabbody.MarketTabBody marketBody;
 
     /** Screen-open latch — every async continuation gates on this so callbacks after
      *  close are dropped. */
@@ -136,6 +140,7 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     public boolean canManageNow() { return canManage; }
     public boolean isFounderNow() { return isFounder; }
     public UUID callerUUID() { return callerUUID; }
+    public boolean isMarketBody(GuiElement body) { return body != null && body == marketBody; }
     public net.kroia.banksystem.api.bankmanager.IClientBankManager clientBankManager() { return getBankManager(); }
 
     /** Spec §0.7 — re-fetch authoritative info after a mutation; rebuilds the tab tree. */
@@ -226,11 +231,26 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
      */
     private void rebuildTabs() {
         int selectedIndex = tabs != null ? tabs.getSelectedTab() : 0;
+        if (marketBody != null) marketBody.closeChart(); // stop the old body's price stream
+        marketBody = null;
         removeAllElements();
         addElement(titleLabel);
         addElement(closeButton);
 
-        tabs = new TabElement();
+        tabs = new TabElement() {
+            @Override
+            public void selectTab(int index) {
+                // Leaving the Overview tab with an unsaved description asks first.
+                if (index != getSelectedTab() && overviewBody != null && overviewBody.hasUnsavedChanges()
+                        && getSelectedTabElement() == overviewBody) {
+                    AskPopupScreen.openUnsavedChangesPopup(CompanyManagementScreen.this,
+                            () -> { overviewBody.discardChanges(); tabs.selectTab(index); },
+                            () -> overviewBody.save(() -> tabs.selectTab(index)));
+                    return;
+                }
+                super.selectTab(index);
+            }
+        };
         tabs.addTab(TAB_OVERVIEW.getString(), buildOverviewBody());
         if (canManage || isFounder) tabs.addTab(TAB_WORKERS.getString(), buildWorkersBody());
         if (canManage || isFounder) tabs.addTab(TAB_PAYOUTS.getString(), buildPayoutsBody());
@@ -254,7 +274,10 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     // ------------------------------------------------------------------
 
     private GuiElement buildOverviewBody() {
-        return new net.kroia.banksystem.screen.uiElements.tabbody.OverviewTabBody(this);
+        var body = new net.kroia.banksystem.screen.uiElements.tabbody.OverviewTabBody(this);
+        body.takeUnsavedChanges(overviewBody); // async rebuilds must not drop an unsaved edit
+        overviewBody = body;
+        return body;
     }
 
     private GuiElement buildWorkersBody() {
@@ -270,7 +293,8 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
     }
 
     private GuiElement buildMarketBody() {
-        return new net.kroia.banksystem.screen.uiElements.tabbody.MarketTabBody(this);
+        marketBody = new net.kroia.banksystem.screen.uiElements.tabbody.MarketTabBody(this);
+        return marketBody;
     }
 
     private GuiElement buildStatisticsBody() {
@@ -287,8 +311,22 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
 
     @Override
     public void onClose() {
+        if (overviewBody != null && overviewBody.hasUnsavedChanges()) {
+            // Save closes only once the server accepted the description.
+            AskPopupScreen.openUnsavedChangesPopup(this,
+                    () -> { overviewBody.discardChanges(); onClose(); },
+                    () -> overviewBody.save(this::onClose));
+            return;
+        }
         screenIsOpen = false;
         super.onClose();
+    }
+
+    /** Fires on close and whenever another screen (popup, SM trade screen) replaces this one. */
+    @Override
+    public void removed() {
+        if (marketBody != null) marketBody.closeChart(); // BS-178: no leaked price stream
+        super.removed();
     }
 
     @Override
@@ -306,5 +344,7 @@ public class CompanyManagementScreen extends BankSystemGuiScreen {
             if (bodyHeight < 40) bodyHeight = 40;
             tabs.setBounds(padding, bodyTop, width, bodyHeight);
         }
+        // init() runs this again when a popup returns here: reopen the chart removed() closed.
+        if (marketBody != null) marketBody.openChart();
     }
 }

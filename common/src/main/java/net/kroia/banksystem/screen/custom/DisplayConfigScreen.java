@@ -4,6 +4,7 @@ import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
 import net.kroia.banksystem.networking.entity.UpdateDisplayBlockConfigPacket;
+import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.util.BankSystemGuiScreen;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.Gui;
@@ -25,6 +26,7 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
     private BankSystemDisplayBlockEntity.DisplayType selectedType;
     private int selectedAccount;
     private String selectedAccountName = "";
+    private boolean dirty = false; // unsaved type / account selection
 
     private final Label titleLabel;
     private final Label typeLabel;
@@ -56,6 +58,7 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
         overviewButton = new Button("Balance Overview");
         overviewButton.setOnFallingEdge(() -> {
             selectedType = BankSystemDisplayBlockEntity.DisplayType.BALANCE_OVERVIEW;
+            dirty = true;
             updateTypeButtons();
         });
         addElement(overviewButton);
@@ -63,6 +66,7 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
         historyButton = new Button("Balance History");
         historyButton.setOnFallingEdge(() -> {
             selectedType = BankSystemDisplayBlockEntity.DisplayType.BALANCE_HISTORY;
+            dirty = true;
             updateTypeButtons();
         });
         addElement(historyButton);
@@ -185,6 +189,7 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
                 btn.setOnFallingEdge(() -> {
                     selectedAccount = account.accountNumber;
                     selectedAccountName = account.accountName;
+                    dirty = true;
                     refreshAccountHighlights();
                     updateSelectedLabel();
                 });
@@ -217,6 +222,17 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
             return;
         }
         UpdateDisplayBlockConfigPacket.sendToServer(blockPos, selectedType.getId(), selectedAccount);
+        dirty = false;
         onClose();
+    }
+
+    @Override
+    public void onClose() {
+        if (dirty) {
+            // Save = onApply (closes on success; stays open if no account is selected).
+            AskPopupScreen.openUnsavedChangesPopup(this, () -> { dirty = false; onClose(); }, this::onApply);
+            return;
+        }
+        super.onClose();
     }
 }

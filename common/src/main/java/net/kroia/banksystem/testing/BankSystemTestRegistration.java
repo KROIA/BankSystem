@@ -1,11 +1,13 @@
 package net.kroia.banksystem.testing;
 
-import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.testkit.TestRegistry;
+import net.kroia.banksystem.testing.tests.AdminFlagSyncTests;
 import net.kroia.banksystem.testing.tests.ArithmeticTests;
 import net.kroia.banksystem.testing.tests.AsyncForwardingTests;
 import net.kroia.banksystem.testing.tests.AsyncMethodAuditTests;
 import net.kroia.banksystem.testing.tests.BackupCommandTests;
 import net.kroia.banksystem.testing.tests.BankAccountTests;
+import net.kroia.banksystem.testing.tests.AccountReadAccessTests;
 import net.kroia.banksystem.testing.tests.BalanceHistoryTests;
 import net.kroia.banksystem.testing.tests.BankChangeStreamPublishTests;
 import net.kroia.banksystem.testing.tests.CompanyFounderInvariantTests;
@@ -52,6 +54,10 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new AsyncForwardingTests());
         TestRegistry.register(new NetworkingValidationTests());
         TestRegistry.register(new MultiServerSecurityTests());
+        // Task #103 — account-data read gate
+        TestRegistry.register(new AccountReadAccessTests());
+        // Task #107 — admin flag / LuckPerms sync decisions
+        TestRegistry.register(new AdminFlagSyncTests());
         TestRegistry.register(new SerializationTests());
         TestRegistry.register(new LifecycleTests());
         TestRegistry.register(new DatabaseTests());
@@ -62,6 +68,10 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new ItemIDIdentityTests());
         TestRegistry.register(new ItemIDMergeGuardTests());
         TestRegistry.register(new ItemIDSlaveDelegationTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDRegistrationRetryTests()); // Task #156
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDUnchangedSetMergeTests()); // Task #157
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDMissingModTests()); // BS-194/195
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.ItemIDMissingNamespaceTests()); // BS-195, offline
         TestRegistry.register(new ItemIDCounterTests());
         TestRegistry.register(new ItemIDFormatAndRepairTests());
         TestRegistry.register(new DepositGateTests());
@@ -76,7 +86,8 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new MoneyDenominationOptimizerTests());
         TestRegistry.register(new ConverterCacheTests());
         // Task #43 (v2.1.0) — Company feature Phase 1 (POJO + manager + founder invariant).
-        TestRegistry.register(new CompanyManagerTests());
+        TestRegistry.register(new CompanyManagerTests(false));
+        TestRegistry.register(new CompanyManagerTests(true)); // BS-205, SLAVE_ONLY
         TestRegistry.register(new CompanyFounderInvariantTests());
         // Task #43g (v2.1.0) — slave-side ARRS forwarding for /company subcommands.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyArrsRoundTripTests());
@@ -84,6 +95,30 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutArrsRoundTripTests());
         // Task #44 (v2.1.0) — SQLite Transaction Ledger round-trip + read API.
         TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLogManagerTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.TransactionLedgerTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.LedgerCompletenessTests()); // BS-254
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditExportTests()); // BS-255
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminAuditTests(false)); // Task #110
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminAuditTests(true)); // BS-209, SLAVE_ONLY
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.SuspicionFlagTests()); // Tasks #111/#114/#115
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditDigestTests()); // Tasks #112/#113/#116
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.DiscordFeedTests()); // Task #119
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.DiagnosticsDatabaseTests()); // Task #123
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.DiagnosticsWalTests()); // Task #164, offline
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.DataMigrationTests()); // BS-274, offline
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.NoteFlowLogTests()); // Task #124, BOTH
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferJournalTests(true)); // Task #124, SLAVE_ONLY
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferJournalTests(false)); // Task #124, MASTER_ONLY
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferStatusTests()); // Task #126, offline
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.TransferStatusRetryTests()); // Task #158, offline
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AsyncTransferIdTests()); // Task #162, MASTER_ONLY
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.WithdrawOutcomeTests()); // Task #160, offline
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.LookupBackoffTests()); // Task #167, offline
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.SlaveMasterDownTests()); // Task #174, SLAVE_ONLY
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.FixtureStepsTests()); // BS-269, SLAVE_ONLY, opt-in
+        // SM T-236 audit join: rows left in the live ledger / journal (autotest only)
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditJoinRowsTests(false)); // MASTER_ONLY
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AuditJoinRowsTests(true)); // SLAVE_ONLY
         // Task #45 (v2.1.0) — recurring payouts (schedule mutation, NBT roundtrip, cascade-strip).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutManagerTests());
         // Task #48 (v2.1.0) — share ItemID volatility guard (distinct companies, distinct ItemIDs).
@@ -94,5 +129,17 @@ public class BankSystemTestRegistration {
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SlaveCompanyMirrorTests());
         // Task #55 (v2.1.1) — persistence dirty-flag contract (timer-gated save safety).
         TestRegistry.register(new net.kroia.banksystem.testing.tests.SaveDirtyFlagTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.CompatItemIDsRecoveryTests()); // Issue #60
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.TerminalInventoryLoadTests()); // Issue #81
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.UploadRestoreTests()); // Issue #82
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.DownloadLockFailureTests()); // Issue #87
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.CompanyReadAsyncTests()); // Issue #93
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.PortCheckTests()); // BS-210
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.UploadHopperWorldTests()); // TK-5 (scenario side)
+        // TK-3/TK-4 GUI suite: registered by DevBootstrap on the client only (no loader in the offline JUnit run)
+        // Task #108 — admin flag sync against a real LuckPerms, then "LuckPerms removed" phase 1/2.
+        // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.AdminFlagSyncLuckPermsTests());
+        TestRegistry.register(new net.kroia.banksystem.testing.tests.BankSystemLuckPermsRemovedTests());
     }
 }
