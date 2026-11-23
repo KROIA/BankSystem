@@ -366,13 +366,13 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
     }
 
     /**
-     * Polls with a fresh load from storage each time, not {@code LuckPermsBridge.getEffective}: that reuses an
-     * already loaded user, and a poll whose load raced the command's in-flight write can leave a stale copy loaded.
+     * Polls through {@code LuckPermsBridge.getEffective}, which queues behind the player's pending bridge writes. A raw
+     * {@code loadUser} outside that queue can overlap the command's in-flight write and reset the user, losing the edit.
      */
     private boolean effectiveEventually(UUID u, boolean expected) {
         long end = System.currentTimeMillis() + 5000;
         while (true) {
-            if (expected == await(Lp.loadEffective(u), TIMEOUT))
+            if (Optional.of(expected).equals(await(LuckPermsBridge.getEffective(u, NODE), TIMEOUT)))
                 return true;
             if (System.currentTimeMillis() > end)
                 return false;
@@ -389,11 +389,6 @@ public class AdminFlagSyncLuckPermsTests extends TestSuite {
     static final class Lp {
         static LuckPerms api() {
             return LuckPermsProvider.get();
-        }
-
-        static CompletableFuture<Boolean> loadEffective(UUID u) {
-            return api().getUserManager().loadUser(u)
-                    .thenApply(user -> user.getCachedData().getPermissionData().checkPermission(NODE).asBoolean());
         }
 
         /** The user's own global {@code banksystem.admin} entry, if any. */
