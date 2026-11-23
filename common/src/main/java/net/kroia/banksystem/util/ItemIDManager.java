@@ -1668,8 +1668,16 @@ public class ItemIDManager implements ServerSaveable {
         // sit at that slot on this side's runtime registry table.
         RegistryAccess syncRegistryAccess = UtilitiesPlatform.getRegistryAccess();
         Map<ItemID, CompoundTag> items = packet.getItems();
+        // BS-287: progress log for a slave's full sync (its bulk item work at start); clients and
+        // incremental syncs stay silent.
+        Progress progress = ownsRegistryMaps && packet.isFullSync()
+                && BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer
+                ? new Progress("Applying the master's item IDs", items.size()) : null;
+        int adopted = 0;
         for(Map.Entry<ItemID, CompoundTag> entry : items.entrySet())
         {
+            if (progress != null)
+                progress.step(adopted);
             ItemID id = entry.getKey();
             CompoundTag stackTag = entry.getValue();
             ItemStack itemStack;
@@ -1733,10 +1741,12 @@ public class ItemIDManager implements ServerSaveable {
             // in the network queue while a renormalize pass merges the ID into a canonical
             // one — re-inserting it here would leave the ID both aliased AND registered
             // (an inconsistent registry that would even be saved to disk in singleplayer).
-            if (ownsRegistryMaps && !itemIDAliasMap.containsKey(id))
-                adoptMasterItem(id, cpy);
+            if (ownsRegistryMaps && !itemIDAliasMap.containsKey(id) && adoptMasterItem(id, cpy))
+                adopted++;
             id.tryUpdateNameCache();
         }
+        if (progress != null)
+            progress.done(adopted);
         if (ownsRegistryMaps)
             dropShortsMissingFromFullSync(packet);
         MoneyItem.resetItemID();
@@ -3776,15 +3786,67 @@ public class ItemIDManager implements ServerSaveable {
             return;
 
         ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
+        List<ItemStack> registryItems = new ArrayList<>();
+        access.lookupOrThrow(Registries.ITEM).listElements()
+                .forEach(listElement -> registryItems.add(listElement.value().getDefaultInstance()));
+        Progress progress = new Progress("Registering default item IDs", moneyItems.size() + registryItems.size());
+        int sizeBefore = itemIDMap.size();
+
         for(ItemStack itemStack : moneyItems)
         {
             registerItemStackServerSide_direct(itemStack);
+            progress.step(itemIDMap.size() - sizeBefore);
         }
         MoneyItem.resetItemID();
 
-        access.lookupOrThrow(Registries.ITEM).listElements().forEach(listElement -> {
-            registerItemStackServerSide_direct(listElement.value().getDefaultInstance());
-        });
+        for(ItemStack itemStack : registryItems)
+        {
+            registerItemStackServerSide_direct(itemStack);
+            progress.step(itemIDMap.size() - sizeBefore);
+        }
+        progress.done(itemIDMap.size() - sizeBefore);
+    }
+
+    /**
+     * BS-287: INFO start line, a time-throttled progress line about every 5 s ("x/N (p%), k new")
+     * and a done line, so a long bulk registration on a big mod pack is visible in the server log.
+     */
+    private static final class Progress
+    {
+        private static final long INTERVAL_MS = 5000;
+        private final String what;
+        private final int total;
+        private final long startMs = System.currentTimeMillis();
+        private long lastLogMs = startMs;
+        private int done;
+
+        Progress(String what, int total)
+        {
+            this.what = what;
+            this.total = total;
+            log(what + ": " + total + " items");
+        }
+
+        void step(int newCount)
+        {
+            done++;
+            long now = System.currentTimeMillis();
+            if (now - lastLogMs < INTERVAL_MS)
+                return;
+            lastLogMs = now;
+            log(what + ": " + done + "/" + total + " (" + (total == 0 ? 100 : done * 100L / total) + "%), " + newCount + " new");
+        }
+
+        void done(int newCount)
+        {
+            log(what + ": done, " + done + " items, " + newCount + " new, " + (System.currentTimeMillis() - startMs) + " ms");
+        }
+
+        private static void log(String msg)
+        {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] " + msg);
+        }
     }
 
     /*@Override
