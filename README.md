@@ -1,5 +1,9 @@
 # BankSystem
 
+<div align="center">
+    <img src="documentation/images/overview.png" alt="BankSystem overview">
+</div>
+
 BankSystem adds a full banking system to Minecraft: every player gets a bank account for money and items, with shared accounts, cash you can hold, redstone automation and companies that sell shares. Connect several servers and they share the same bank.
 
 <div align="center">
