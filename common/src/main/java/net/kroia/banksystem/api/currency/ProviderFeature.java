@@ -11,7 +11,7 @@ package net.kroia.banksystem.api.currency;
  * as authoritative.
  * <p>
  * What each flag implies for currency units and permission mapping:
- * {@code documentation/developer-guide/CurrencyIntegration.md}, section 5.
+ * https://kroia.github.io/BanksystemStockmarketDoku/developers/banksystem/currency-integration/#feature-flags
  *
  * @since 2.0.5
  */

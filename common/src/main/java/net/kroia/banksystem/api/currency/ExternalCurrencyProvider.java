@@ -32,7 +32,7 @@ import java.util.UUID;
  * Design principle: <b>binding, not replacement</b>. The external mod owns the balance;
  * BankSystem keeps its permissions, and the locked balance stays local (lock/unlock never
  * touch the external account, withdrawLocked does). Adapter guide, unit conversion and
- * shared-account permission mapping: {@code documentation/developer-guide/CurrencyIntegration.md}.
+ * shared-account permission mapping: https://kroia.github.io/BanksystemStockmarketDoku/developers/banksystem/currency-integration/.
  *
  * @since 2.0.5
  * @see ExternalAccount
