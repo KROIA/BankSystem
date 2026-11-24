@@ -10,6 +10,8 @@ BankSystem adds a full banking system to Minecraft: every player gets a bank acc
 
 [![Documentation](https://img.shields.io/badge/Documentation-Open_the_guide-2d8a4e?style=for-the-badge)](https://kroia.github.io/BanksystemStockmarketDoku/banksystem/)
 
+[![For developers](https://img.shields.io/badge/For_developers-API_guide-555555)](https://kroia.github.io/BanksystemStockmarketDoku/developers/)
+
 </div>
 
 ## Features
@@ -53,7 +55,9 @@ All recipes are on the [Blocks and recipes](https://kroia.github.io/BanksystemSt
 
 ## Supported versions
 
-BankSystem needs [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api), and on Fabric also [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api). Downloads: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem) · [Modrinth](https://modrinth.com/mod/kroia_banksystem)
+BankSystem needs [Architectury API](https://www.curseforge.com/minecraft/mc-mods/architectury-api) and, on Fabric, [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api). ModUtilities is inside the BankSystem jar, you don't have to install it. Details: [Installation](https://kroia.github.io/BanksystemStockmarketDoku/admin/install/).
+
+Downloads: [CurseForge](https://www.curseforge.com/minecraft/mc-mods/banksystem) · [Modrinth](https://modrinth.com/mod/kroia_banksystem)
 
 | Minecraft | Fabric | NeoForge |
 |---|---|---|
@@ -71,6 +75,8 @@ BankSystem needs [Architectury API](https://www.curseforge.com/minecraft/mc-mods
 | 1.21.3 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.3] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.3] |
 | 1.21.2 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.2] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.2] |
 | 1.21.1 | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-fabric-1.21.1] | [![v2.2.0](https://img.shields.io/badge/v2.2.0-green)][2.2.0-neoforge-1.21.1] |
+
+Release notes for every version: [changelog/](changelog/)
 
 <!-- Links to CurseForge -->
 [2.2.0-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/banksystem/files/9781819
