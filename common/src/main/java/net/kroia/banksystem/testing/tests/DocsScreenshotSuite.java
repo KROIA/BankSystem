@@ -358,7 +358,7 @@ public class DocsScreenshotSuite extends TestSuite {
         return UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
     }
 
-    private IAsyncBankAccount account(IAsyncBankManager bank, int number) {
+    IAsyncBankAccount account(IAsyncBankManager bank, int number) {
         IAsyncBankAccount account = await(bank.getBankAccountAsync(number), WAIT_MS);
         if (account == null) throw new IllegalStateException("no account " + number);
         return account;
@@ -409,7 +409,7 @@ public class DocsScreenshotSuite extends TestSuite {
     }
 
     /** Sets one bank's balance to {@code whole} items without a ledger row (the fixture writes its own history). */
-    private @Nullable String setBalance(IAsyncBankAccount account, ItemID item, long whole) {
+    @Nullable String setBalance(IAsyncBankAccount account, ItemID item, long whole) {
         IAsyncBank b = await(account.getOrCreateBankAsync(item), WAIT_MS);
         if (b == null) return "no bank for " + item + " in account " + account.getAccountNumberAsync();
         long raw = whole * scale();

@@ -41,6 +41,7 @@ public final class DevBootstrap {
                 // BS-288/BS-291: docs screenshots, on demand (--only banksystem/bs_docs_shots)
                 TestRegistry.register(new net.kroia.banksystem.testing.tests.DocsScreenshotSuite());
                 TestRegistry.register(new net.kroia.banksystem.testing.tests.DocsWorldShotsSuite());
+                TestRegistry.register(new net.kroia.banksystem.testing.tests.DocsCurrencyShotsSuite()); // needs Numismatics
             }
         }
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) ->
