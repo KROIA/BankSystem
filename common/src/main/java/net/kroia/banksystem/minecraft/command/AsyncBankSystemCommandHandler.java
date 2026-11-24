@@ -552,26 +552,41 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
         MinecraftServer server = UtilitiesPlatform.getServer();
         if(server == null)
             return CompletableFuture.completedFuture(false);
+        if(!MultiServerUtils.checkConnectionToMaster(executor))
+            return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        var infoFuture = ServerNetworkInfoRequest.sendRequest().thenApply(o -> {
-            if(o == null)
-                throw new IllegalStateException("null ARRS reply: server network info");
-            return o;
-        });
-        failInto(infoFuture, future, executor);
-        infoFuture.thenAccept(serverNetworkInfo -> {
-            StringBuilder builder = new StringBuilder();
-            builder.append("§8============================================\n");
-            List<ServerInfoRequest.ServerInfo> servers = serverNetworkInfo.servers();
-            for(int i = 0; i < servers.size(); i++)
+        // BS-292: admin check first; the master serves the request below as console (no player sent)
+        CompletableFuture<Boolean> isAdmin = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getAsync().isBanksystemAdminAsync(executor).thenApply(java.util.Objects::requireNonNull);
+        failInto(isAdmin, future, executor);
+        isAdmin.thenAccept(result -> {
+            if(!result)
             {
-                builder.append(servers.get(i));
-                if(i < servers.size()-1)
-                    builder.append("\n");
+                ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
+                if (player != null)
+                    player.sendSystemMessage(Component.literal(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE).withStyle(ChatFormatting.RED));
+                future.complete(false);
+                return;
             }
-            builder.append("\n§8============================================");
-            ServerPlayerUtilities.printToClientConsole(executor, builder.toString());
-            future.complete(true);
+            var infoFuture = ServerNetworkInfoRequest.sendRequest().thenApply(o -> {
+                if(o == null)
+                    throw new IllegalStateException("null ARRS reply: server network info");
+                return o;
+            });
+            failInto(infoFuture, future, executor);
+            infoFuture.thenAccept(serverNetworkInfo -> {
+                StringBuilder builder = new StringBuilder();
+                builder.append("§8============================================\n");
+                List<ServerInfoRequest.ServerInfo> servers = serverNetworkInfo.servers();
+                for(int i = 0; i < servers.size(); i++)
+                {
+                    builder.append(servers.get(i));
+                    if(i < servers.size()-1)
+                        builder.append("\n");
+                }
+                builder.append("\n§8============================================");
+                ServerPlayerUtilities.printToClientConsole(executor, builder.toString());
+                future.complete(true);
+            });
         });
         return future;
     }

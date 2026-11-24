@@ -294,6 +294,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public CompletableFuture<Boolean> banksystem_serverNetworkInfo_async(@NotNull UUID executor)
     {
+        if(!isPlayerAdmin(executor)) // BS-292: lists every server's address and players
+            return CompletableFuture.completedFuture(false);
         MinecraftServer server = UtilitiesPlatform.getServer();
         if(server == null)
             return CompletableFuture.completedFuture(false);
