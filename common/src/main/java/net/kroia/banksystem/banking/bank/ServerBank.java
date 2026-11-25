@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bank;
 
+import net.kroia.banksystem.util.ServerThread;
 import net.kroia.modutilities.NbtCompat;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -314,7 +315,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankData> getMinimalDataAsync() {
-        return CompletableFuture.completedFuture(getMinimalData());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getMinimalData());
+        });
     }
 
 
@@ -331,7 +334,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Long> getBalanceAsync() {
-        return CompletableFuture.completedFuture(getBalance());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBalance());
+        });
     }
 
 
@@ -347,7 +352,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Long> getLockedBalanceAsync() {
-        return CompletableFuture.completedFuture(getLockedBalance());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getLockedBalance());
+        });
     }
 
 
@@ -365,7 +372,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Long> getTotalBalanceAsync() {
-        return CompletableFuture.completedFuture(getTotalBalance());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getTotalBalance());
+        });
     }
 
 
@@ -378,7 +387,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Double> getRealBalanceAsync() {
-        return CompletableFuture.completedFuture(getRealBalance());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getRealBalance());
+        });
     }
 
 
@@ -389,7 +400,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Double> getRealLockedBalanceAsync() {
-        return CompletableFuture.completedFuture(getRealLockedBalance());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getRealLockedBalance());
+        });
     }
 
 
@@ -400,7 +413,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Double> getRealTotalBalanceAsync() {
-        return CompletableFuture.completedFuture(getRealTotalBalance());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getRealTotalBalance());
+        });
     }
 
 
@@ -429,7 +444,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getItemNameAsync()
     {
-        return CompletableFuture.completedFuture(getItemName());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getItemName());
+        });
     }
 
 
@@ -479,7 +496,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Boolean> setBalanceAsync(long balance) {
-        return CompletableFuture.completedFuture(setBalance(balance));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(setBalance(balance));
+        });
     }
 
 
@@ -490,7 +509,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Boolean> setRealBalanceAsync(double balance) {
-        return CompletableFuture.completedFuture(setRealBalance(balance));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(setRealBalance(balance));
+        });
     }
 
 
@@ -531,7 +552,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> depositAsync(long amount) {
-        return CompletableFuture.completedFuture(deposit(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(deposit(amount));
+        });
     }
 
 
@@ -542,7 +565,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> depositRealAsync(double amount) {
-        return CompletableFuture.completedFuture(depositReal(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(depositReal(amount));
+        });
     }
 
 
@@ -559,7 +584,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<Boolean> hasSufficientFundsAsync(long amount) {
-        return CompletableFuture.completedFuture(hasSufficientFunds(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(hasSufficientFunds(amount));
+        });
     }
 
 
@@ -602,7 +629,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> withdrawAsync(long amount) {
-        return CompletableFuture.completedFuture(withdraw(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(withdraw(amount));
+        });
     }
 
 
@@ -613,7 +642,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> withdrawRealAsync(double amount) {
-        return CompletableFuture.completedFuture(withdrawReal(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(withdrawReal(amount));
+        });
     }
 
 
@@ -653,7 +684,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> withdrawLockedAsync(long amount) {
-        return CompletableFuture.completedFuture(withdrawLocked(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(withdrawLocked(amount));
+        });
     }
 
 
@@ -665,7 +698,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> withdrawLockedRealAsync(double amount) {
-        return CompletableFuture.completedFuture(withdrawLockedReal(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(withdrawLockedReal(amount));
+        });
     }
 
 
@@ -723,7 +758,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> withdrawLockedPreferedAsync(long amount) {
-        return CompletableFuture.completedFuture(withdrawLockedPrefered(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(withdrawLockedPrefered(amount));
+        });
     }
 
 
@@ -734,7 +771,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> withdrawLockedPreferedRealAsync(double amount) {
-        return CompletableFuture.completedFuture(withdrawLockedPreferedReal(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(withdrawLockedPreferedReal(amount));
+        });
     }
 
 
@@ -838,7 +877,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     //}
     @Override
     public CompletableFuture<BankStatus> transferAsync(long amount, int toAccount) {
-        return CompletableFuture.completedFuture(transfer(amount, toAccount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(transfer(amount, toAccount));
+        });
     }
 
 
@@ -856,13 +897,15 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> transferRealAsync(double amount, int toAccount) {
-        IServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
-        if(account == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        ISyncServerBank bank = account.getBank(itemID);
-        if(bank == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        return CompletableFuture.completedFuture(transferReal(amount, bank));
+        return ServerThread.call(() -> {
+            IServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
+            if(account == null)
+                return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            ISyncServerBank bank = account.getBank(itemID);
+            if(bank == null)
+                return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            return CompletableFuture.completedFuture(transferReal(amount, bank));
+        });
     }
 
 
@@ -929,7 +972,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<BankStatus> transferFromLockedAsync(long amount, int toAccount)
     {
-        return CompletableFuture.completedFuture(transferFromLocked(amount, toAccount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(transferFromLocked(amount, toAccount));
+        });
     }
 
 
@@ -946,13 +991,15 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<BankStatus> transferFromLockedRealAsync(double amount, int toAccount)
     {
-        ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
-        if(account == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        ISyncServerBank bank = account.getBank(itemID);
-        if(bank == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        return CompletableFuture.completedFuture(transferFromLockedReal(amount, bank));
+        return ServerThread.call(() -> {
+            ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
+            if(account == null)
+                return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            ISyncServerBank bank = account.getBank(itemID);
+            if(bank == null)
+                return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            return CompletableFuture.completedFuture(transferFromLockedReal(amount, bank));
+        });
     }
 
 
@@ -1034,13 +1081,15 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<BankStatus> transferFromLockedPreferedAsync(long amount, int toAccount)
     {
-        ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
-        if(account == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        ISyncServerBank bank = account.getBank(itemID);
-        if(bank == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        return CompletableFuture.completedFuture(transferFromLockedPrefered(amount, bank));
+        return ServerThread.call(() -> {
+            ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
+            if(account == null)
+                return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            ISyncServerBank bank = account.getBank(itemID);
+            if(bank == null)
+                return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            return CompletableFuture.completedFuture(transferFromLockedPrefered(amount, bank));
+        });
     }
 
 
@@ -1057,13 +1106,15 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<BankStatus> transferFromLockedPreferedRealAsync(double amount, int toAccount)
     {
-        ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
-        if(account == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        ISyncServerBank bank = account.getBank(itemID);
-        if(bank == null)
-            return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
-        return CompletableFuture.completedFuture(transferFromLockedPreferedReal(amount, bank));
+        return ServerThread.call(() -> {
+            ISyncServerBankAccount account = BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().getBankAccount(toAccount);
+            if(account == null)
+                return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            ISyncServerBank bank = account.getBank(itemID);
+            if(bank == null)
+                return CompletableFuture.completedFuture(BankStatus.FAILED_NO_BANK);
+            return CompletableFuture.completedFuture(transferFromLockedPreferedReal(amount, bank));
+        });
     }
 
 
@@ -1108,7 +1159,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> lockAmountAsync(long amount) {
-        return CompletableFuture.completedFuture(lockAmount(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(lockAmount(amount));
+        });
     }
 
 
@@ -1120,7 +1173,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> lockAmountRealAsync(double amount) {
-        return CompletableFuture.completedFuture(lockAmountReal(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(lockAmountReal(amount));
+        });
     }
 
 
@@ -1172,7 +1227,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> unlockAmountAsync(long amount) {
-        return CompletableFuture.completedFuture(unlockAmount(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(unlockAmount(amount));
+        });
     }
 
 
@@ -1184,7 +1241,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     }
     @Override
     public CompletableFuture<BankStatus> unlockAmountRealAsync(double amount) {
-        return CompletableFuture.completedFuture(unlockAmountReal(amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(unlockAmountReal(amount));
+        });
     }
 
 
@@ -1253,7 +1312,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<Long> convertToRawAmountAsync(double realAmount)
     {
-        return CompletableFuture.completedFuture(convertToRawAmount(realAmount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(convertToRawAmount(realAmount));
+        });
     }
 
 
@@ -1267,7 +1328,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<Double> convertToRealAmountAsync(long rawAmount)
     {
-        return CompletableFuture.completedFuture(BankManager.convertToRealAmountStatic(rawAmount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(BankManager.convertToRealAmountStatic(rawAmount));
+        });
     }
 
 
@@ -1286,7 +1349,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getNormalizedBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getNormalizedAmount(getBalance()));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getNormalizedAmount(getBalance()));
+        });
     }
 
 
@@ -1300,7 +1365,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getNormalizedLockedBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getNormalizedAmount(getLockedBalance()));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getNormalizedAmount(getLockedBalance()));
+        });
     }
 
 
@@ -1314,7 +1381,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getNormalizedTotalBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getNormalizedAmount(getTotalBalance()));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getNormalizedAmount(getTotalBalance()));
+        });
     }
 
 
@@ -1329,7 +1398,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getFormattedBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getFormattedAmount(getBalance()));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getFormattedAmount(getBalance()));
+        });
     }
 
 
@@ -1343,7 +1414,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getFormattedLockedBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getFormattedAmount(getLockedBalance()));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getFormattedAmount(getLockedBalance()));
+        });
     }
 
 
@@ -1356,7 +1429,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getFormattedTotalBalanceAsync()
     {
-        return CompletableFuture.completedFuture(getFormattedAmount(getTotalBalance()));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getFormattedAmount(getTotalBalance()));
+        });
     }
 
 
@@ -1370,7 +1445,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getNormalizedAmountAsync(double realAmount)
     {
-        return CompletableFuture.completedFuture(getNormalizedAmountStatic(realAmount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getNormalizedAmountStatic(realAmount));
+        });
     }
 
 
@@ -1384,7 +1461,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getNormalizedAmountAsync(long rawAmount)
     {
-        return CompletableFuture.completedFuture(getNormalizedAmountStatic(rawAmount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getNormalizedAmountStatic(rawAmount));
+        });
     }
 
 
@@ -1399,7 +1478,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getFormattedAmountAsync(double realAmount)
     {
-        return CompletableFuture.completedFuture(getFormattedAmountStatic(realAmount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getFormattedAmountStatic(realAmount));
+        });
     }
 
 
@@ -1413,7 +1494,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> getFormattedAmountAsync(long rawAmount)
     {
-        return CompletableFuture.completedFuture(getFormattedAmountStatic(rawAmount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getFormattedAmountStatic(rawAmount));
+        });
     }
 
 
@@ -1428,7 +1511,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> toStringAsync()
     {
-        return CompletableFuture.completedFuture(toJsonString());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(toJsonString());
+        });
     }
 
     @Override
@@ -1449,7 +1534,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> toStringNoOwnerAsync()
     {
-        return CompletableFuture.completedFuture(toStringNoOwner());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(toStringNoOwner());
+        });
     }
 
 
@@ -1467,7 +1554,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<JsonElement> toJsonAsync()
     {
-        return CompletableFuture.completedFuture(toJson());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(toJson());
+        });
     }
 
 
@@ -1481,7 +1570,9 @@ public class ServerBank implements ServerSaveable, IServerBank {
     @Override
     public CompletableFuture<String> toJsonStringAsync()
     {
-        return CompletableFuture.completedFuture(JsonUtilities.toPrettyString(toJson()));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(JsonUtilities.toPrettyString(toJson()));
+        });
     }
 
 

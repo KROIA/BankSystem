@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bankmanager;
 
+import net.kroia.banksystem.util.ServerThread;
 import net.kroia.modutilities.NbtCompat;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -306,7 +307,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<BankManagerData> getBankManagerDataAsync() {
-        return CompletableFuture.completedFuture(getBankManagerData());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankManagerData());
+        });
     }
 
 
@@ -321,7 +324,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<BankManagerData.UserMapData> getBankManagerUserMapDataAsync() {
-        return CompletableFuture.completedFuture(getBankManagerUserMapData());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankManagerUserMapData());
+        });
     }
 
 
@@ -336,7 +341,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<BankManagerData.BankAccountsData> getBankManagerBankAccountsDataAsync() {
-        return CompletableFuture.completedFuture(getBankManagerBankAccountsData());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankManagerBankAccountsData());
+        });
     }
 
     @Override
@@ -355,7 +362,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<Boolean> setBanksystemAdminModeAsync(UUID playerUUID, boolean isAdmin) {
-        return CompletableFuture.completedFuture(setBanksystemAdminMode(playerUUID, isAdmin));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(setBanksystemAdminMode(playerUUID, isAdmin));
+        });
     }
 
     @Override
@@ -390,10 +399,12 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Boolean> isBanksystemAdminAsync(UUID playerUUID) {
-        User user = userMap.get(playerUUID);
-        if (user == null)
-            return CompletableFuture.completedFuture(false);
-        return CompletableFuture.completedFuture(user.isBanksystemAdmin());
+        return ServerThread.call(() -> {
+            User user = userMap.get(playerUUID);
+            if (user == null)
+                return CompletableFuture.completedFuture(false);
+            return CompletableFuture.completedFuture(user.isBanksystemAdmin());
+        });
     }
 
 
@@ -406,7 +417,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<Boolean> isSlaveServerTrustedAsync(String slaveID)
     {
-        return CompletableFuture.completedFuture(isSlaveServerTrusted(slaveID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(isSlaveServerTrusted(slaveID));
+        });
     }
 
 
@@ -457,7 +470,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<List<ItemID>> getAllowedItemsAsync() {
-        return CompletableFuture.completedFuture(getAllowedItems());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getAllowedItems());
+        });
     }
 
 
@@ -475,7 +490,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<List<ItemID>> getBlacklistedItemsAsync() {
-        return CompletableFuture.completedFuture(getBlacklistedItems());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBlacklistedItems());
+        });
     }
 
     /**
@@ -531,7 +548,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<ItemInfoData> getItemInfoDataAsync(@NotNull ItemID itemID) {
-        return CompletableFuture.completedFuture(getItemInfoData(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getItemInfoData(itemID));
+        });
     }
 
     @Override
@@ -962,7 +981,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<Boolean> removeUserAsync(UUID userUUID) {
-        return CompletableFuture.completedFuture(removeUser(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(removeUser(userUUID));
+        });
     }
 
 
@@ -987,7 +1008,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<Boolean> userExistsAsync(UUID userUUID) {
-        return CompletableFuture.completedFuture(userExists(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(userExists(userUUID));
+        });
     }
 
     @Override
@@ -997,7 +1020,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<@Nullable User> getUserByUUIDAsync(UUID userUUID) {
-        return CompletableFuture.completedFuture(getUserByUUID(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getUserByUUID(userUUID));
+        });
     }
 
     @Override
@@ -1013,7 +1038,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<@Nullable User> getUserByNameAsync(String name) {
-        return CompletableFuture.completedFuture(getUserByName(name));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getUserByName(name));
+        });
     }
 
 
@@ -1030,7 +1057,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<Boolean> isAccountFrozenAsync(int accountNumber) {
-        return CompletableFuture.completedFuture(isAccountFrozen(accountNumber));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(isAccountFrozen(accountNumber));
+        });
     }
 
     @Override
@@ -1054,7 +1083,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
 
     @Override
     public CompletableFuture<Boolean> bankAccountExistsAsync(int accountNumber) {
-        return CompletableFuture.completedFuture(bankAccounts.containsKey(accountNumber));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(bankAccounts.containsKey(accountNumber));
+        });
     }
 
 
@@ -1067,7 +1098,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Boolean> bankAccountHasBankAsync(int accountNumber, ItemID itemID) {
-        return CompletableFuture.completedFuture(bankAccountHasBank(accountNumber, itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(bankAccountHasBank(accountNumber, itemID));
+        });
     }
 
 
@@ -1084,7 +1117,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<@Nullable BankAccountData> getBankAccountDataAsync(int accountNumber)
     {
-        return CompletableFuture.completedFuture(getBankAccountData(accountNumber));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankAccountData(accountNumber));
+        });
     }
 
 
@@ -1098,7 +1133,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> createPersonalBankAccountAsync(UUID user) {
-        return CompletableFuture.completedFuture(createPersonalBankAccount_internal(user));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(createPersonalBankAccount_internal(user));
+        });
     }
 
 
@@ -1115,7 +1152,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<Integer> createPersonalBankAccountGetAccountNrAsync(UUID user)
     {
-        return CompletableFuture.completedFuture(createPersonalBankAccountGetAccountNr(user));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(createPersonalBankAccountGetAccountNr(user));
+        });
     }
 
 
@@ -1133,7 +1172,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<Integer> createPersonalBankAccountGetAccountNrAsync(String userName)
     {
-        return CompletableFuture.completedFuture(createPersonalBankAccountGetAccountNr(userName));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(createPersonalBankAccountGetAccountNr(userName));
+        });
     }
 
 
@@ -1151,7 +1192,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<Integer> getPersonalBankAccountNrAsync(UUID user)
     {
-        return CompletableFuture.completedFuture(getPersonalBankAccountNr(user));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getPersonalBankAccountNr(user));
+        });
     }
     @Override
     public int getPersonalBankAccountNr(String userName)
@@ -1164,7 +1207,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<Integer> getPersonalBankAccountNrAsync(String userName)
     {
-        return CompletableFuture.completedFuture(getPersonalBankAccountNr(userName));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getPersonalBankAccountNr(userName));
+        });
     }
 
 
@@ -1202,36 +1247,23 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> createBankAccountAsync(String accountName) {
-        if(accountName == null || accountName.isEmpty()) {
-            accountName = "Unnamed Account";
-        }
-        int accountNumber = generateNewAccountNumber();
-        ServerBankAccount account = ServerBankAccount.create(accountNumber);
-        if(account == null)
-        {
-            warn("Failed to create bank account with number: " + accountNumber);
-            return CompletableFuture.completedFuture(null);
-        }
-        account.setAccountName(accountName);
-        account.setAccountIcon(ItemIDManager.registerItemStackServerSide_direct(Items.CHEST.getDefaultInstance()));
-        bankAccounts.put(accountNumber, account);
-        markPersistDirty(); // Task #55 (new account + advanced nextAccountNumber)
-        info("Created new bank account with number: " + accountNumber + " and name: " + account.getAccountName());
-        return CompletableFuture.completedFuture(account);
+        return ServerThread.call(() -> CompletableFuture.completedFuture(createBankAccount(accountName)));
     }
     @Override
     public CompletableFuture<Integer> createBankAccountGetAccountNrAsync(String accountName)
     {
-        CompletableFuture<Integer> future = new CompletableFuture<>();
-        CompletableFuture<@Nullable IAsyncBankAccount>  futureAccount = createBankAccountAsync(accountName);
-        futureAccount.thenAccept(account -> {
-            if(account == null) {
-                future.complete(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
-            }
-            else
-                future.complete(account.getAccountNumberAsync());
+        return ServerThread.call(() -> {
+            CompletableFuture<Integer> future = new CompletableFuture<>();
+            CompletableFuture<@Nullable IAsyncBankAccount>  futureAccount = createBankAccountAsync(accountName);
+            futureAccount.thenAccept(account -> {
+                if(account == null) {
+                    future.complete(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
+                }
+                else
+                    future.complete(account.getAccountNumberAsync());
+            });
+            return future;
         });
-        return future;
     }
 
     @Override
@@ -1241,7 +1273,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountAsync(int accountNumber) {
-        return CompletableFuture.completedFuture(bankAccounts.get(accountNumber));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(bankAccounts.get(accountNumber));
+        });
     }
 
 
@@ -1260,14 +1294,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(UUID userUUID) {
-        List<IAsyncBankAccount> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
-            ServerBankAccount account = entry.getValue();
-            if(account.hasUser(userUUID)) {
-                accounts.add(account); // Add the account if the user is a member
+        return ServerThread.call(() -> {
+            List<IAsyncBankAccount> accounts = new ArrayList<>();
+            for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+                ServerBankAccount account = entry.getValue();
+                if(account.hasUser(userUUID)) {
+                    accounts.add(account); // Add the account if the user is a member
+                }
             }
-        }
-        return CompletableFuture.completedFuture(accounts); // Return all accounts the user is a member of
+            return CompletableFuture.completedFuture(accounts); // Return all accounts the user is a member of
+        });
     }
 
 
@@ -1288,18 +1324,22 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getBankAccountByNameAsync(String accountName)
     {
-        return CompletableFuture.completedFuture(getBankAccountByName(accountName));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankAccountByName(accountName));
+        });
     }
     @Override
     public CompletableFuture<Integer> getBankAccountNrByNameAsync(String accountName)
     {
-        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
-            ServerBankAccount account = entry.getValue();
-            if(account.getAccountName().equals(accountName)) {
-                return CompletableFuture.completedFuture(entry.getKey());
+        return ServerThread.call(() -> {
+            for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+                ServerBankAccount account = entry.getValue();
+                if(account.getAccountName().equals(accountName)) {
+                    return CompletableFuture.completedFuture(entry.getKey());
+                }
             }
-        }
-        return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
+            return CompletableFuture.completedFuture(ServerBankAccount.INVALID_ACCOUNT_NUMBER);
+        });
     }
 
 
@@ -1319,7 +1359,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<List<Integer>> getBankAccountNumbersAsync(UUID userUUID)
     {
-        return CompletableFuture.completedFuture(getBankAccountNumbers(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankAccountNumbers(userUUID));
+        });
     }
 
     @Override
@@ -1356,7 +1398,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<List<Integer>> getBankAccountNumbersAsync(ItemID itemID)
     {
-        return CompletableFuture.completedFuture(getBankAccountNumbers(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankAccountNumbers(itemID));
+        });
     }
 
     /**
@@ -1399,7 +1443,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(UUID userUUID)
     {
-        return CompletableFuture.completedFuture(getBankAccountsData(userUUID)); // Return all accounts the user is a member of
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankAccountsData(userUUID)); // Return all accounts the user is a member of
+        });
     }
 
 
@@ -1419,14 +1465,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<List<IAsyncBankAccount>> getBankAccountsAsync(ItemID itemID) {
-        List<IAsyncBankAccount> accounts = new ArrayList<>();
-        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
-            ServerBankAccount account = entry.getValue();
-            if(account.hasBank(itemID)) {
-                accounts.add(account); // Add the account if it has the bank for the given itemID
+        return ServerThread.call(() -> {
+            List<IAsyncBankAccount> accounts = new ArrayList<>();
+            for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+                ServerBankAccount account = entry.getValue();
+                if(account.hasBank(itemID)) {
+                    accounts.add(account); // Add the account if it has the bank for the given itemID
+                }
             }
-        }
-        return CompletableFuture.completedFuture(accounts); // Return all accounts that have a bank for the given itemID
+            return CompletableFuture.completedFuture(accounts); // Return all accounts that have a bank for the given itemID
+        });
     }
 
 
@@ -1448,7 +1496,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<List<BankAccountData>> getBankAccountsDataAsync(ItemID itemID)
     {
-        return CompletableFuture.completedFuture(getBankAccountsData(itemID)); // Return all accounts that have a bank for the given itemID
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankAccountsData(itemID)); // Return all accounts that have a bank for the given itemID
+        });
     }
 
 
@@ -1462,14 +1512,16 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(UUID userUUID) {
-        for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
-            ServerBankAccount account = entry.getValue();
-            User creator = account.getPersonalBankOwner();
-            if(creator != null && creator.getUUID().equals(userUUID)) {
-                return CompletableFuture.completedFuture(account); // Found the personal bank account
+        return ServerThread.call(() -> {
+            for(Map.Entry<Integer, ServerBankAccount> entry : bankAccounts.entrySet()) {
+                ServerBankAccount account = entry.getValue();
+                User creator = account.getPersonalBankOwner();
+                if(creator != null && creator.getUUID().equals(userUUID)) {
+                    return CompletableFuture.completedFuture(account); // Found the personal bank account
+                }
             }
-        }
-        return CompletableFuture.completedFuture(null); // No personal bank account found for this user
+            return CompletableFuture.completedFuture(null); // No personal bank account found for this user
+        });
     }
 
 
@@ -1490,7 +1542,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(UUID userUUID)
     {
-        return CompletableFuture.completedFuture(getPersonalBankAccountData(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getPersonalBankAccountData(userUUID));
+        });
     }
 
 
@@ -1503,7 +1557,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getPersonalBankAccountAsync(String userName) {
-        return CompletableFuture.completedFuture(getPersonalBankAccount_internal(userName));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getPersonalBankAccount_internal(userName));
+        });
     }
 
 
@@ -1522,18 +1578,20 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<@Nullable BankAccountData> getPersonalBankAccountDataAsync(String userName)
     {
-        User user = getUserByName(userName);
-        if(user == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-        else
-        {
-            @Nullable ISyncServerBankAccount  account = getPersonalBankAccount(user.getUUID());
-            if(account == null) {
+        return ServerThread.call(() -> {
+            User user = getUserByName(userName);
+            if(user == null) {
                 return CompletableFuture.completedFuture(null);
             }
-            return CompletableFuture.completedFuture(account.getAccountData());
-        }
+            else
+            {
+                @Nullable ISyncServerBankAccount  account = getPersonalBankAccount(user.getUUID());
+                if(account == null) {
+                    return CompletableFuture.completedFuture(null);
+                }
+                return CompletableFuture.completedFuture(account.getAccountData());
+            }
+        });
     }
 
 
@@ -1546,8 +1604,10 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(UUID userUUID) {
-        IServerBankAccount account = getOrCreatePersonalBankAccount_internal(userUUID);
-        return CompletableFuture.completedFuture(account);
+        return ServerThread.call(() -> {
+            IServerBankAccount account = getOrCreatePersonalBankAccount_internal(userUUID);
+            return CompletableFuture.completedFuture(account);
+        });
     }
 
 
@@ -1564,11 +1624,13 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBankAccount> getOrCreatePersonalBankAccountAsync(@NotNull String userName) {
-        User user = getUserByName(userName);
-        if(user == null)
-            return CompletableFuture.completedFuture(null);
-        else
-            return getOrCreatePersonalBankAccountAsync(user.getUUID());
+        return ServerThread.call(() -> {
+            User user = getUserByName(userName);
+            if(user == null)
+                return CompletableFuture.completedFuture(null);
+            else
+                return getOrCreatePersonalBankAccountAsync(user.getUUID());
+        });
     }
     @Override
     public boolean userHasPersonalBankAccount(UUID userUUID)
@@ -1584,7 +1646,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Boolean> userHasPersonalBankAccountAsync(UUID userUUID) {
-        return CompletableFuture.completedFuture(userHasPersonalBankAccount(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(userHasPersonalBankAccount(userUUID));
+        });
     }
 
     @Override
@@ -1649,7 +1713,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Boolean> deleteBankAccountAsync(int accountNumber) {
-        return CompletableFuture.completedFuture(deleteBankAccount(accountNumber));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(deleteBankAccount(accountNumber));
+        });
     }
 
 
@@ -1663,7 +1729,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<Boolean> personalBankExistsAsync(UUID owner, ItemID itemID)
     {
-        return CompletableFuture.completedFuture(personalBankExists(owner, itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(personalBankExists(owner, itemID));
+        });
     }
 
 
@@ -1677,7 +1745,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<Boolean> personalBankExistsAsync(String ownerName, ItemID itemID)
     {
-        return CompletableFuture.completedFuture(personalBankExists(ownerName, itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(personalBankExists(ownerName, itemID));
+        });
     }
 
 
@@ -1696,7 +1766,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getPersonalBankAsync(UUID owner, ItemID itemID) {
-        return CompletableFuture.completedFuture(getPersonalBank(owner, itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getPersonalBank(owner, itemID));
+        });
     }
 
 
@@ -1721,7 +1793,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getPersonalBankAsync(String ownerName, ItemID itemID) {
-        return CompletableFuture.completedFuture(getPersonalBank(ownerName, itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getPersonalBank(ownerName, itemID));
+        });
     }
 
 
@@ -1750,7 +1824,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(UUID owner, ItemID itemID) {
-        return CompletableFuture.completedFuture(getOrCreatePersonalBank(owner, itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getOrCreatePersonalBank(owner, itemID));
+        });
     }
 
 
@@ -1773,7 +1849,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreatePersonalBankAsync(String ownerName, ItemID itemID) {
-        return CompletableFuture.completedFuture(getOrCreatePersonalBank(ownerName, itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getOrCreatePersonalBank(ownerName, itemID));
+        });
     }
 
 
@@ -1807,7 +1885,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Boolean> isItemIDAllowedAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(isItemIDAllowed(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(isItemIDAllowed(itemID));
+        });
     }
 
     @Override
@@ -1855,7 +1935,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Boolean> allowItemIDAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(allowItemID(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(allowItemID(itemID));
+        });
     }
 
     // No refund on disallow — multi-server item mapping makes refunds unreliable; admin responsibility
@@ -1939,7 +2021,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Boolean> disallowItemIDAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(disallowItemID(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(disallowItemID(itemID));
+        });
     }
 
     @Override
@@ -1974,7 +2058,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Boolean> isItemIDBlacklistedAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(isItemIDBlacklisted(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(isItemIDBlacklisted(itemID));
+        });
     }
 
 
@@ -1987,7 +2073,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     @Override
     public CompletableFuture<Integer> getItemFractionScaleFactorAsync()
     {
-        return CompletableFuture.completedFuture(getItemFractionScaleFactor());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getItemFractionScaleFactor());
+        });
     }
 
 
@@ -2012,7 +2100,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Double> getRealMoneyCirculationAsync() {
-        return CompletableFuture.completedFuture(getRealMoneyCirculation());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getRealMoneyCirculation());
+        });
     }
 
     @Override
@@ -2031,7 +2121,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Double> getRealLockedMoneyCirculationAsync() {
-        return CompletableFuture.completedFuture(getRealLockedMoneyCirculation());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getRealLockedMoneyCirculation());
+        });
     }
 
     @Override
@@ -2048,7 +2140,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Double> getRealItemCirculationAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(getRealItemCirculation(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getRealItemCirculation(itemID));
+        });
     }
 
     @Override
@@ -2065,7 +2159,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<Double> getRealLockedItemCirculationAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(getRealLockedItemCirculation(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getRealLockedItemCirculation(itemID));
+        });
     }
 
     @Override
@@ -2108,7 +2204,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<JsonElement> getCirculationDataJsonAsync() {
-        return CompletableFuture.completedFuture(getCirculationDataJson());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getCirculationDataJson());
+        });
     }
 
     @Override
@@ -2119,7 +2217,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<String> getCirculationDataJsonStringAsync() {
-        return CompletableFuture.completedFuture(getCirculationDataJsonString());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getCirculationDataJsonString());
+        });
     }
 
 
@@ -2163,7 +2263,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<JsonElement> toJsonAsync() {
-        return CompletableFuture.completedFuture(toJson());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(toJson());
+        });
     }
 
 
@@ -2177,7 +2279,9 @@ public class ServerBankManager implements ServerSaveableChunked, IServerBankMana
     }
     @Override
     public CompletableFuture<String> toJsonStringAsync() {
-        return CompletableFuture.completedFuture(toJsonString());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(toJsonString());
+        });
     }
 
 
