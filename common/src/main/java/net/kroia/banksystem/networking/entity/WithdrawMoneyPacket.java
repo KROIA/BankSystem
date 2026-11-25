@@ -181,8 +181,7 @@ public class WithdrawMoneyPacket extends BankSystemNetworkPacket {
         {
             warn("The slave server: '" + slaveID + "' tried to withdraw money, which is not allowed for an untrusted slave server!");
             // Stays master-local on purpose: the slave shows its own untrusted line (routeToMaster, BS-272), so the player sees it once.
-            ServerPlayerUtilities.printToClientConsole(player, "[BankSystem] Your server '" + slaveID + "' is not trusted by the bank master. "
-                    + "Contact a bank admin to grant trust for cross-server bank operations.");
+            ServerPlayerUtilities.printToClientConsole(player, net.kroia.banksystem.util.BankSystemTextMessages.getSlaveNotTrustedForWithdrawMessage(slaveID));
             return;
         }
         final int finalCurrentSelectedAccountNumber = currentSelectedAccountNumber;
