@@ -19,6 +19,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -974,6 +975,13 @@ public class ItemIDManager implements ServerSaveable {
 
     public static List<ItemID> registerItemStackServerSide_direct(List<ItemStack> itemStacks)
     {
+        return registerItemStackServerSide_direct(itemStacks, null);
+    }
+
+    /** @param byItem BS-286: per-Item view of {@link #itemIDMap} kept in step here, see {@link #getItemID(ItemStack, Map)}; or {@code null} */
+    private static List<ItemID> registerItemStackServerSide_direct(List<ItemStack> itemStacks,
+                                                                   @Nullable Map<Item, List<Map.Entry<ItemID, ItemStack>>> byItem)
+    {
         // Task #23: on the slave, minting is delegated to the master via an ARRS round-trip.
         // The slave-branch is a pure lookup-or-delegate — no fresh shorts are ever allocated
         // locally, guaranteeing zero cross-server ID divergence (Acceptance Criterion A).
@@ -985,7 +993,7 @@ public class ItemIDManager implements ServerSaveable {
         synchronized (itemIDMap) {
             for (ItemStack stack : itemStacks) {
                 // Search the entire list to check if the same item stack already is registered
-                ItemID id = getItemID(stack);
+                ItemID id = getItemID(stack, byItem);
                 if (id != null && id.isValid()) {
                     ids.add(id);
                     continue;
@@ -1083,6 +1091,8 @@ public class ItemIDManager implements ServerSaveable {
                 cpy.setCount(1);
                 newItemIDMap.put(id, cpy);
                 itemIDMap.put(id, cpy);
+                if (byItem != null)
+                    byItem.computeIfAbsent(cpy.getItem(), k -> new ArrayList<>()).add(Map.entry(id, cpy));
                 ids.add(id);
             }
         }
@@ -1418,12 +1428,26 @@ public class ItemIDManager implements ServerSaveable {
      */
     public static @NotNull ItemID getItemID(@NotNull ItemStack itemStack)
     {
+        return getItemID(itemStack, null);
+    }
+
+    /**
+     * @param byItem BS-286: per-Item view of {@link #itemIDMap} (see {@link #createDefaultItemIDs()}),
+     *               or {@code null} to scan the whole map. Same result: only entries of the
+     *               query's Item can match either compare below.
+     */
+    private static @NotNull ItemID getItemID(@NotNull ItemStack itemStack,
+                                             @Nullable Map<Item, List<Map.Entry<ItemID, ItemStack>>> byItem)
+    {
         // Normalize into a working copy: never mutate the caller's stack
         // (the previous implementation temporarily changed its count).
         ItemStack query = VolatileItemComponents.normalize(itemStack);
         query.setCount(1);
+        Iterable<Map.Entry<ItemID, ItemStack>> entries = byItem != null
+                ? byItem.getOrDefault(query.getItem(), List.of())
+                : itemIDMap.entrySet();
         // Fast path: exact component comparison (works for items without registry-backed holders)
-        for(Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet())
+        for(Map.Entry<ItemID, ItemStack> entry : entries)
         {
             if(ItemStack.isSameItemSameComponents(query, entry.getValue()))
             {
@@ -1436,9 +1460,16 @@ public class ItemIDManager implements ServerSaveable {
         RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
         if (access != null) {
             try {
-                Tag searchTag = ItemStackNbt.save(query, access);
-                for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
+                Tag searchTag = null;
+                for (Map.Entry<ItemID, ItemStack> entry : entries) {
+                    // BS-286: the tag carries the item id, so another Item never matches. Skipping
+                    // it keeps a miss from NBT-saving every registered item (quadratic server start).
+                    if (!query.is(entry.getValue().getItem()))
+                        continue;
+                    if (searchTag == null)
+                        searchTag = ItemStackNbt.save(query, access);
                     try {
+                        lookupTemplateSaves.incrementAndGet();
                         Tag existingTag = ItemStackNbt.save(entry.getValue(), access);
                         if (searchTag.equals(existingTag)) {
                             return entry.getKey();
@@ -1448,6 +1479,14 @@ public class ItemIDManager implements ServerSaveable {
             } catch (Exception ignored) {}
         }
         return ItemID.INVALID_ID;
+    }
+
+    /** BS-286: registered templates NBT-saved by lookups, for the test that keeps lookups from going quadratic. */
+    private static final java.util.concurrent.atomic.AtomicLong lookupTemplateSaves = new java.util.concurrent.atomic.AtomicLong();
+
+    public static long getLookupTemplateSaves_forTesting()
+    {
+        return lookupTemplateSaves.get();
     }
 
     /*private static @NotNull ItemID generateIdFromItemStack(@NotNull ItemStack itemStack)
@@ -3790,21 +3829,30 @@ public class ItemIDManager implements ServerSaveable {
         access.lookupOrThrow(Registries.ITEM).listElements()
                 .forEach(listElement -> registryItems.add(listElement.value().getDefaultInstance()));
         Progress progress = new Progress("Registering default item IDs", moneyItems.size() + registryItems.size());
-        int sizeBefore = itemIDMap.size();
+        // BS-286: lookups only compare entries of the same Item (see getItemID), so index them by
+        // Item once instead of scanning the whole map per item: linear instead of quadratic on
+        // big mod packs. The lock for the whole pass keeps the index in step with itemIDMap; the
+        // only mutation in here is registerItemStackServerSide_direct's put, which adds to it.
+        synchronized (itemIDMap) {
+            int sizeBefore = itemIDMap.size();
+            Map<Item, List<Map.Entry<ItemID, ItemStack>>> byItem = new HashMap<>();
+            for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet())
+                byItem.computeIfAbsent(entry.getValue().getItem(), k -> new ArrayList<>()).add(Map.entry(entry.getKey(), entry.getValue()));
 
-        for(ItemStack itemStack : moneyItems)
-        {
-            registerItemStackServerSide_direct(itemStack);
-            progress.step(itemIDMap.size() - sizeBefore);
-        }
-        MoneyItem.resetItemID();
+            for(ItemStack itemStack : moneyItems)
+            {
+                registerItemStackServerSide_direct(List.of(itemStack), byItem);
+                progress.step(itemIDMap.size() - sizeBefore);
+            }
+            MoneyItem.resetItemID();
 
-        for(ItemStack itemStack : registryItems)
-        {
-            registerItemStackServerSide_direct(itemStack);
-            progress.step(itemIDMap.size() - sizeBefore);
+            for(ItemStack itemStack : registryItems)
+            {
+                registerItemStackServerSide_direct(List.of(itemStack), byItem);
+                progress.step(itemIDMap.size() - sizeBefore);
+            }
+            progress.done(itemIDMap.size() - sizeBefore);
         }
-        progress.done(itemIDMap.size() - sizeBefore);
     }
 
     /**
