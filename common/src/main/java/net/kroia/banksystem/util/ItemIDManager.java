@@ -195,6 +195,12 @@ public class ItemIDManager implements ServerSaveable {
     private static ConcurrentHashMap<ItemID, CompoundTag> singlePlayerServerUnresolvedBackupOnPlayerLeave = null;
     /** BS-195: ItemIDs removed by the last load's confirmed missing-mod recovery (empty otherwise). */
     private static volatile Set<ItemID> lastRemovedMissing = Set.of();
+    /**
+     * BS-309: shorts whose saved item was renamed by the last load's upgrade (e.g. Minecraft's
+     * DataFixer turning {@code minecraft:chain} into {@code minecraft:iron_chain}), short → "old -> new".
+     * The renumbering tripwire skips exactly these renames; the item behind the short is unchanged.
+     */
+    private static final ConcurrentHashMap<Short, String> renamedByUpdate = new ConcurrentHashMap<>();
 
     /**
      * Session-scoped dedup guard for the Task #25 "unresolvable sync entry" INFO log.
@@ -338,6 +344,7 @@ public class ItemIDManager implements ServerSaveable {
         pendingMergeConsolidation.clear();
         // Provenance tracking: the next load() re-records which shorts came from disk.
         persistedShorts.clear();
+        renamedByUpdate.clear();
         // Task #25 dedup guard: a rejoin against a possibly-different master gets a
         // fresh log budget; without this, the second session on the same JVM would
         // silently skip "still unresolvable" INFO lines.
@@ -2077,6 +2084,7 @@ public class ItemIDManager implements ServerSaveable {
         persistedShorts.clear();
         unresolvedEntries.clear();
         lastRemovedMissing = Set.of();
+        renamedByUpdate.clear();
 
         RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
         if(access == null)
@@ -2130,6 +2138,10 @@ public class ItemIDManager implements ServerSaveable {
             // migrates worlds saved before volatile-component normalization existed).
             ItemStack itemStack = itemStackOptional.get();
             itemStack.setCount(1);
+            String savedName = NbtCompat.getString(itemStackTag, "id");
+            String loadedName = ItemUtilities.getItemIDStr(itemStack.getItem());
+            if (!savedName.isEmpty() && !savedName.equals(loadedName))
+                noteRenamedByUpdate(id, savedName, loadedName);
 
             // Stale-key hardening (Task #16 Fix C): ConcurrentHashMap.put() replaces the
             // VALUE but RETAINS a pre-existing KEY object. A key minted before this load
@@ -2522,6 +2534,7 @@ public class ItemIDManager implements ServerSaveable {
             // A fixture's unresolved raw entries must never reach the live world's next save.
             unresolvedEntries.clear();
             lastRemovedMissing = Set.of();
+            renamedByUpdate.clear();
         }
     }
 
@@ -3136,12 +3149,26 @@ public class ItemIDManager implements ServerSaveable {
             if (liveTemplate.isEmpty())
                 continue; // dropped entry — covered by the load()-time drop WARN
             String liveName = ItemUtilities.getItemIDStr(liveTemplate.getItem());
+            if ((previousName + " -> " + liveName).equals(renamedByUpdate.get(shortValue)))
+                continue; // BS-309: renamed by an update in this load, same item behind the short
             if (!previousName.equals(liveName)) {
                 mismatches.add("#" + Short.toUnsignedInt(shortValue) + ": was " + previousName
                         + " last session, now resolves to " + liveName);
             }
         }
         return mismatches;
+    }
+
+    /**
+     * BS-309: records that the saved item behind {@code id} was renamed while this load upgraded it,
+     * and logs it at INFO. {@link #diffShortNameDigest(ListTag)} then skips exactly this rename;
+     * any other change of the short's item is still reported.
+     */
+    public static void noteRenamedByUpdate(ItemID id, String previousName, String currentName) {
+        renamedByUpdate.put(id.getShort(), previousName + " -> " + currentName);
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+            BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] renamed by a Minecraft update: " + previousName
+                    + " -> " + currentName + " (#" + Short.toUnsignedInt(id.getShort()) + ")");
     }
 
     /**
