@@ -12,7 +12,7 @@ public final class BankSystemMod {
         //return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(MOD_ID, path); // mc<=1.21.10
         return net.minecraft.resources.Identifier.fromNamespaceAndPath(MOD_ID, path); // mc>=1.21.11
     }
-    public static final String VERSION = "2.2.0";
+    public static final String VERSION = "2.2.1";
 
     // Dev-only code (unit tests, test commands) is switched by enable_dev_features in gradle.properties:
     // Gradle compiles the testing package only when it is true, and this flag follows from its presence.
