@@ -53,6 +53,75 @@ public class ItemIDMissingModTests extends TestSuite {
         addTest("missing_mod_entries_refuse_load_and_survive_save", () -> run(Mode.REFUSE));
         addTest("missing_mod_refusal_lists_namespaces_with_counts", () -> run(Mode.REFUSE_MESSAGE));
         addTest("missing_mod_recovery_removes_entries_and_balances", () -> run(Mode.RECOVER));
+        addTest("items_saved_by_older_minecraft_are_upgraded", this::olderMinecraftItemsUpgrade);
+    }
+
+    /** Sharpness level of a stored-enchantments book, or -1 when it has another or more than one. */
+    private static int storedSharpness(ItemStack book) {
+        var stored = book.get(net.minecraft.core.component.DataComponents.STORED_ENCHANTMENTS);
+        if (stored == null || stored.size() != 1)
+            return -1;
+        var e = stored.entrySet().iterator().next();
+        return e.getKey().is(net.minecraft.world.item.enchantment.Enchantments.SHARPNESS) ? e.getIntValue() : -1;
+    }
+
+    /**
+     * BS-308: saved templates go through Minecraft's DataFixer from the data version they were written in, so a
+     * world moved to a newer Minecraft keeps renamed items (chain) and items whose component format changed
+     * (enchanted books); save() stamps the current data version.
+     */
+    private TestResult olderMinecraftItemsUpgrade() {
+        var reg = UtilitiesPlatform.getRegistryAccessServerSide();
+        if (reg == null)
+            return skip("no server-side RegistryAccess");
+        String bookId = net.kroia.modutilities.ItemUtilities.getItemIDStr(Items.ENCHANTED_BOOK);
+
+        // A 1.20.4 book (data version 3700, item NBT before components): only the DataFixer can read it.
+        CompoundTag sharp = new CompoundTag();
+        sharp.putString("id", "minecraft:sharpness");
+        sharp.putShort("lvl", (short) 5);
+        ListTag storedList = new ListTag();
+        storedList.add(sharp);
+        CompoundTag oldTag = new CompoundTag();
+        oldTag.put("StoredEnchantments", storedList);
+        CompoundTag old = new CompoundTag();
+        old.putString("id", "minecraft:enchanted_book");
+        old.putByte("Count", (byte) 1);
+        old.put("tag", oldTag);
+        var upgraded = ItemIDManager.decodeSavedStack(reg, old, 3700);
+        TestResult r = assertTrue("1.20.4 book decodes after the upgrade", upgraded.isPresent());
+        if (!r.passed()) return r;
+        r = assertEquals("upgraded item", bookId, net.kroia.modutilities.ItemUtilities.getItemIDStr(upgraded.get().getItem()));
+        if (!r.passed()) return r;
+        r = assertEquals("upgraded book keeps Sharpness V", 5, storedSharpness(upgraded.get()));
+        if (!r.passed()) return r;
+
+        // Unstamped 2.2.0/2.2.1 save of unknown source: 1.21.1 tags must load on every version (on newer
+        // ones through the 1.21.1 upgrade: chain was renamed, the book's enchantment format changed).
+        CompoundTag levels = new CompoundTag();
+        levels.putInt("minecraft:sharpness", 5);
+        CompoundTag stored = new CompoundTag();
+        stored.put("levels", levels);
+        CompoundTag components = new CompoundTag();
+        components.put("minecraft:stored_enchantments", stored);
+        CompoundTag book121 = stack("minecraft:enchanted_book");
+        book121.put("components", components);
+        var book = ItemIDManager.decodeSavedStack(reg, book121, ItemIDManager.UNKNOWN_SOURCE_DATA_VERSION);
+        r = assertTrue("1.21.1 book of unknown source decodes", book.isPresent());
+        if (!r.passed()) return r;
+        r = assertEquals("1.21.1 book keeps Sharpness V", 5, storedSharpness(book.get()));
+        if (!r.passed()) return r;
+        r = assertTrue("1.21.1 chain of unknown source decodes",
+                ItemIDManager.decodeSavedStack(reg, stack("minecraft:chain"), ItemIDManager.UNKNOWN_SOURCE_DATA_VERSION).isPresent());
+        if (!r.passed()) return r;
+
+        CompoundTag file = new CompoundTag();
+        if (!new ItemIDManager().save(file))
+            return fail("Could not serialize the live ItemIDs");
+        r = assertEquals("save() stamps the running Minecraft data version", net.minecraft.SharedConstants.WORLD_VERSION,
+                NbtCompat.getInt(file, net.minecraft.SharedConstants.DATA_VERSION_TAG));
+        if (!r.passed()) return r;
+        return pass("older item formats upgrade on load; ItemIDs.nbt is stamped with data version " + net.minecraft.SharedConstants.WORLD_VERSION);
     }
 
     private static CompoundTag pair(int s, CompoundTag stack) {

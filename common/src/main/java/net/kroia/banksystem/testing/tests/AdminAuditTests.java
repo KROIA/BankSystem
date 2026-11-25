@@ -533,7 +533,14 @@ public class AdminAuditTests extends TestSuite {
         if (!refused(req.handleOnMasterServer(in, "", PLAYER))) return fail("non-admin got the server list");
         if (!refused(req.handleOnMasterServer(in, "audit-test-untrusted-slave", ADMIN))) return fail("untrusted slave got the server list");
         if (refused(req.handleOnMasterServer(in, "", ADMIN))) return fail("admin refused");
-        return pass("non-admin and untrusted slave refused; admin served");
+        // BS-292: the command itself checks the executor (the request alone runs as console)
+        if (!(BankSystemModBackend.getInstances_forTesting().COMMAND_HANDLER.getAsync() instanceof ServerBankSystemCommandHandler h))
+            return fail("master command handler is not ServerBankSystemCommandHandler");
+        CompletableFuture<Boolean> cmdPlayer = h.banksystem_serverNetworkInfo_async(PLAYER);
+        if (!pumpUntil(cmdPlayer::isDone, WAIT_MS) || cmdPlayer.getNow(true)) return fail("non-admin command not refused");
+        CompletableFuture<Boolean> cmdAdmin = h.banksystem_serverNetworkInfo_async(ADMIN);
+        if (!pumpUntil(cmdAdmin::isDone, WAIT_MS) || !cmdAdmin.getNow(false)) return fail("admin command failed");
+        return pass("non-admin and untrusted slave refused (request + command); admin served");
     }
 
     private static boolean refused(CompletableFuture<ServerNetworkInfoRequest.OutputData> reply) {

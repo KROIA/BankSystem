@@ -8,6 +8,7 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.converter.ConverterCacheManager;
 import net.kroia.banksystem.minecraft.block.BankSystemBlocks;
 import net.kroia.banksystem.minecraft.block.custom.BankDownloadBlock;
+import net.kroia.banksystem.minecraft.block.custom.BankSystemDisplayBlock;
 import net.kroia.banksystem.minecraft.block.custom.BankUploadBlock;
 import net.kroia.banksystem.minecraft.entity.BankSystemEntities;
 import net.kroia.banksystem.minecraft.entity.custom.BankDownloadBlockEntity;
@@ -99,6 +100,7 @@ public class PortCheckTests extends TestSuite {
         addTest("blocks_break_with_their_tool", this::blocksBreakWithTheirTool);
         addTest("recipes_loaded", this::recipesLoaded);
         addTest("block_entities_keep_data_on_save_load", this::blockEntityRoundTrip);
+        addTest("display_sneak_use_opens_setup_screen", this::displaySneakOpensSetup);
         addTest("break_terminal_drops_once", () -> breakDrops(BankSystemBlocks.BANK_TERMINAL_BLOCK.get(),
                 be -> ((BankTerminalBlockEntity) be).getInventory(UUID.randomUUID()).setItem(0, new ItemStack(Items.DIAMOND, 5)),
                 Map.of(BankSystemBlocks.BANK_TERMINAL_BLOCK.get().asItem(), 1, Items.DIAMOND, 5)));
@@ -385,6 +387,36 @@ public class PortCheckTests extends TestSuite {
             }
         }
         return pass(factories.size() + " block entities keep their data across save/load");
+    }
+
+    /**
+     * BS-295: right-click on a display without an account opens the setup screen; once it shows an account,
+     * plain right-click opens the interactive view and sneak + right-click the setup screen. Checks the decision
+     * the block makes, with the online player's real sneak state (the screens themselves open on the client).
+     */
+    private TestResult displaySneakOpensSetup() {
+        ServerPlayer player = player();
+        if (player == null) return skip("no online player");
+        BankSystemDisplayBlockEntity display = new BankSystemDisplayBlockEntity(BlockPos.ZERO,
+                BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get().defaultBlockState());
+        boolean sneaking = player.isShiftKeyDown();
+        try {
+            player.setShiftKeyDown(false);
+            TestResult r = assertTrue("unconfigured display: right-click does not open the setup screen",
+                    BankSystemDisplayBlock.opensSetupScreen(display, player));
+            if (!r.passed()) return r;
+            display.adoptConfig(BankSystemDisplayBlockEntity.DisplayType.BALANCE_OVERVIEW, 77);
+            r = assertFalse("configured display: plain right-click opens the setup screen, not the interactive view",
+                    BankSystemDisplayBlock.opensSetupScreen(display, player));
+            if (!r.passed()) return r;
+            player.setShiftKeyDown(true);
+            r = assertTrue("configured display: sneak + right-click does not open the setup screen",
+                    BankSystemDisplayBlock.opensSetupScreen(display, player));
+            if (!r.passed()) return r;
+            return pass("setup screen when unconfigured or sneaking, interactive view otherwise");
+        } finally {
+            player.setShiftKeyDown(sneaking);
+        }
     }
 
     // ── Breaking ──

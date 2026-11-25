@@ -28,8 +28,10 @@ public record PayDividendResult(Reason reason, long totalPaid, int holderCount) 
         /** Company money bank balance &lt; total outflow; run refused wholesale. */
         INSUFFICIENT_FUNDS,
         /**
-         * Master-side MANAGE gate rejected the caller (also raised by the ARRS
-         * layer before {@code DividendPayer} is even invoked).
+         * Never returned by {@code IDividendPayer.payDividend}: it checks no permissions
+         * (direct callers are trusted server code). The MANAGE check is done by the
+         * company screen's request to the master, which refuses with its own
+         * no-permission code before the payer runs. Kept for API compatibility.
          */
         NO_PERMISSION,
         /** Internal error (bank manager missing, source account missing, ...). */

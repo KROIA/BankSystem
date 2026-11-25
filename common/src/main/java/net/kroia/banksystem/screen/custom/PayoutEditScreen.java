@@ -238,7 +238,9 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         dividendCheckBox.setHoverTooltipSupplier(MODE_DIVIDEND_TOOLTIP::getString);
         dividendCheckBox.setOnStateChanged(checked -> {
             dirty = true;
-            applyModeVisibility(checked || (oneTimeCheckBox != null && oneTimeCheckBox.isChecked()));
+            // BS-293: one-time payouts pay one target, so dividend and one-time exclude each other.
+            if (checked && oneTimeCheckBox != null) oneTimeCheckBox.setChecked(false);
+            applyModeVisibility(checked);
         });
 
         // Feature C — ONE_TIME mode toggle.
@@ -248,6 +250,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         oneTimeCheckBox.setHoverTooltipSupplier(ONE_TIME_TOOLTIP::getString);
         oneTimeCheckBox.setOnStateChanged(checked -> {
             dirty = true;
+            if (checked) dividendCheckBox.setChecked(false); // BS-293
             applyOneTimeModeVisibility(checked);
         });
 
@@ -259,7 +262,9 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         executeInBox.setEnabled(canManage && oneTimeCheckBox.isChecked());
         executeInBox.setOnTextChanged(text -> dirty = true);
 
-        targetLabel = new Label(TARGET.getString() + ": " + targetDisplay());
+        targetLabel = new Label(targetText());
+        // BS-296: the label may show a shortened copy; the tooltip gives the whole target then.
+        targetLabel.setHoverTooltipSupplier(() -> targetLabel.getText().equals(targetText()) ? null : targetText());
         pickTargetButton = new Button(PICK_TARGET.getString(), this::onPickTargetClicked);
         pickTargetButton.setEnabled(canManage);
         pickTargetButton.setHoverTooltipSupplier(
@@ -364,8 +369,17 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         for (Button b : intervalButtons) b.setEnabled(!oneTime && canManage);
         customMinutesBox.setEnabled(!oneTime && canManage && selectedIntervalIdx == intervalButtons.length - 1);
         executeInBox.setEnabled(oneTime && canManage);
-        // ONE_TIME + DIVIDEND is valid; re-apply dividend visibility.
+        // Re-apply dividend visibility (ONE_TIME always has a target).
         applyModeVisibility(dividendCheckBox.isChecked());
+    }
+
+    private String targetText() {
+        return TARGET.getString() + ": " + targetDisplay();
+    }
+
+    /** BS-296: the target cut at the end with "..." instead of the Label scrolling it (cut at both ends). */
+    private void fitTargetLabel() {
+        targetLabel.setText(ellipsize(targetLabel, targetText(), targetLabel.getWidth() - 2 * targetLabel.getPadding()));
     }
 
     private String targetDisplay() {
@@ -494,7 +508,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                     targetAccountNr = accountId;
                     targetAccountName = accountName;
                     dirty = true;
-                    targetLabel.setText(TARGET.getString() + ": " + targetDisplay());
+                    fitTargetLabel();
                 }));
     }
 
@@ -522,9 +536,9 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         byte mode = (byte) modeEnum.ordinal();
         UUID target = dividend ? null : targetUUID;
         int accountNr = dividend ? PayoutSchedule.NO_TARGET_ACCOUNT : targetAccountNr;
+        if (modeEnum != PayoutSchedule.Mode.DIVIDEND && target == null) return; // BS-293: server refuses it too
 
         if (original == null) {
-            if (!dividend && targetUUID == null) return;
             AsyncCompanyManager.createPayoutAsync(companyId, target, amount, intervalTicks, 0L, caller,
                             accountNr, mode, currencyItem)
                     // Bug D fix (v2.1.0) — hop to render thread before firing onDirty
@@ -670,8 +684,12 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         dividendCheckBox.setBounds(padding + fp, y, width / 2, 20);
         y += 25;
 
-        targetLabel.setBounds(padding + fp, y, col - spacing - fp, 20);
-        pickTargetButton.setBounds(padding + col, y, col - spacing, 20);
+        // BS-296: the button fits its text at the row's right end; the label gets the rest of the row.
+        int pickW = Math.min(col - spacing, pickTargetButton.getTextWidth(pickTargetButton.getText()) + 20);
+        int pickX = padding + width - spacing - pickW;
+        pickTargetButton.setBounds(pickX, y, pickW, 20);
+        targetLabel.setBounds(padding + fp, y, pickX - spacing - padding - fp, 20);
+        fitTargetLabel();
         y += 25;
 
         targetFrame.setBounds(padding, dividendCheckBoxY - fp, width, y - (dividendCheckBoxY - fp) + fp);
