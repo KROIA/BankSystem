@@ -38,6 +38,7 @@ public final class DevBootstrap {
             // TK-3/TK-4: GUI suite on the client only, so a dedicated server never loads its client classes
             if (dev.architectury.platform.Platform.getEnvironment() == dev.architectury.utils.Env.CLIENT) {
                 TestRegistry.register(new net.kroia.banksystem.testing.tests.AccountSelectionGuiTests());
+                TestRegistry.register(new net.kroia.banksystem.testing.tests.PayoutEditGuiTests()); // BS-293
                 // BS-288/BS-291: docs screenshots, on demand (--only banksystem/bs_docs_shots)
                 TestRegistry.register(new net.kroia.banksystem.testing.tests.DocsScreenshotSuite());
                 TestRegistry.register(new net.kroia.banksystem.testing.tests.DocsWorldShotsSuite());
