@@ -23,7 +23,12 @@ import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
 import net.kroia.modutilities.UtilitiesPlatform;
+import io.netty.buffer.Unpooled;
+import net.kroia.banksystem.util.ItemStackNbt;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.world.item.Item;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
@@ -109,6 +114,7 @@ public class ItemIDMergeGuardTests extends TestSuite {
         addTest("receiver_takes_master_item_on_short_clash", this::testReceiverTakesMasterItemOnShortClash);
         addTest("receiver_full_sync_drops_stale_short", this::testReceiverFullSyncDropsStaleShort);
         addTest("incomplete_full_sync_is_sent_as_update", this::testIncompleteFullSyncIsSentAsUpdate);
+        addTest("full_sync_of_30k_items_fits_payload_limit", this::testFullSyncOf30kItemsFitsPayloadLimit); // BS-302
         addTest("fixture_window_suppresses_new_item_broadcast", this::testFixtureWindowSuppressesNewItemBroadcast);
         // Task #16 — registration latch, persisted-wins merges, stale-key replacement
         addTest("master_registration_latched_before_load", this::testMasterRegistrationLatchedBeforeLoad);
@@ -1065,6 +1071,59 @@ public class ItemIDMergeGuardTests extends TestSuite {
      * packet, so a full sync built from that table must go out as an incremental update.
      * Builds the packets only; nothing is sent.
      */
+    /**
+     * Smallest frame limit the full sync crosses: vanilla's client connection (3-byte length, applies to the raw
+     * packet when compression is off; the 1 MiB payload check covers only unknown payload types) and the slave
+     * socket (MU, no compression). Minus 1 KiB for the packet id, payload type and the slave wrapper.
+     */
+    private static final int FRAME_LIMIT = (1 << 21) - 1 - 1024;
+    private static final int BIG_PACK_ITEMS = 30_000;
+
+    /**
+     * BS-302: a player join sends the whole ItemID table in one packet. Builds the full sync for a ~30k-item mod pack
+     * (registry items under 58 made-up mod namespaces, the size of real modded ids) and the live one, and encodes both.
+     * Builds the packets only; nothing is sent and the live table is not touched.
+     */
+    private TestResult testFullSyncOf30kItemsFitsPayloadLimit() {
+        var server = UtilitiesPlatform.getServer();
+        if (server == null) return pass("skipped: no server");
+        RegistryAccess access = server.registryAccess();
+        List<Item> registryItems = new ArrayList<>();
+        for (Item item : BuiltInRegistries.ITEM)
+            if (item != Items.AIR) registryItems.add(item);
+        Map<ItemID, CompoundTag> items = new HashMap<>();
+        long idChars = 0;
+        for (int i = 0; i < BIG_PACK_ITEMS; i++) {
+            Item item = registryItems.get(i % registryItems.size());
+            CompoundTag tag = (CompoundTag) ItemStackNbt.save(new ItemStack(item), access, new CompoundTag());
+            String id = "bigpack" + (i % 58) + ":" + BuiltInRegistries.ITEM.getKey(item).getPath() + "_v" + (i / registryItems.size());
+            tag.putString("id", id);
+            idChars += id.length();
+            items.put(new ItemID((short) (i + 1), null), tag);
+        }
+        int bigPack = encodedSize(new SyncItemIDsPacket(items, VolatileItemComponents.getConfigComponentIdStrings(),
+                VolatileItemComponents.getGatedConfigComponentIdStrings(), ItemIDManager.getItemIDAliasMap(), true), access);
+        int liveCount = ItemIDManager.getItemIDMap().size();
+        int live = encodedSize(new SyncItemIDsPacket(ItemIDManager.getItemIDMap(), true), access);
+        double perItem = bigPack / (double) BIG_PACK_ITEMS;
+        String numbers = BIG_PACK_ITEMS + " items (avg id " + idChars / BIG_PACK_ITEMS + " chars): " + bigPack + " bytes, "
+                + String.format("%.1f", perItem) + " bytes/item, limit " + FRAME_LIMIT + " bytes = about "
+                + (int) (FRAME_LIMIT / perItem) + " items; live table " + liveCount + " items: " + live + " bytes";
+        if (bigPack > FRAME_LIMIT)
+            return fail("full ItemID sync is over the network frame limit: " + numbers);
+        return pass(numbers);
+    }
+
+    private static int encodedSize(SyncItemIDsPacket packet, RegistryAccess access) {
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
+        try {
+            SyncItemIDsPacket.STREAM_CODEC.encode(buf, packet);
+            return buf.readableBytes();
+        } finally {
+            buf.release();
+        }
+    }
+
     private TestResult testIncompleteFullSyncIsSentAsUpdate() {
         short base = pickUnusedShortBase(2);
         if (base < 0) return fail("Could not pick unused shorts");
