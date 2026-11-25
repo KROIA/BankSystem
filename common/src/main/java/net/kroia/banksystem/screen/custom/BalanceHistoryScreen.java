@@ -519,6 +519,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
                             iv.setBounds(1, 1, 16, 16);
                         } else if (child instanceof Button btn) {
                             btn.setBounds(19, 0, getWidth() - 19, 18);
+                            btn.setText(BankSystemGuiScreen.ellipsize(btn, name, btn.getWidth() - 2 * GuiElement.DEFAULT_PADDING));
                         }
                     }
                 }
