@@ -136,6 +136,8 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
                 this::testBootOrderCorruptedShapePassesExtendedFirewall);
         addTest("digest_tripwire_reports_renumbered_shorts",
                 this::testDigestTripwireReportsRenumberedShorts);
+        addTest("digest_tripwire_skips_rename_by_update",
+                this::testDigestTripwireSkipsRenameByUpdate);
     }
 
     // ========================================================================
@@ -1180,6 +1182,56 @@ public class ItemIDFormatAndRepairTests extends TestSuite {
 
         return pass("boot-order corrupted shape is detected, passes the extended firewall and "
                 + "repairs to the boot-order old mapping; the default-order shape still passes");
+    }
+
+    /**
+     * BS-309: a short whose saved item was renamed by this load's upgrade (Minecraft's DataFixer,
+     * e.g. chain -> iron_chain) is not a renumbering: the tripwire skips exactly that rename, and
+     * still reports the short when its digest name is not the renamed one.
+     */
+    private TestResult testDigestTripwireSkipsRenameByUpdate() {
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if (access == null)
+            return pass("skipped: no server-side RegistryAccess (client-only / early-init)");
+
+        Map<ItemID, ItemStack> savedItemMap = new HashMap<>(ItemIDManager.getItemIDMap());
+        Map<ItemID, ItemID> savedAliasMap = new HashMap<>(ItemIDManager.getItemIDAliasMap());
+        int savedCounter = ItemIDManager.getNextShortCounter_forTesting();
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) {
+            try {
+                Map<ItemID, ItemStack> fixture = buildTwoEntryFixture(); // shorts 7 (paper) and 9
+                if (fixture == null)
+                    return fail("could not register the synthetic fixture templates");
+                ItemIDManager.replaceState_forTesting(fixture, Collections.emptyMap(), 100);
+                ListTag digest = ItemIDManager.buildShortNameDigest();
+
+                // Short 7 now loads as stone, as if an update renamed paper to stone.
+                Map<ItemID, ItemStack> renamed = new ConcurrentHashMap<>(fixture);
+                renamed.put(new ItemID((short) 7), new ItemStack(Items.STONE));
+                ItemIDManager.replaceState_forTesting(renamed, Collections.emptyMap(), 100);
+                TestResult r = assertEquals("without a recorded rename the change is reported",
+                        1, ItemIDManager.diffShortNameDigest(digest).size());
+                if (!r.passed()) return r;
+
+                ItemIDManager.noteRenamedByUpdate(new ItemID((short) 7), "minecraft:paper", "minecraft:stone");
+                r = assertTrue("a rename recorded by the load's upgrade is not reported",
+                        ItemIDManager.diffShortNameDigest(digest).isEmpty());
+                if (!r.passed()) return r;
+
+                // A recorded rename from a different item does not cover the digest's change.
+                ItemIDManager.replaceState_forTesting(renamed, Collections.emptyMap(), 100);
+                ItemIDManager.noteRenamedByUpdate(new ItemID((short) 7), "minecraft:dirt", "minecraft:stone");
+                r = assertEquals("a rename of another item still reports the renumbered short",
+                        1, ItemIDManager.diffShortNameDigest(digest).size());
+                if (!r.passed()) return r;
+
+                return pass("tripwire skips renames recorded by the upgrade and still reports real renumberings");
+            } catch (Throwable t) {
+                return fail("rename-by-update test threw: " + t.getClass().getSimpleName() + " — " + t.getMessage());
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+            }
+        }
     }
 
     /**
