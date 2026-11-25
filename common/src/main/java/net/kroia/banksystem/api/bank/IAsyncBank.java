@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
  *       exception like an unknown outcome.</li>
  *   <li>A request the master refuses (not allowed for clients or untrusted slaves) usually completes with {@code null}.</li>
  * </ul>
- * See {@code documentation/developer-guide/API.md}, "When an async call fails".
+ * See https://kroia.github.io/BanksystemStockmarketDoku/developers/banksystem/api/#when-an-async-call-fails
  * <p>
  * <b>Deposits and withdrawals</b> ({@code deposit*Async}, {@code withdraw*Async}) from a slave carry a transfer id.
  * When the answer is missing the slave asks the master first: applied completes with {@code SUCCESS}, not applied

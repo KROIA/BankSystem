@@ -1,6 +1,8 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.modutilities.NbtCompat;
+import net.kroia.banksystem.BankSystemModBackend;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.networking.general.RegisterItemIDPacket;
 import net.kroia.banksystem.networking.multi_server.RegisterItemStacksBatchRequest;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
@@ -12,7 +14,9 @@ import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -20,7 +24,10 @@ import net.minecraft.world.item.component.CustomData;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -67,6 +74,7 @@ public class ItemIDCounterTests extends TestSuite {
         addTest("overflow_caller_handling", this::testOverflowCallerHandling);
         addTest("player_registration_budget", this::testPlayerRegistrationBudget); // Task #143
         addTest("untrusted_slave_cannot_register_items", this::testUntrustedSlaveCannotRegister); // Task #143
+        addTest("default_registration_stays_linear", this::testDefaultRegistrationStaysLinear); // BS-286
     }
 
 
@@ -189,6 +197,55 @@ public class ItemIDCounterTests extends TestSuite {
         if (ids.size() != 1 || ids.get(0).getShort() != ItemID.INVALID_ID.getShort() || isRegistered(viaBatch))
             return fail("Task #143: RegisterItemStacksBatchRequest from an untrusted slave created an item id");
         return pass("Untrusted slave refused on both registration paths");
+    }
+
+    /**
+     * BS-286: the default registration pass of a server start ({@code createDefaultItemIDs}),
+     * once on an empty registry (fresh server) and again on the filled one (later start). Every
+     * registry item gets an ID once, and no lookup NBT-saves the template of another item: that
+     * made the pass quadratic and hung servers with big mod packs until the watchdog killed them.
+     * Fixture state inside a fixture window (no broadcasts); live state restored afterwards.
+     */
+    private TestResult testDefaultRegistrationStaysLinear() {
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
+        if (access == null)
+            return skip("no server-side RegistryAccess");
+        if (BankSystemModBackend.getInstances_forTesting().isSlaveServer)
+            return skip("slave server, only the master registers the default items");
+
+        Map<ItemID, ItemStack> savedItemMap = new HashMap<>(ItemIDManager.getItemIDMap());
+        Map<ItemID, ItemID> savedAliasMap = new HashMap<>(ItemIDManager.getItemIDAliasMap());
+        int savedCounter = ItemIDManager.getNextShortCounter_forTesting();
+        try (ItemIDManager.FixtureWindow fixtureWindow = ItemIDManager.fixtureWindow_forTesting()) {
+            try {
+                ItemIDManager.replaceState_forTesting(Collections.emptyMap(), Collections.emptyMap(), 1);
+                long savesBefore = ItemIDManager.getLookupTemplateSaves_forTesting();
+                new ItemIDManager().createDefaultItemIDs();
+                int registered = ItemIDManager.getItemIDMap().size();
+                int counter = ItemIDManager.getNextShortCounter_forTesting();
+                new ItemIDManager().createDefaultItemIDs();
+                long saves = ItemIDManager.getLookupTemplateSaves_forTesting() - savesBefore;
+
+                List<String> missing = new ArrayList<>();
+                for (var holder : access.lookupOrThrow(Registries.ITEM).listElements().toList()) {
+                    ItemStack stack = holder.value().getDefaultInstance();
+                    if (!stack.isEmpty() && !isRegistered(stack))
+                        missing.add(stack.getItem().toString());
+                }
+                TestResult r = assertTrue("every registry item got an ID, missing: " + missing, registered > 0 && missing.isEmpty());
+                if (!r.passed()) return r;
+                r = assertTrue("a later start mints nothing", ItemIDManager.getItemIDMap().size() == registered
+                        && ItemIDManager.getNextShortCounter_forTesting() == counter);
+                if (!r.passed()) return r;
+                // Quadratic (the bug) is about registered^2 / 2 saves; same-item compares only stay below this.
+                r = assertTrue("lookups NBT-saved " + saves + " templates for " + registered + " items", saves <= registered);
+                if (!r.passed()) return r;
+                return pass(registered + " default items registered with " + saves + " template NBT saves");
+            } finally {
+                ItemIDManager.replaceState_forTesting(savedItemMap, savedAliasMap, savedCounter);
+                MoneyItem.resetItemID(); // the pass cached the fixture's money ID
+            }
+        }
     }
 
     /**
