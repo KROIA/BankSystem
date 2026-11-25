@@ -50,8 +50,28 @@ public final class CompanyCommandLogic {
         ServerPlayerUtilities.printToClientConsole(player, msg);
     }
 
+    /** Chat text of {@code message.banksystem.company.<key>}. */
+    private static String text(String key) {
+        return Component.translatable("message." + BankSystemMod.MOD_ID + ".company." + key).getString();
+    }
+
+    private static String notFound(String companyName) {
+        return text("not_found").replace("{company}", companyName);
+    }
+
+    private static String created(long companyId, String name, int accountNr, long maxSupply) {
+        return text("created").replace("{company_id}", String.valueOf(companyId)).replace("{account_number}", String.valueOf(accountNr))
+                .replace("{amount}", String.valueOf(maxSupply)).replace("{company}", name); // player text last
+    }
+
+    private static String createFailed(String name, String reason) {
+        return text("create_failed").replace("{reason}", reason).replace("{company}", name);
+    }
+
     /** Issue #85: a slave request that got no answer from the bank master completes with null. */
-    private static final String NO_ANSWER = "No answer from the bank server.";
+    private static String noAnswer() {
+        return text("no_answer");
+    }
 
     private static String cleanName(String raw) {
         return raw == null ? "" : raw.replace("\"", "").trim();
@@ -72,7 +92,7 @@ public final class CompanyCommandLogic {
 
         IServerBankAccount account = bm.createBankAccount(name);
         if (account == null) {
-            send(player, "Failed to create bank account for company '" + name + "'.");
+            send(player, text("account_failed").replace("{company}", name));
             return;
         }
         // Company bank accounts need the same default money/currency slots as personal
@@ -92,29 +112,23 @@ public final class CompanyCommandLogic {
         if (outcome.result != CompanyManager.CreateResult.OK) {
             bm.deleteBankAccount(account.getAccountNumber());
             String capMsg = capMessageFor(outcome.result);
-            send(player, capMsg != null ? capMsg
-                    : "Failed to create company '" + name + "': " + outcome.result.name());
+            send(player, capMsg != null ? capMsg : createFailed(name, outcome.result.name()));
             return;
         }
         account.setCreatorUUID(player.getUUID()); // Task #58 — company account counts against the founder's cap
-        send(player, "Created company #" + outcome.company.getCompanyId() + " '" + name
-                + "' bound to bank account " + account.getAccountNumber()
-                + " (maxSupply=" + maxSupply + ").");
+        send(player, created(outcome.company.getCompanyId(), name, account.getAccountNumber(), maxSupply));
     }
 
     private static void renderCreate(ServerPlayer player, String name, long maxSupply, AsyncCompanyManager.CreateOutput out) {
         if (out == null) {
-            send(player, NO_ANSWER + " The company may have been created; check /company info " + name + " before trying again.");
+            send(player, text("create_no_answer").replace("{company}", name));
             return;
         }
         if (out.resultCode() == AsyncCompanyManager.CODE_OK) {
-            send(player, "Created company #" + out.companyId() + " '" + name
-                    + "' bound to bank account " + out.bankAccountNr()
-                    + " (maxSupply=" + maxSupply + ").");
+            send(player, created(out.companyId(), name, out.bankAccountNr(), maxSupply));
         } else {
             String capMsg = capMessageForCode(out.resultCode());
-            send(player, capMsg != null ? capMsg
-                    : "Failed to create company '" + name + "': " + describeCode(out.resultCode()));
+            send(player, capMsg != null ? capMsg : createFailed(name, describeCode(out.resultCode())));
         }
     }
 
@@ -154,48 +168,56 @@ public final class CompanyCommandLogic {
         CompanyManager cm = CompanyManager.get();
         Company company = cm.getByName(companyName);
         if (company == null) {
-            send(player, "No such company '" + companyName + "'.");
+            send(player, notFound(companyName));
             return;
         }
         StringBuilder sb = new StringBuilder();
         sb.append("§8============================================\n");
-        sb.append("§7Company #").append(company.getCompanyId()).append(" §f").append(company.getName()).append('\n');
-        sb.append("§7Bank account: §f").append(company.getBankAccountNr()).append('\n');
-        sb.append("§7Max supply:   §f").append(company.getMaxSupply()).append('\n');
-        sb.append("§7Issued:       §f").append(company.getTotalSharesIssued()).append('\n');
+        appendInfoHeader(sb, company.getCompanyId(), company.getName(), company.getBankAccountNr(),
+                company.getMaxSupply(), company.getTotalSharesIssued());
         Set<UUID> founders = company.getFounders();
-        sb.append("§7Founders (").append(founders.size()).append("):\n");
+        appendFoundersLine(sb, founders.size());
         IServerBankManager bm = sync();
         for (UUID uuid : founders) {
             User u = bm.getUserByUUID(uuid);
             sb.append("  §f").append(u != null ? u.getName() : uuid.toString()).append('\n');
         }
         if (!company.getDescription().isEmpty()) {
-            sb.append("§7Description: §f").append(company.getDescription()).append('\n');
+            sb.append("§7").append(text("info_description").replace("{description}", "§f" + company.getDescription())).append('\n');
         }
         sb.append("§8============================================");
         send(player, sb.toString());
     }
 
+    /** Company/bank account/max supply/issued lines of {@code /company info}: grey label, white value. */
+    private static void appendInfoHeader(StringBuilder sb, long companyId, String name, int accountNr, long maxSupply, long issued) {
+        sb.append("§7").append(text("info_title").replace("{company_id}", String.valueOf(companyId))
+                .replace("{company}", "§f" + name)).append('\n');
+        sb.append("§7").append(text("info_bank_account").replace("{account_number}", "§f" + accountNr)).append('\n');
+        sb.append("§7").append(text("info_max_supply").replace("{amount}", "§f" + maxSupply)).append('\n');
+        sb.append("§7").append(text("info_issued").replace("{amount}", "§f" + issued)).append('\n');
+    }
+
+    private static void appendFoundersLine(StringBuilder sb, int count) {
+        sb.append("§7").append(text("info_founders").replace("{count}", String.valueOf(count))).append('\n');
+    }
+
     private static void renderInfo(ServerPlayer player, String companyName, AsyncCompanyManager.CompanyInfoOutput out) {
-        if (out == null) { send(player, NO_ANSWER); return; }
+        if (out == null) { send(player, noAnswer()); return; }
         if (!out.present()) {
-            send(player, "No such company '" + companyName + "'.");
+            send(player, notFound(companyName));
             return;
         }
         StringBuilder sb = new StringBuilder();
         sb.append("§8============================================\n");
-        sb.append("§7Company #").append(out.companyId()).append(" §f").append(out.name()).append('\n');
-        sb.append("§7Bank account: §f").append(out.bankAccountNr()).append('\n');
-        sb.append("§7Max supply:   §f").append(out.maxSupply()).append('\n');
-        sb.append("§7Issued:       §f").append(out.totalSharesIssued()).append('\n');
+        appendInfoHeader(sb, out.companyId(), out.name(), out.bankAccountNr(), out.maxSupply(), out.totalSharesIssued());
         List<String> founders = out.founderNames();
-        sb.append("§7Founders (").append(founders.size()).append("):\n");
+        appendFoundersLine(sb, founders.size());
         for (String fname : founders) {
             sb.append("  §f").append(fname).append('\n');
         }
         if (out.description() != null && !out.description().isEmpty()) {
-            sb.append("§7Description: §f").append(out.description()).append('\n');
+            sb.append("§7").append(text("info_description").replace("{description}", "§f" + out.description())).append('\n');
         }
         sb.append("§8============================================");
         send(player, sb.toString());
@@ -213,9 +235,9 @@ public final class CompanyCommandLogic {
         String companyName = cleanName(rawCompanyName);
         if (isSlave()) {
             AsyncCompanyManager.getCompanyInfoAsync(companyName).thenAccept(out -> {
-                if (out == null) { send(player, NO_ANSWER); return; }
+                if (out == null) { send(player, noAnswer()); return; }
                 if (!out.present()) {
-                    send(player, "No such company '" + companyName + "'.");
+                    send(player, notFound(companyName));
                     return;
                 }
                 // Slave has no local bank-account view of MANAGE — rely on master to
@@ -230,14 +252,14 @@ public final class CompanyCommandLogic {
         IServerBankManager bm = sync();
         Company company = cm.getByName(companyName);
         if (company == null) {
-            send(player, "No such company '" + companyName + "'.");
+            send(player, notFound(companyName));
             return;
         }
         IServerBankAccount account = bm.getBankAccount(company.getBankAccountNr());
         boolean hasManage = account != null && account.hasPermission(player.getUUID(), BankPermission.MANAGE);
         boolean isAdmin = bm.isBanksystemAdmin(player.getUUID());
         if (!hasManage && !isAdmin) {
-            send(player, "You need MANAGE on the company's bank account to manage it.");
+            send(player, text("manage_no_permission"));
             return;
         }
         net.kroia.banksystem.networking.general.S2COpenCompanyManagementPacket
@@ -274,14 +296,13 @@ public final class CompanyCommandLogic {
     }
 
     private static String sharesAcknowledgeText(String companyName, AsyncCompanyManager.ShareAcknowledgeOutput out) {
-        if (out == null) return NO_ANSWER;
+        if (out == null) return noAnswer();
         return switch (out.resultCode()) {
-            case AsyncCompanyManager.CODE_OK -> "Company '" + out.companyName() + "': share excess of " + out.excess()
-                    + " acknowledged, dividends resume. A new alert comes only if the excess grows.";
-            case AsyncCompanyManager.CODE_NOT_FOUND -> "No such company '" + companyName + "'.";
-            case AsyncCompanyManager.CODE_NO_PERMISSION ->
-                    "You need MANAGE on the company's bank account to acknowledge its shares.";
-            default -> "Failed to acknowledge the shares of '" + companyName + "': " + describeCode(out.resultCode());
+            case AsyncCompanyManager.CODE_OK -> text("shares_acknowledged").replace("{amount}", String.valueOf(out.excess()))
+                    .replace("{company}", out.companyName());
+            case AsyncCompanyManager.CODE_NOT_FOUND -> notFound(companyName);
+            case AsyncCompanyManager.CODE_NO_PERMISSION -> text("shares_no_permission");
+            default -> text("shares_failed").replace("{reason}", describeCode(out.resultCode())).replace("{company}", companyName);
         };
     }
 

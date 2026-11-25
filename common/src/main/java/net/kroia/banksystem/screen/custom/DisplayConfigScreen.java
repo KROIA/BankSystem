@@ -1,5 +1,6 @@
 package net.kroia.banksystem.screen.custom;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.minecraft.entity.custom.BankSystemDisplayBlockEntity;
@@ -22,6 +23,14 @@ import java.util.List;
 
 public class DisplayConfigScreen extends BankSystemGuiScreen {
 
+    private static final String PREFIX = "gui." + BankSystemMod.MOD_ID + ".display_config_screen.";
+    private static final Component TITLE = Component.translatable(PREFIX + "title");
+    private static final Component DISPLAY_TYPE = Component.translatable(PREFIX + "display_type");
+    private static final Component SELECT_ACCOUNT = Component.translatable(PREFIX + "select_account");
+    private static final Component APPLY = Component.translatable(PREFIX + "apply");
+    private static final Component NO_ACCOUNT_SELECTED = Component.translatable(PREFIX + "no_account_selected");
+    private static final Component NO_ACCOUNTS = Component.translatable(PREFIX + "no_accounts");
+
     private final BlockPos blockPos;
     private BankSystemDisplayBlockEntity.DisplayType selectedType;
     private int selectedAccount;
@@ -42,20 +51,20 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
     private static final int HOVER_COLOR = ColorUtilities.getRGB(60, 140, 100);
 
     public DisplayConfigScreen(BlockPos blockPos, BankSystemDisplayBlockEntity.DisplayType currentType, int currentAccount) {
-        super(Component.literal("Configure Display"));
+        super(TITLE);
         this.blockPos = blockPos;
         this.selectedType = (currentType != null && currentType != BankSystemDisplayBlockEntity.DisplayType.NONE)
                 ? currentType : BankSystemDisplayBlockEntity.DisplayType.BALANCE_OVERVIEW;
         this.selectedAccount = currentAccount;
 
-        titleLabel = new Label("Configure Display");
+        titleLabel = new Label(TITLE.getString());
         titleLabel.setAlignment(GuiElement.Alignment.CENTER);
         addElement(titleLabel);
 
-        typeLabel = new Label("Display Type:");
+        typeLabel = new Label(DISPLAY_TYPE.getString());
         addElement(typeLabel);
 
-        overviewButton = new Button("Balance Overview");
+        overviewButton = new Button(BankSystemDisplayBlockEntity.BALANCE_OVERVIEW_TEXT.getString());
         overviewButton.setOnFallingEdge(() -> {
             selectedType = BankSystemDisplayBlockEntity.DisplayType.BALANCE_OVERVIEW;
             dirty = true;
@@ -63,7 +72,7 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
         });
         addElement(overviewButton);
 
-        historyButton = new Button("Balance History");
+        historyButton = new Button(BankSystemDisplayBlockEntity.BALANCE_HISTORY_TEXT.getString());
         historyButton.setOnFallingEdge(() -> {
             selectedType = BankSystemDisplayBlockEntity.DisplayType.BALANCE_HISTORY;
             dirty = true;
@@ -71,7 +80,7 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
         });
         addElement(historyButton);
 
-        accountLabel = new Label("Select Account:");
+        accountLabel = new Label(SELECT_ACCOUNT.getString());
         addElement(accountLabel);
 
         accountListView = new VerticalListView();
@@ -83,7 +92,7 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
         selectedLabel = new Label("");
         addElement(selectedLabel);
 
-        applyButton = new Button("Apply");
+        applyButton = new Button(APPLY.getString());
         applyButton.setOnFallingEdge(this::onApply);
         addElement(applyButton);
 
@@ -135,9 +144,9 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
     private void updateSelectedLabel() {
         if (selectedAccount > 0) {
             String name = selectedAccountName.isEmpty() ? "#" + selectedAccount : selectedAccountName;
-            selectedLabel.setText("Selected: " + name + " (#" + selectedAccount + ")");
+            selectedLabel.setText(Component.translatable(PREFIX + "selected", name, selectedAccount).getString());
         } else {
-            selectedLabel.setText("No account selected");
+            selectedLabel.setText(NO_ACCOUNT_SELECTED.getString());
         }
     }
 
@@ -151,7 +160,7 @@ public class DisplayConfigScreen extends BankSystemGuiScreen {
         Minecraft.getInstance().execute(() -> {
             accountListView.removeChilds();
             if (accounts == null || accounts.isEmpty()) {
-                Label noAccounts = new Label("No accounts found");
+                Label noAccounts = new Label(NO_ACCOUNTS.getString());
                 noAccounts.setAlignment(GuiElement.Alignment.CENTER);
                 accountListView.addChild(noAccounts);
                 updateSelectedLabel();
