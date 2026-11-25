@@ -124,7 +124,10 @@ public class AuditScreen extends BankSystemGuiScreen {
         pageLabel = new Label("");
         statusLabel = new Label("");
         String[] header = headerTexts();
-        for (int i = 0; i < header.length; i++) headerCells[i] = new Label(header[i]);
+        for (int i = 0; i < header.length; i++) {
+            headerCells[i] = new Label(header[i]);
+            headerCells[i].setEllipsisEnabled(true);
+        }
 
         listView = new VerticalListView();
         LayoutGrid layout = new LayoutGrid();
@@ -321,6 +324,7 @@ public class AuditScreen extends BankSystemGuiScreen {
             cells = new Label[text.length];
             for (int i = 0; i < text.length; i++) {
                 cells[i] = new Label(text[i]);
+                cells[i].setEllipsisEnabled(true);
                 addChild(cells[i]);
             }
             String full = String.join(" | ", text);
@@ -343,7 +347,6 @@ public class AuditScreen extends BankSystemGuiScreen {
         protected void layoutChanged() {
             for (int i = 0; i < cells.length; i++) {
                 cells[i].setBounds(colX[i], 0, colW[i] - 2, getHeight());
-                cells[i].setText(ellipsize(cells[i], text[i], cells[i].getWidth() - 2 * cells[i].getPadding()));
             }
         }
     }
@@ -373,14 +376,13 @@ public class AuditScreen extends BankSystemGuiScreen {
             if (m.getTextWidth(t.name()) > m.getTextWidth(widestType)) widestType = t.name();
         String[] samples = {TimeFormat.formatTimestamp(System.currentTimeMillis()), widestType, "", "",
                 SAMPLE_ACCOUNT, "", "", ""};
-        String[] header = headerTexts(); // the cells may hold a shortened copy
+        String[] header = headerTexts();
         int[] fixed = new int[COL_KEYS.length];
         for (int i = 0; i < fixed.length; i++)
             if (FLEX[i] == 0) fixed[i] = Math.max(m.getTextWidth(samples[i]), m.getTextWidth(header[i])) + 6;
         layoutColumns(w, fixed, FLEX, colX, colW);
         for (int i = 0; i < headerCells.length; i++) {
             headerCells[i].setBounds(p + colX[i], y, colW[i] - 2, 12);
-            headerCells[i].setText(ellipsize(headerCells[i], header[i], colW[i] - 2 - 2 * headerCells[i].getPadding()));
         }
 
         int listH = getHeight() - y - 14 - p - 14;
