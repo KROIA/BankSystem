@@ -55,10 +55,13 @@ public class AuditScreen extends BankSystemGuiScreen {
     /** Columns: time, type, item, amount, counterparty, actor, note, ref. Header, rows and CSV share this order. */
     private static final String[] COL_KEYS = {"col_time", "col_type", "col_item", "col_amount", "col_counterparty",
             "col_actor", "col_note", "col_ref"};
-    /** Weight of a flexible column in the width the fixed ones leave; 0 = fixed, sized to its widest value. */
-    private static final int[] FLEX = {0, 0, 3, 2, 0, 2, 4, 0};
+    /**
+     * Weight of a flexible column in the width the fixed ones leave; 0 = fixed, sized to its widest value.
+     * BS-296: the transaction id is fixed to its header only (a full UUID took the width time, type and
+     * counterparty need); longer ids end in "...", the row tooltip and a click still give the whole id.
+     */
+    private static final int[] FLEX = {0, 0, 3, 3, 0, 3, 3, 0};
     private static final String SAMPLE_ACCOUNT = "#0000000";
-    private static final String SAMPLE_REF = "00000000-0000-0000-0000-000000000000"; // transfer ids are UUIDs
 
     /** Types whose stored (unsigned) amount leaves the account; shown with a minus. */
     private static final Set<LedgerType> OUTFLOW = EnumSet.of(LedgerType.WITHDRAW, LedgerType.ADMIN_REMOVE,
@@ -266,13 +269,13 @@ public class AuditScreen extends BankSystemGuiScreen {
     }
 
     /**
-     * Issue #166: fixed columns get their own width (shrunk if they would take more than 60 %),
+     * Issue #166: fixed columns get their own width (shrunk if they would take more than two thirds),
      * the flexible ones share the rest by weight.
      */
     static void layoutColumns(int total, int[] fixed, int[] flex, int[] x, int[] w) {
         int fixedSum = 0, flexSum = 0;
         for (int i = 0; i < fixed.length; i++) { fixedSum += fixed[i]; flexSum += flex[i]; }
-        int maxFixed = total * 3 / 5;
+        int maxFixed = total * 2 / 3;
         double shrink = fixedSum > maxFixed ? maxFixed / (double) fixedSum : 1;
         int rest = total;
         for (int i = 0; i < fixed.length; i++) if (flex[i] == 0) rest -= (int) (fixed[i] * shrink);
@@ -338,7 +341,10 @@ public class AuditScreen extends BankSystemGuiScreen {
 
         @Override
         protected void layoutChanged() {
-            for (int i = 0; i < cells.length; i++) cells[i].setBounds(colX[i], 0, colW[i] - 2, getHeight());
+            for (int i = 0; i < cells.length; i++) {
+                cells[i].setBounds(colX[i], 0, colW[i] - 2, getHeight());
+                cells[i].setText(ellipsize(cells[i], text[i], cells[i].getWidth() - 2 * cells[i].getPadding()));
+            }
         }
     }
 
@@ -365,13 +371,17 @@ public class AuditScreen extends BankSystemGuiScreen {
         String widestType = "";
         for (LedgerType t : LedgerType.values())
             if (m.getTextWidth(t.name()) > m.getTextWidth(widestType)) widestType = t.name();
-        String[] samples = {TimeFormat.formatTimestamp(System.currentTimeMillis()), widestType, null, null,
-                SAMPLE_ACCOUNT, null, null, SAMPLE_REF};
+        String[] samples = {TimeFormat.formatTimestamp(System.currentTimeMillis()), widestType, "", "",
+                SAMPLE_ACCOUNT, "", "", ""};
+        String[] header = headerTexts(); // the cells may hold a shortened copy
         int[] fixed = new int[COL_KEYS.length];
         for (int i = 0; i < fixed.length; i++)
-            if (FLEX[i] == 0) fixed[i] = Math.max(m.getTextWidth(samples[i]), m.getTextWidth(headerCells[i].getText())) + 6;
+            if (FLEX[i] == 0) fixed[i] = Math.max(m.getTextWidth(samples[i]), m.getTextWidth(header[i])) + 6;
         layoutColumns(w, fixed, FLEX, colX, colW);
-        for (int i = 0; i < headerCells.length; i++) headerCells[i].setBounds(p + colX[i], y, colW[i] - 2, 12);
+        for (int i = 0; i < headerCells.length; i++) {
+            headerCells[i].setBounds(p + colX[i], y, colW[i] - 2, 12);
+            headerCells[i].setText(ellipsize(headerCells[i], header[i], colW[i] - 2 - 2 * headerCells[i].getPadding()));
+        }
 
         int listH = getHeight() - y - 14 - p - 14;
         listView.setBounds(p, y + 14, w, listH);

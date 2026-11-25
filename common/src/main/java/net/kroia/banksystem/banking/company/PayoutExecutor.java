@@ -98,42 +98,8 @@ public final class PayoutExecutor {
         List<TransactionLogRecord> pendingLedgerRows = new ArrayList<>();
         List<PayoutExecutedInfo> pendingEvents = new ArrayList<>();
 
-        cm.forEach(company -> {
-            List<PayoutSchedule> schedules = new ArrayList<>(company.getPayoutSchedules());
-            for (PayoutSchedule schedule : schedules) {
-                if (schedule.isPaused()) continue;
-                if (schedule.getNextRunTick() > nowTick) continue;
-                Outcome outcome = executeOne(company, schedule, schedule.getAmount(), bm, nowMs,
-                        pendingLedgerRows);
-                PayoutHistoryRecord.Status status = outcome.reason == null
-                        ? PayoutHistoryRecord.Status.OK : outcome.reason.toStatus();
-                pendingHistoryRows.add(PayoutHistoryRecord.of(
-                        company.getCompanyId(), schedule.getScheduleId(),
-                        company.getBankAccountNr(), schedule.getTargetUUID(),
-                        schedule.getAmount(), nowMs, status,
-                        outcome.targetPlayerName, outcome.targetAccountName,
-                        schedule.getCurrencyItem(), PayoutHistoryRecord.Type.NORMAL));
-                pendingEvents.add(new PayoutExecutedInfo(company.getCompanyId(),
-                        schedule.getScheduleId(), company.getBankAccountNr(),
-                        schedule.getTargetUUID(), schedule.getAmount(), status, nowMs));
-                boolean oneTime = schedule.getMode() == PayoutSchedule.Mode.ONE_TIME;
-                if (outcome.reason == null && oneTime) {
-                    // Feature C — ONE_TIME success: self-delete; no advancement needed.
-                    cm.deleteSchedule(company.getCompanyId(), schedule.getScheduleId());
-                } else {
-                    if (outcome.reason != null && !oneTime) {
-                        // Spec B.4 — accumulate the missed execution (not for ONE_TIME).
-                        cm.recordMissedExecution(company.getCompanyId(), schedule.getScheduleId(),
-                                schedule.getAmount());
-                    }
-                    // Feature C — ONE_TIME failure: retry at next tick interval (1 s) instead of
-                    // the full schedule interval (which could be hours away).
-                    long advance = oneTime ? PAYOUT_TICK_INTERVAL : schedule.getIntervalTicks();
-                    cm.advanceSchedule(company.getCompanyId(), schedule.getScheduleId(),
-                            nowTick + advance);
-                }
-            }
-        });
+        cm.forEach(company -> runDue(cm, company, bm, nowTick, nowMs,
+                pendingHistoryRows, pendingLedgerRows, pendingEvents));
 
         if (historyManager != null && !pendingHistoryRows.isEmpty()) {
             historyManager.save(pendingHistoryRows);
@@ -144,6 +110,68 @@ public final class PayoutExecutor {
         if (events != null) {
             for (PayoutExecutedInfo info : pendingEvents) events.PAYOUT_EXECUTED.notifyListeners(info);
         }
+    }
+
+    /**
+     * Run the due schedules of one company. History rows, ledger legs and events are collected
+     * into the lists; the caller writes them. Public for the tests.
+     */
+    public static void runDue(CompanyManager cm, Company company, ISyncServerBankManager bm, long nowTick,
+                              long nowMs, List<PayoutHistoryRecord> historyRows,
+                              List<TransactionLogRecord> ledgerRows, List<PayoutExecutedInfo> events) {
+        List<PayoutSchedule> schedules = new ArrayList<>(company.getPayoutSchedules());
+        for (PayoutSchedule schedule : schedules) {
+            if (schedule.isPaused()) continue;
+            if (schedule.getNextRunTick() > nowTick) continue;
+            Outcome outcome = executeOne(company, schedule, schedule.getAmount(), bm, nowMs, ledgerRows);
+            boolean oneTime = schedule.getMode() == PayoutSchedule.Mode.ONE_TIME;
+            // BS-293: a failing ONE_TIME schedule records its first failure and each change of reason only.
+            OneTimeFailure previous = oneTime ? company.oneTimeFailures.get(schedule.getScheduleId()) : null;
+            if (outcome.reason == null || previous == null || previous.reason() != outcome.reason) {
+                PayoutHistoryRecord.Status status = outcome.reason == null
+                        ? PayoutHistoryRecord.Status.OK : outcome.reason.toStatus();
+                historyRows.add(PayoutHistoryRecord.of(
+                        company.getCompanyId(), schedule.getScheduleId(),
+                        company.getBankAccountNr(), schedule.getTargetUUID(),
+                        schedule.getAmount(), nowMs, status,
+                        outcome.targetPlayerName, outcome.targetAccountName,
+                        schedule.getCurrencyItem(), PayoutHistoryRecord.Type.NORMAL));
+                events.add(new PayoutExecutedInfo(company.getCompanyId(),
+                        schedule.getScheduleId(), company.getBankAccountNr(),
+                        schedule.getTargetUUID(), schedule.getAmount(), status, nowMs));
+            }
+            if (!oneTime) {
+                if (outcome.reason != null) {
+                    // Spec B.4 — accumulate the missed execution (not for ONE_TIME).
+                    cm.recordMissedExecution(company.getCompanyId(), schedule.getScheduleId(),
+                            schedule.getAmount());
+                }
+                cm.advanceSchedule(company.getCompanyId(), schedule.getScheduleId(),
+                        nowTick + schedule.getIntervalTicks());
+            } else if (outcome.reason == null) {
+                // Feature C — ONE_TIME success: self-delete (also drops its failure state).
+                cm.deleteSchedule(company.getCompanyId(), schedule.getScheduleId());
+            } else {
+                // BS-293: ONE_TIME failure retries with a growing delay instead of every second.
+                int failures = previous == null ? 1 : previous.count() + 1;
+                company.oneTimeFailures.put(schedule.getScheduleId(), new OneTimeFailure(outcome.reason, failures));
+                cm.advanceSchedule(company.getCompanyId(), schedule.getScheduleId(),
+                        nowTick + oneTimeRetryDelay(failures));
+            }
+        }
+    }
+
+    /** BS-293: first retry delay of a failing ONE_TIME schedule (5 s); doubles per failure. */
+    public static final long ONE_TIME_RETRY_TICKS = 100L;
+    /** BS-293: longest wait between two tries of a failing ONE_TIME schedule (5 min). */
+    public static final long ONE_TIME_RETRY_MAX_TICKS = 6000L;
+
+    /** BS-293: consecutive failures of a ONE_TIME schedule, kept on its Company in memory (a restart starts over). */
+    record OneTimeFailure(PayoutFailureReason reason, int count) {}
+
+    /** BS-293: wait after {@code failures} consecutive failures: 5 s, 10 s, 20 s ... capped at 5 min. */
+    public static long oneTimeRetryDelay(int failures) {
+        return Math.min(ONE_TIME_RETRY_MAX_TICKS, ONE_TIME_RETRY_TICKS << Math.min(Math.max(failures, 1) - 1, 10));
     }
 
     /**
