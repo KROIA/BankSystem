@@ -1,5 +1,6 @@
 package net.kroia.banksystem.minecraft.command;
 
+import net.kroia.banksystem.util.ServerThread;
 import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.ISyncServerBank;
@@ -41,20 +42,22 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
 
     @Override
     public CompletableFuture<Boolean> banksystem_manage_async(@NotNull UUID executor) {
-        if(!isPlayerAdmin(executor))
-            return CompletableFuture.completedFuture(false);
-        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
-        if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isBanksystemAdmin(executor))
-        {
-            // Open screen for settings GUI
-            SyncOpenGUIPacket.send_openBankSystemManageScreen(player);
-            return CompletableFuture.completedFuture(true);
-        }
-        else
-        {
-            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getOnlyForAdminsMessage());
-            return CompletableFuture.completedFuture(false);
-        }
+        return ServerThread.call(() -> {
+            if(!isPlayerAdmin(executor))
+                return CompletableFuture.completedFuture(false);
+            ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
+            if(BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isBanksystemAdmin(executor))
+            {
+                // Open screen for settings GUI
+                SyncOpenGUIPacket.send_openBankSystemManageScreen(player);
+                return CompletableFuture.completedFuture(true);
+            }
+            else
+            {
+                ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getOnlyForAdminsMessage());
+                return CompletableFuture.completedFuture(false);
+            }
+        });
     }
 
 
@@ -154,7 +157,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> banksystem_allowItem_async(@NotNull UUID executor, ItemID itemID) {
-        return CompletableFuture.completedFuture(banksystem_allowItem(executor,itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(banksystem_allowItem(executor,itemID));
+        });
     }
 
 
@@ -181,7 +186,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> banksystem_freeze_async(@NotNull UUID executor, int accountNumber, int mode) {
-        return CompletableFuture.completedFuture(banksystem_freeze(executor, accountNumber, mode));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(banksystem_freeze(executor, accountNumber, mode));
+        });
     }
 
     /** Task #110 — per-admin chat alerts toggle (audit file and flags are written regardless). */
@@ -196,19 +203,25 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> banksystem_alerts_async(@NotNull UUID executor, boolean enabled) {
-        return CompletableFuture.completedFuture(banksystem_alerts(executor, enabled));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(banksystem_alerts(executor, enabled));
+        });
     }
 
     /** Task #113 — digest written on the DB worker; the future completes on the server thread. */
     @Override
     public CompletableFuture<String> banksystem_auditreport(@NotNull UUID executor, int hours) {
-        if(!isPlayerAdmin(executor))
-            return CompletableFuture.completedFuture("");
-        return reportOnServerThread(hours);
+        return ServerThread.call(() -> {
+            if(!isPlayerAdmin(executor))
+                return CompletableFuture.completedFuture("");
+            return reportOnServerThread(hours);
+        });
     }
     @Override
     public CompletableFuture<String> banksystem_auditreport_async(@NotNull UUID executor, int hours) {
-        return banksystem_auditreport(executor, hours);
+        return ServerThread.call(() -> {
+            return banksystem_auditreport(executor, hours);
+        });
     }
 
     /** Task #113 — {@link net.kroia.banksystem.banking.ledger.AuditDigest#report}, completed on the server thread ("" on failure). */
@@ -278,43 +291,49 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> banksystem_disallowItem_async(@NotNull UUID executor, ItemID itemID) {
-        return CompletableFuture.completedFuture(banksystem_disallowItem(executor,itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(banksystem_disallowItem(executor,itemID));
+        });
     }
 
     @Override
     public CompletableFuture<Boolean> banksystem_serverInfo_async(@NotNull UUID executor)
     {
-        MinecraftServer server = UtilitiesPlatform.getServer();
-        if(server == null)
-            return CompletableFuture.completedFuture(false);
+        return ServerThread.call(() -> {
+            MinecraftServer server = UtilitiesPlatform.getServer();
+            if(server == null)
+                return CompletableFuture.completedFuture(false);
 
-        ServerPlayerUtilities.printToClientConsole(executor, ServerInfoRequest.createInfo(server).toString());
-        return CompletableFuture.completedFuture(true);
+            ServerPlayerUtilities.printToClientConsole(executor, ServerInfoRequest.createInfo(server).toString());
+            return CompletableFuture.completedFuture(true);
+        });
     }
     @Override
     public CompletableFuture<Boolean> banksystem_serverNetworkInfo_async(@NotNull UUID executor)
     {
-        if(!isPlayerAdmin(executor)) // BS-292: lists every server's address and players
-            return CompletableFuture.completedFuture(false);
-        MinecraftServer server = UtilitiesPlatform.getServer();
-        if(server == null)
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        ServerNetworkInfoRequest.sendRequest().thenAccept(serverNetworkInfo -> {
-            StringBuilder builder = new StringBuilder();
-            builder.append("§8============================================\n");
-            List<ServerInfoRequest.ServerInfo> servers = serverNetworkInfo.servers();
-            for(int i = 0; i < servers.size(); i++)
-            {
-                builder.append(servers.get(i));
-                if(i < servers.size()-1)
-                    builder.append("\n");
-            }
-            builder.append("\n§8============================================");
-            ServerPlayerUtilities.printToClientConsole(executor, builder.toString());
-            future.complete(true);
+        return ServerThread.call(() -> {
+            if(!isPlayerAdmin(executor)) // BS-292: lists every server's address and players
+                return CompletableFuture.completedFuture(false);
+            MinecraftServer server = UtilitiesPlatform.getServer();
+            if(server == null)
+                return CompletableFuture.completedFuture(false);
+            CompletableFuture<Boolean> future = new CompletableFuture<>();
+            ServerNetworkInfoRequest.sendRequest().thenAccept(serverNetworkInfo -> {
+                StringBuilder builder = new StringBuilder();
+                builder.append("§8============================================\n");
+                List<ServerInfoRequest.ServerInfo> servers = serverNetworkInfo.servers();
+                for(int i = 0; i < servers.size(); i++)
+                {
+                    builder.append(servers.get(i));
+                    if(i < servers.size()-1)
+                        builder.append("\n");
+                }
+                builder.append("\n§8============================================");
+                ServerPlayerUtilities.printToClientConsole(executor, builder.toString());
+                future.complete(true);
+            });
+            return future;
         });
-        return future;
     }
 
 
@@ -343,7 +362,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public CompletableFuture<Boolean> money_async(@NotNull UUID executor)
     {
-        return CompletableFuture.completedFuture(money(executor));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money(executor));
+        });
     }
 
 
@@ -354,7 +375,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> money_add_async(@NotNull UUID executor, float amount) {
-        return CompletableFuture.completedFuture(money_add(executor, amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money_add(executor, amount));
+        });
     }
 
 
@@ -390,7 +413,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> money_add_user_async(@NotNull UUID executor, String userName, float amount) {
-        return CompletableFuture.completedFuture(money_add_user(executor, userName, amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money_add_user(executor, userName, amount));
+        });
     }
 
 
@@ -403,7 +428,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> money_set_async(@NotNull UUID executor, float amount) {
-        return CompletableFuture.completedFuture(money_set(executor, amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money_set(executor, amount));
+        });
     }
 
 
@@ -439,7 +466,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> money_set_user_async(@NotNull UUID executor, String userName, float amount) {
-        return CompletableFuture.completedFuture(money_set_user(executor, userName, amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money_set_user(executor, userName, amount));
+        });
     }
 
 
@@ -451,7 +480,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> money_remove_async(@NotNull UUID executor, float amount) {
-        return CompletableFuture.completedFuture(money_remove(executor, amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money_remove(executor, amount));
+        });
     }
 
 
@@ -482,7 +513,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> money_remove_user_async(@NotNull UUID executor, String userName, float amount) {
-        return CompletableFuture.completedFuture(money_remove_user(executor, userName, amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money_remove_user(executor, userName, amount));
+        });
     }
 
 
@@ -528,7 +561,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> money_send_user_async(@NotNull UUID executor, String toUserName, float amount) {
-        return CompletableFuture.completedFuture(money_send_user(executor, toUserName, amount));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money_send_user(executor, toUserName, amount));
+        });
     }
 
 
@@ -542,7 +577,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     }
     @Override
     public CompletableFuture<Boolean> money_circulation_async(@NotNull UUID executor) {
-        return CompletableFuture.completedFuture(money_circulation(executor));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(money_circulation(executor));
+        });
     }
 
 
@@ -582,7 +619,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public CompletableFuture<Boolean> bank_manage_async(@NotNull UUID executor)
     {
-        return CompletableFuture.completedFuture(bank_manage(executor));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(bank_manage(executor));
+        });
     }
 
 
@@ -608,7 +647,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public CompletableFuture<Boolean> bank_manage_account_async(@NotNull UUID executor, String accountName)
     {
-        return CompletableFuture.completedFuture(bank_manage_account(executor, accountName));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(bank_manage_account(executor, accountName));
+        });
     }
 
 
@@ -635,7 +676,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public CompletableFuture<Boolean> bank_manage_account_async(@NotNull UUID executor, int accountNr)
     {
-        return CompletableFuture.completedFuture(bank_manage_account(executor, accountNr));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(bank_manage_account(executor, accountNr));
+        });
     }
 
 
@@ -678,7 +721,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public CompletableFuture<IAsyncBankAccount> bank_create_async(@NotNull UUID executor, String accountName)
     {
-        return CompletableFuture.completedFuture(AsyncBankAccount.createSlaveServerBank(bank_create(executor, accountName)));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(AsyncBankAccount.createSlaveServerBank(bank_create(executor, accountName)));
+        });
     }
 
 
@@ -709,7 +754,9 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public CompletableFuture<Boolean> bank_show_user_async(@NotNull UUID executor, String userName)
     {
-        return CompletableFuture.completedFuture(bank_show_user(executor, userName));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(bank_show_user(executor, userName));
+        });
     }
 
 
