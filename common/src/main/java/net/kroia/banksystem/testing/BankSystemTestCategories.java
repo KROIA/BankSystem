@@ -85,4 +85,9 @@ public class BankSystemTestCategories {
     public static final TestCategory FIXTURE = new TestCategory(
             "banksystem", "fixture", "Audit fixture story steps (opt-in, trusted slave)",
             TestCategory.ServerType.SLAVE_ONLY, true);
+
+    /** BS-288/BS-291 — scripted docs screenshots (on demand: runs only when named by --only banksystem/bs_docs_shots). */
+    public static final TestCategory DOCS_SHOTS = new TestCategory(
+            "banksystem", "bs_docs_shots", "Docs screenshots of the BankSystem screens and blocks (on demand, sp)",
+            TestCategory.ServerType.BOTH, true);
 }
