@@ -262,7 +262,9 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         executeInBox.setEnabled(canManage && oneTimeCheckBox.isChecked());
         executeInBox.setOnTextChanged(text -> dirty = true);
 
-        targetLabel = new Label(TARGET.getString() + ": " + targetDisplay());
+        targetLabel = new Label(targetText());
+        // BS-296: the label may show a shortened copy; the tooltip gives the whole target then.
+        targetLabel.setHoverTooltipSupplier(() -> targetLabel.getText().equals(targetText()) ? null : targetText());
         pickTargetButton = new Button(PICK_TARGET.getString(), this::onPickTargetClicked);
         pickTargetButton.setEnabled(canManage);
         pickTargetButton.setHoverTooltipSupplier(
@@ -369,6 +371,15 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         executeInBox.setEnabled(oneTime && canManage);
         // Re-apply dividend visibility (ONE_TIME always has a target).
         applyModeVisibility(dividendCheckBox.isChecked());
+    }
+
+    private String targetText() {
+        return TARGET.getString() + ": " + targetDisplay();
+    }
+
+    /** BS-296: the target cut at the end with "..." instead of the Label scrolling it (cut at both ends). */
+    private void fitTargetLabel() {
+        targetLabel.setText(ellipsize(targetLabel, targetText(), targetLabel.getWidth() - 2 * targetLabel.getPadding()));
     }
 
     private String targetDisplay() {
@@ -497,7 +508,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                     targetAccountNr = accountId;
                     targetAccountName = accountName;
                     dirty = true;
-                    targetLabel.setText(TARGET.getString() + ": " + targetDisplay());
+                    fitTargetLabel();
                 }));
     }
 
@@ -673,8 +684,12 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         dividendCheckBox.setBounds(padding + fp, y, width / 2, 20);
         y += 25;
 
-        targetLabel.setBounds(padding + fp, y, col - spacing - fp, 20);
-        pickTargetButton.setBounds(padding + col, y, col - spacing, 20);
+        // BS-296: the button fits its text at the row's right end; the label gets the rest of the row.
+        int pickW = Math.min(col - spacing, pickTargetButton.getTextWidth(pickTargetButton.getText()) + 20);
+        int pickX = padding + width - spacing - pickW;
+        pickTargetButton.setBounds(pickX, y, pickW, 20);
+        targetLabel.setBounds(padding + fp, y, pickX - spacing - padding - fp, 20);
+        fitTargetLabel();
         y += 25;
 
         targetFrame.setBounds(padding, dividendCheckBoxY - fp, width, y - (dividendCheckBoxY - fp) + fp);
