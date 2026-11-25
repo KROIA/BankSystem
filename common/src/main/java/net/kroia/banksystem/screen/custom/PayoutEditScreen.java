@@ -263,8 +263,9 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         executeInBox.setOnTextChanged(text -> dirty = true);
 
         targetLabel = new Label(targetText());
+        targetLabel.setEllipsisEnabled(true);
         // BS-296: the label may show a shortened copy; the tooltip gives the whole target then.
-        targetLabel.setHoverTooltipSupplier(() -> targetLabel.getText().equals(targetText()) ? null : targetText());
+        targetLabel.setHoverTooltipSupplier(() -> targetLabel.getDisplayedText().equals(targetLabel.getText()) ? null : targetLabel.getText());
         pickTargetButton = new Button(PICK_TARGET.getString(), this::onPickTargetClicked);
         pickTargetButton.setEnabled(canManage);
         pickTargetButton.setHoverTooltipSupplier(
@@ -375,11 +376,6 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
 
     private String targetText() {
         return TARGET.getString() + ": " + targetDisplay();
-    }
-
-    /** BS-296: the target cut at the end with "..." instead of the Label scrolling it (cut at both ends). */
-    private void fitTargetLabel() {
-        targetLabel.setText(ellipsize(targetLabel, targetText(), targetLabel.getWidth() - 2 * targetLabel.getPadding()));
     }
 
     private String targetDisplay() {
@@ -508,7 +504,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
                     targetAccountNr = accountId;
                     targetAccountName = accountName;
                     dirty = true;
-                    fitTargetLabel();
+                    targetLabel.setText(targetText());
                 }));
     }
 
@@ -689,7 +685,6 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         int pickX = padding + width - spacing - pickW;
         pickTargetButton.setBounds(pickX, y, pickW, 20);
         targetLabel.setBounds(padding + fp, y, pickX - spacing - padding - fp, 20);
-        fitTargetLabel();
         y += 25;
 
         targetFrame.setBounds(padding, dividendCheckBoxY - fp, width, y - (dividendCheckBoxY - fp) + fp);
