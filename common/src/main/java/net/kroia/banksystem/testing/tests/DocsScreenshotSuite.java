@@ -52,7 +52,6 @@ import net.kroia.banksystem.screen.custom.ShareStamperScreen;
 import net.kroia.banksystem.screen.custom.ShareVisualEditorScreen;
 import net.kroia.banksystem.screen.custom.atm.MoneyElement;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
-import net.kroia.banksystem.util.BankCraftingRecipes;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.MoneyFormat;
@@ -76,7 +75,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -86,7 +84,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.Rectangle;
 import java.nio.charset.StandardCharsets;
@@ -230,7 +227,7 @@ public class DocsScreenshotSuite extends TestSuite {
         MinecraftServer server = server();
         if (server == null) return skip(fixtureProblem = "needs the integrated server (sp cell)");
         if (BankSystemModBackend.getInstances_forTesting().isSlaveServer) return skip(fixtureProblem = "not the BankSystem master");
-        String name = Gui.onClient(() -> Minecraft.getInstance().player.getGameProfile().getName());
+        String name = Gui.onClient(() -> Minecraft.getInstance().player.getName().getString());
         if (!SELF.equals(name))
             return fail(fixtureProblem = "start the client with --client-name " + SELF + " (the name shows on the screens), not " + name);
         List<String> notes = new ArrayList<>();
@@ -631,7 +628,7 @@ public class DocsScreenshotSuite extends TestSuite {
             String problem = prepare.get();
             if (problem != null) return fail(problem);
             // in the world (no screen) the mouse turns the camera: it is left alone there
-            boolean screen = Gui.onClient(() -> Minecraft.getInstance().screen != null);
+            boolean screen = Gui.onClient(() -> ClientCompat.screen() != null);
             if (screen) parkMouse();
             List<Layout.Problem> layout = screen ? Gui.layoutProblems() : List.of();
             Rectangle area = crop == null ? null : crop.get();
@@ -649,7 +646,7 @@ public class DocsScreenshotSuite extends TestSuite {
 
     /** Closes the open screen and the parents it returns to. */
     static void closeAll() {
-        for (int i = 0; i < 6 && Gui.onClient(() -> Minecraft.getInstance().screen != null); i++) Gui.close();
+        for (int i = 0; i < 6 && Gui.onClient(() -> ClientCompat.screen() != null); i++) Gui.close();
         Gui.waitTicks(5);
     }
 
@@ -763,14 +760,14 @@ public class DocsScreenshotSuite extends TestSuite {
             boolean checked = Gui.onClient(() -> ((CheckBox) boxes.get(0).handle()).isChecked());
             if (!checked) {
                 GuiNode box = boxes.get(0); // only its box (the right end) takes the click
-                Gui.click(box.x() + box.width() - box.height() / 2.0, box.centerY(), GLFW.GLFW_MOUSE_BUTTON_LEFT);
+                Gui.click(box.x() + box.width() - box.height() / 2.0, box.centerY(), 0); // 0 = left button
                 Gui.waitTicks(20);
             }
         }
         Gui.onClient(() -> {
             Minecraft mc = Minecraft.getInstance();
-            if (!(mc.screen instanceof BankTerminalScreen terminal)) return;
-            var recipe = BankCraftingRecipes.byId(mc.level, ResourceLocation.withDefaultNamespace("iron_pickaxe"));
+            if (!(ClientCompat.screen() instanceof BankTerminalScreen terminal)) return;
+            var recipe = BankCraftingMatcherTests.craftingRecipe(mc.level, "iron_pickaxe");
             if (recipe != null) terminal.getMenu().requestGhostRecipe(recipe);
         });
         Gui.waitTicks(DATA_TICKS);
@@ -934,7 +931,7 @@ public class DocsScreenshotSuite extends TestSuite {
             Gui.waitForScreen(InventoryScreen.class, 100);
             Gui.waitTicks(10);
             int[] origin = Gui.onClient(() -> {
-                Screen s = Minecraft.getInstance().screen;
+                Screen s = ClientCompat.screen();
                 return new int[]{(s.width - 176) / 2, (s.height - 166) / 2};
             });
             // main inventory slot 10 (second slot of the top row): x 26, y 84 in the 176x166 window
