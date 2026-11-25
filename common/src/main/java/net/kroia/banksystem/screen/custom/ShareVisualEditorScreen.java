@@ -49,6 +49,11 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
     private static final Component DESCRIPTION  = Component.translatable(PREFIX + "description");
     private static final Component PREVIEW      = Component.translatable(PREFIX + "preview");
     private static final Component CARD_COLOR   = Component.translatable(PREFIX + "card_color");
+    private static final Component FOREGROUND   = Component.translatable(PREFIX + "foreground");
+    private static final Component BACKGROUND   = Component.translatable(PREFIX + "background");
+    private static final Component SYMBOL       = Component.translatable(PREFIX + "symbol");
+    private static final Component COLOR        = Component.translatable(PREFIX + "color");
+    private static final Component NO_SYMBOL    = Component.translatable(PREFIX + "no_symbol");
 
     private final GuiScreen parent;
     private final int companyId;
@@ -120,9 +125,9 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
         cardColorSwatch.setEnabled(canManage);
 
         // FG first (top of scroll list = foreground visual layer), BG second.
-        fgPanel = new ShareLayerPanel("Foreground",
+        fgPanel = new ShareLayerPanel(FOREGROUND.getString(),
                 initial.getFgLayer().symbolId(), initial.getFgLayer().tint());
-        bgPanel = new ShareLayerPanel("Background",
+        bgPanel = new ShareLayerPanel(BACKGROUND.getString(),
                 initial.getBgLayer().symbolId(), initial.getBgLayer().tint());
 
         layerList = new VerticalListView();
@@ -293,13 +298,13 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
             selectedTint = (initialTint & 0xFF000000) == 0 ? (initialTint | 0xFF000000) : initialTint;
 
             titleLabel = new Label("§l" + title);
-            symbolLabel = new Label("Symbol:");
+            symbolLabel = new Label(SYMBOL.getString());
             symbolButton = new Button(
-                    selectedSymbolId.isEmpty() ? "(none)" : selectedSymbolId,
+                    selectedSymbolId.isEmpty() ? NO_SYMBOL.getString() : selectedSymbolId,
                     this::onPickSymbol);
             symbolButton.setEnabled(canManage);
 
-            colorLabel = new Label("Color:");
+            colorLabel = new Label(COLOR.getString());
             colorSwatch = new Button("", this::onPickColor);
             applySwatchColor(selectedTint);
             colorSwatch.setEnabled(canManage);
@@ -325,7 +330,7 @@ public class ShareVisualEditorScreen extends BankSystemGuiScreen {
                             presetId -> {
                                 selectedSymbolId = presetId == null ? "" : presetId;
                                 dirty = true;
-                                symbolButton.setText(selectedSymbolId.isEmpty() ? "(none)" : selectedSymbolId);
+                                symbolButton.setText(selectedSymbolId.isEmpty() ? NO_SYMBOL.getString() : selectedSymbolId);
                                 updatePreview();
                             }));
         }

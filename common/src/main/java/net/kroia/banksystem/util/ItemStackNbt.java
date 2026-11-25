@@ -1,6 +1,8 @@
 package net.kroia.banksystem.util;
 
+import com.mojang.serialization.Dynamic;
 import net.kroia.modutilities.NbtCompat;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
@@ -8,6 +10,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.util.datafix.DataFixers;
+import net.minecraft.util.datafix.fixes.References;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
@@ -54,6 +58,19 @@ public final class ItemStackNbt {
      */
     public static Optional<ItemStack> parseStrict(HolderLookup.Provider registries, Tag tag) {
         return ItemStack.CODEC.parse(ops(registries), tag).result();
+    }
+
+    /**
+     * BS-308: upgrades a saved item tag written by Minecraft data version {@code fromVersion} to the running
+     * version with Minecraft's own DataFixer, the way vanilla upgrades items in chunks and player data
+     * (renamed items, changed component formats). Returns the tag unchanged when it is already current, and
+     * never modifies the argument.
+     */
+    public static Tag upgrade(Tag tag, int fromVersion) {
+        if (fromVersion >= SharedConstants.WORLD_VERSION)
+            return tag;
+        return DataFixers.getDataFixer().update(References.ITEM_STACK, new Dynamic<>(NbtOps.INSTANCE, tag.copy()),
+                fromVersion, SharedConstants.WORLD_VERSION).getValue();
     }
 
     /** Like 1.21.1 {@code ItemStack.parseOptional(registries, tag)}. */

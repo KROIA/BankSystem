@@ -471,7 +471,7 @@ public final class CompanyManager implements ServerSaveableChunked {
     /**
      * Spec B.1–B.3 (v2.1.0) — extended create carrying the explicit target account,
      * display-name snapshots (spec A.9), payout mode, and currency ItemID short.
-     * DIVIDEND-mode schedules do not require a target.
+     * Only DIVIDEND-mode schedules may omit the target.
      */
     public ScheduleCreateOutcome createSchedule(int companyId, UUID target, long amount,
                                                 long intervalTicks, long nowTick, UUID createdBy,
@@ -481,7 +481,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         Company company = byId.get(companyId);
         if (company == null) return new ScheduleCreateOutcome(PayoutMutation.COMPANY_MISSING, null);
         if (mode == null) mode = PayoutSchedule.Mode.FIXED_PAYOUT;
-        boolean needsTarget = mode == PayoutSchedule.Mode.FIXED_PAYOUT;
+        boolean needsTarget = mode != PayoutSchedule.Mode.DIVIDEND; // BS-293: ONE_TIME pays one target too
         if ((needsTarget && target == null) || amount <= 0 || intervalTicks < MIN_INTERVAL_TICKS) {
             return new ScheduleCreateOutcome(PayoutMutation.INVALID_INPUT, null);
         }
@@ -519,7 +519,7 @@ public final class CompanyManager implements ServerSaveableChunked {
         Company company = byId.get(companyId);
         if (company == null) return PayoutMutation.COMPANY_MISSING;
         if (newMode == null) newMode = PayoutSchedule.Mode.FIXED_PAYOUT;
-        boolean needsTarget = newMode == PayoutSchedule.Mode.FIXED_PAYOUT;
+        boolean needsTarget = newMode != PayoutSchedule.Mode.DIVIDEND; // BS-293: ONE_TIME pays one target too
         if ((needsTarget && newTarget == null) || newAmount <= 0 || newIntervalTicks < MIN_INTERVAL_TICKS) {
             return PayoutMutation.INVALID_INPUT;
         }
