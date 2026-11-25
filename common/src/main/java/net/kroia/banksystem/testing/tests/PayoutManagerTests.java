@@ -1,8 +1,11 @@
 package net.kroia.banksystem.testing.tests;
 
+import net.kroia.banksystem.api.event.PayoutExecutedInfo;
 import net.kroia.banksystem.banking.company.Company;
 import net.kroia.banksystem.banking.company.CompanyManager;
+import net.kroia.banksystem.banking.company.PayoutExecutor;
 import net.kroia.banksystem.banking.company.PayoutSchedule;
+import net.kroia.banksystem.data.table.record.PayoutHistoryRecord;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
@@ -10,7 +13,9 @@ import net.kroia.testkit.TestSuite;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -49,6 +54,66 @@ public class PayoutManagerTests extends TestSuite {
         addTest("schedule_immutable_copy_with", this::testScheduleImmutableCopyWith);
         addTest("currency_ban_fallback_pause_resume", this::testCurrencyBanFallbackPauseResume);
         addTest("currency_ban_money_sets_unset", this::testCurrencyBanMoneySetsUnset);
+        addTest("one_time_needs_target_and_backs_off", this::testOneTimeNeedsTargetAndBacksOff); // BS-293
+    }
+
+    /**
+     * BS-293: a ONE_TIME schedule needs a target on create and update. One saved without a target
+     * by an older version still loads; its repeated failure writes one history row and one event,
+     * and the retry delay doubles up to the cap instead of retrying every second.
+     */
+    private TestResult testOneTimeNeedsTargetAndBacksOff() {
+        CompanyManager cm = fresh();
+        int id = make(cm, "OneTime", 1).getCompanyId();
+        PayoutSchedule.Mode oneTime = PayoutSchedule.Mode.ONE_TIME;
+        if (cm.createSchedule(id, null, 100L, 40L, 0L, CALLER, PayoutSchedule.NO_TARGET_ACCOUNT, "", "",
+                oneTime, PayoutSchedule.MONEY_CURRENCY).result != CompanyManager.PayoutMutation.INVALID_INPUT)
+            return fail("ONE_TIME without a target accepted on create");
+        long sid = cm.createSchedule(id, WORKER1, 100L, 40L, 0L, CALLER, PayoutSchedule.NO_TARGET_ACCOUNT, "", "",
+                oneTime, PayoutSchedule.MONEY_CURRENCY).schedule.getScheduleId();
+        if (cm.updateScheduleEx(id, sid, 100L, 40L, 0L, null, PayoutSchedule.NO_TARGET_ACCOUNT, "", "",
+                oneTime, PayoutSchedule.MONEY_CURRENCY) != CompanyManager.PayoutMutation.INVALID_INPUT)
+            return fail("ONE_TIME without a target accepted on update");
+
+        // Saved data of an older version: a company with a targetless ONE_TIME schedule.
+        CompoundTag schedule = new CompoundTag();
+        new PayoutSchedule(7L, null, 100L, 40L, 0L, false, 0L, CALLER, PayoutSchedule.NO_TARGET_ACCOUNT, "", "",
+                oneTime, PayoutSchedule.MONEY_CURRENCY, 0L, 0).save(schedule);
+        ListTag schedules = new ListTag();
+        schedules.add(schedule);
+        CompoundTag company = new CompoundTag();
+        company.putInt("companyId", 1);
+        company.putString("name", "Legacy");
+        company.putInt("bankAccountNr", 1);
+        company.putLong("maxSupply", 100L);
+        company.putLong("createdAt", 1L);
+        company.put("payoutSchedules", schedules);
+        ListTag companies = new ListTag();
+        companies.add(company);
+        Map<String, ListTag> data = new HashMap<>();
+        data.put("companies", companies);
+        CompanyManager legacyCm = fresh();
+        legacyCm.load(data);
+        Company legacy = legacyCm.getById(1);
+        if (legacy == null || legacy.findSchedule(7L) == null) return fail("targetless ONE_TIME schedule did not load");
+
+        // A null target fails before the bank manager is used, so no bank manager is needed.
+        List<PayoutHistoryRecord> history = new ArrayList<>();
+        List<PayoutExecutedInfo> events = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            long tick = legacy.findSchedule(7L).getNextRunTick();
+            PayoutExecutor.runDue(legacyCm, legacy, null, tick, 0L, history, new ArrayList<>(), events);
+            PayoutSchedule after = legacy.findSchedule(7L);
+            if (after == null) return fail("failing ONE_TIME schedule was removed");
+            long expected = Math.min(PayoutExecutor.ONE_TIME_RETRY_MAX_TICKS, PayoutExecutor.ONE_TIME_RETRY_TICKS << i);
+            if (after.getNextRunTick() - tick != expected)
+                return fail("failure " + (i + 1) + ": retry in " + (after.getNextRunTick() - tick) + " ticks, expected " + expected);
+        }
+        if (history.size() != 1 || events.size() != 1)
+            return fail(history.size() + " history rows and " + events.size() + " events for 8 failures, expected 1 each");
+        if (history.get(0).status() != PayoutHistoryRecord.Status.TARGET_MISSING)
+            return fail("history status " + history.get(0).status() + ", expected TARGET_MISSING");
+        return pass("targetless ONE_TIME refused; a loaded one failed 8 times with 1 history row, 1 event, delay capped");
     }
 
     private long makeScheduleWithCurrency(CompanyManager cm, int companyId, UUID target, short currency) {

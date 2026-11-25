@@ -52,7 +52,7 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         }
         else
         {
-            ServerPlayerUtilities.printToClientConsole(player,"This command is only for BankSystem admins!");
+            ServerPlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getOnlyForAdminsMessage());
             return CompletableFuture.completedFuture(false);
         }
     }
@@ -69,15 +69,15 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         @Nullable UUID playerUUID = tryGetPlayerUUID(userName);
         if(playerUUID == null)
         {
-            sendMessage(executor, "No UUID found for Player: "+userName);
+            sendMessage(executor, BankSystemTextMessages.getPlayerUUIDNotFoundMessage(userName));
             return false;
         }
         if(net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), // BS-257: actor of the audit line
                 () -> BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().setBanksystemAdminMode(playerUUID, isAdmin)))
         {
-            sendMessage(executor, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
+            sendMessage(executor, BankSystemTextMessages.getAdminModeSetMessage(isAdmin, userName));
             if(!executor.equals(playerUUID))
-                sendMessage(playerUUID, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
+                sendMessage(playerUUID, BankSystemTextMessages.getAdminModeSetMessage(isAdmin, userName));
             net.kroia.banksystem.util.AdminFlagSync.pushToLuckPerms(executor, playerUUID, userName, isAdmin); // Task #107
             return true;
         }
@@ -100,21 +100,21 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
         if(isTrusted) {
             if (manager.isSlaveServerTrusted(slaveID))
             {
-                sendMessage(executor, "The slave '"+slaveID+"' is already trusted");
+                sendMessage(executor, BankSystemTextMessages.getSlaveAlreadyTrustedMessage(slaveID));
                 return true;
             }
             net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), () -> { manager.trustSlaveServer(slaveID); return null; }); // BS-257
-            sendMessage(executor, "The slave '"+slaveID+"' is now trusted");
+            sendMessage(executor, BankSystemTextMessages.getSlaveNowTrustedMessage(slaveID));
         }
         else
         {
             if (!manager.isSlaveServerTrusted(slaveID))
             {
-                sendMessage(executor, "The slave '"+slaveID+"' was not trusted");
+                sendMessage(executor, BankSystemTextMessages.getSlaveWasNotTrustedMessage(slaveID));
                 return true;
             }
             net.kroia.banksystem.banking.ledger.TransactionLedger.withActor(net.kroia.banksystem.banking.ledger.TransactionLedger.admin(executor), () -> { manager.untrustSlaveServer(slaveID); return null; }); // BS-257
-            sendMessage(executor, "The slave '"+slaveID+"' is no longer trusted");
+            sendMessage(executor, BankSystemTextMessages.getSlaveNoLongerTrustedMessage(slaveID));
         }
         return true;
     }
@@ -294,6 +294,8 @@ public class ServerBankSystemCommandHandler implements IServerBankSystemCommandH
     @Override
     public CompletableFuture<Boolean> banksystem_serverNetworkInfo_async(@NotNull UUID executor)
     {
+        if(!isPlayerAdmin(executor)) // BS-292: lists every server's address and players
+            return CompletableFuture.completedFuture(false);
         MinecraftServer server = UtilitiesPlatform.getServer();
         if(server == null)
             return CompletableFuture.completedFuture(false);

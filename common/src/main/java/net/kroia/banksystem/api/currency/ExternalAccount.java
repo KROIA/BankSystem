@@ -113,6 +113,8 @@ public interface ExternalAccount {
      * <b>advisory</b> — usually implemented as {@code getBalance() >= amount} — and
      * a subsequent {@code withdraw} may still fail (e.g. because the balance moved
      * between the two calls via the external mod's own UI).
+     * <p>
+     * BankSystem does not call this method yet; adapters implement it for future use.
      *
      * @param amount amount to test, in BankSystem raw units.
      * @return {@code true} if the withdraw is expected to succeed.
@@ -120,20 +122,22 @@ public interface ExternalAccount {
     boolean canWithdraw(long amount);
 
     /**
+     * BankSystem does not call this method yet; adapters implement it for future use.
+     * The rule that shared BankSystem accounts only bind to shared external accounts
+     * is checked with {@link ExternalAccountRef#shared()} instead.
+     *
      * @return {@code true} if this external account is co-owned by multiple players
-     *         on the provider side (e.g. Numismatics BLAZE_BANKER). Shared BankSystem
-     *         accounts may only bind to shared external accounts.
+     *         on the provider side (e.g. Numismatics BLAZE_BANKER).
      */
     boolean isSharedAccount();
 
     /**
      * Snapshot of the current membership set as understood by the provider — i.e.
      * the UUIDs of players who can withdraw / spend from this external account.
-     * <p>
-     * Used by BankSystem for perm-mapping sanity checks (does the BankSystem
-     * WITHDRAW set match the external membership set?) and for logging. For
-     * personal (single-owner) accounts this returns a one-element set with the
+     * For personal (single-owner) accounts this returns a one-element set with the
      * owner's UUID.
+     * <p>
+     * BankSystem does not call this method yet; adapters implement it for future use.
      *
      * @return a snapshot set of member UUIDs. May be empty (e.g. an unclaimed
      *         shared account). Never {@code null}. Implementations should return a
@@ -143,16 +147,17 @@ public interface ExternalAccount {
 
     /**
      * Requests the provider replace its withdraw-capable membership set with the
-     * given UUIDs. Called by BankSystem whenever a shared BankSystem account's user
-     * list or per-user permission mask changes.
+     * given UUIDs.
      * <p>
-     * <b>Best-effort.</b> If the provider does not advertise
-     * {@link ProviderFeature#MEMBERSHIP_SYNC}, this method is a no-op and BankSystem
-     * treats non-propagation as expected (e.g. Numismatics PLAYER-type accounts, or
-     * Lightman's personal-only bindings). When the feature bit is set, the provider
-     * is expected to reflect the change on its side (Numismatics trust list, etc.)
-     * before returning, but transient failures should be swallowed rather than
-     * thrown — BankSystem cannot recover from an exception here.
+     * <b>BankSystem does not call this method yet.</b> The members of a shared
+     * BankSystem account are not synced to the external mod (e.g. the Numismatics
+     * Blaze Banker trust list); adapters implement it for future use.
+     * <p>
+     * Contract for implementations: best-effort. A provider without
+     * {@link ProviderFeature#MEMBERSHIP_SYNC} makes this a no-op (e.g. Numismatics
+     * PLAYER-type accounts, or Lightman's Currency). With the feature bit, the
+     * provider should reflect the change on its side before returning, and swallow
+     * transient failures rather than throw.
      *
      * @param withdrawCapableUuids the target set of members that should be able to
      *                             withdraw from this external account. Never

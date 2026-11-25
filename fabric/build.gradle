@@ -146,3 +146,5 @@ remapJar { // mc<=1.21.11
 //jar { // mc>=26.1
     //archiveClassifier = 'raw' // mc>=26.1
 //} // mc>=26.1
+// Loom nests the `include` jars only into the raw `jar` by itself; on 26.1+ the shadow jar is the release jar, so nest them there too.
+//loom.nestJars(tasks.named('shadowJar'), configurations.include) // mc>=26.1

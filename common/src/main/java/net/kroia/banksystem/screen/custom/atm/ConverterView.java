@@ -64,6 +64,7 @@ public class ConverterView extends BankSystemGuiElement {
     public static final String DROP_REMAINDER_BUTTON_KEY = COMPONENT_STR_START + "converter_drop_remainder_button";
     public static final String DEPOSIT_TO_BANK_BUTTON_KEY = COMPONENT_STR_START + "converter_deposit_to_bank_button";
     public static final String NO_ACCOUNT_SELECTED_KEY = COMPONENT_STR_START + "no_account_selected";
+    public static final String NO_MONEY_ITEMS_KEY = COMPONENT_STR_START + "converter_no_money_items";
 
     // Tooltip keys (backend agent adds the strings; see task instructions).
     public static final String TOOLTIP_DEPOSIT_KEY           = COMPONENT_STR_START + "tooltip.converter_deposit";
@@ -318,7 +319,7 @@ public class ConverterView extends BankSystemGuiElement {
 
         if (moneyItems.isEmpty()) {
             // Nothing to deposit — surface a friendly no-op instead of a silent click.
-            net.kroia.modutilities.PlayerCompat.sendMessage(player, Component.literal("No money items found in inventory."), false);
+            net.kroia.modutilities.PlayerCompat.sendMessage(player, Component.translatable(NO_MONEY_ITEMS_KEY), false);
             return;
         }
         try {
