@@ -17,6 +17,8 @@ import net.kroia.banksystem.banking.company.AsyncCompanyManager;
 import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.banksystem.testing.LiveStateGuard;
+import net.kroia.banksystem.testing.fixture.FixtureSteps;
+import net.kroia.banksystem.util.ServerThread;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
@@ -27,6 +29,8 @@ import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Tests for {@link net.kroia.banksystem.banking.bankmanager.ServerBankManager}
@@ -86,6 +90,51 @@ public class BankManagerTests extends TestSuite {
         // Task #144 — small lookups only for readers of the account
         addTest("personal_account_lookups_need_reader", this::testPersonalAccountLookupsNeedReader);
         addTest("company_account_list_visible_to_caller", this::testCompanyAccountListVisibleToCaller);
+        // BS-303 — the master's async API runs its work on the server thread
+        addTest("async_api_runs_on_server_thread", this::testAsyncApiRunsOnServerThread);
+    }
+
+    /**
+     * BS-303: the async bank API runs its work on the server thread, also when a mod calls it from its own thread.
+     * While this (server) thread waits for the caller thread, a hopped call can't be finished yet; before BS-303 the
+     * master answered on the caller's thread and the future was already done.
+     */
+    private TestResult testAsyncApiRunsOnServerThread() {
+        net.minecraft.server.MinecraftServer server = net.kroia.modutilities.UtilitiesPlatform.getServer();
+        if (server == null)
+            return pass("skipped: no server");
+        boolean onServerThread = server.isSameThread();
+        if (onServerThread) {
+            CompletableFuture<Boolean> inline = ServerThread.call(() -> CompletableFuture.completedFuture(server.isSameThread()));
+            if (!inline.isDone() || !inline.join())
+                return fail("on the server thread the work must run inline");
+        }
+        AtomicReference<CompletableFuture<Boolean>> hop = new AtomicReference<>();
+        AtomicReference<CompletableFuture<Boolean>> api = new AtomicReference<>();
+        Thread caller = new Thread(() -> {
+            hop.set(ServerThread.call(() -> CompletableFuture.completedFuture(server.isSameThread())));
+            api.set(BankSystemMod.getAPI().getServerBankManager().getAsync().userExistsAsync(UUID.randomUUID()));
+        }, "BS-303 test caller");
+        caller.start();
+        try {
+            caller.join(5000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return fail("interrupted");
+        }
+        if (hop.get() == null || api.get() == null)
+            return fail("the caller thread did not return its futures");
+        if (onServerThread && (hop.get().isDone() || api.get().isDone()))
+            return fail("a call from another thread finished before the server thread ran it (hop done="
+                    + hop.get().isDone() + ", userExistsAsync done=" + api.get().isDone() + ")");
+        FixtureSteps.pumpUntil(server, () -> hop.get().isDone() && api.get().isDone(), 5000);
+        if (!hop.get().isDone() || !api.get().isDone())
+            return fail("the hopped calls did not finish within 5 s");
+        if (!hop.get().join())
+            return fail("the hopped work did not run on the server thread");
+        if (api.get().join())
+            return fail("userExistsAsync found a random UUID");
+        return pass("work runs inline on the server thread and hops there from other threads (userExistsAsync too)");
     }
 
     @Override
