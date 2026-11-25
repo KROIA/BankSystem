@@ -1,13 +1,13 @@
 package net.kroia.banksystem.testing.tests;
 
 import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.screen.custom.BankAccountSelectionScreen;
 import net.kroia.banksystem.testing.BankSystemTestCategories;
 import net.kroia.testkit.TestCategory;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.TestSuite;
 import net.kroia.testkit.autotest.AutoTest;
+import net.kroia.testkit.autotest.ServerRole;
 import net.kroia.testkit.gui.Gui;
 import net.kroia.testkit.gui.GuiNode;
 import net.kroia.testkit.gui.Layout;
@@ -18,7 +18,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -35,8 +34,6 @@ public class AccountSelectionGuiTests extends TestSuite {
 
     /** Ticks the account list gets to arrive from the (master) server. */
     private static final int LIST_TICKS = 200;
-    /** Bound for the trust question a slave asks the master. */
-    private static final int TRUST_SECONDS = 15;
     private static final String UNTRUSTED = "untrusted slave: the master refuses its account reads, empty list expected";
     private static final String MASTER_DOWN = "slave-masterdown cell: the master is down on purpose, no account list";
     private static final String NO_ROWS = "no shown account rows within " + LIST_TICKS + " ticks";
@@ -66,19 +63,11 @@ public class AccountSelectionGuiTests extends TestSuite {
     }
 
     /**
-     * True on a slave the master does not trust. sp, mp and a master are decided from the join-synced isMasterServer
-     * flag with no round trip; only a slave asks the master (same check the account screen uses). No answer throws,
-     * so the test errors instead of hiding a broken slave link behind a skip.
+     * True on a slave the cell does not trust (BS-306): TestKit's server role, from run_matrix's serverRole/trustedSlave
+     * properties or the local role provider. No round trip to the master, which timed out under load.
      */
     private static boolean onUntrustedSlave() {
-        if (Gui.onClient(() -> BankSystemModBackend.getInstances_forTesting().CLIENT_SETTINGS.isMasterServer()))
-            return false;
-        IClientBankManager client = BankSystemModBackend.getInstances_forTesting().CLIENT_BANK_MANAGER;
-        try {
-            return !Gui.onClient(client::isServerTrustedAsync).get(TRUST_SECONDS, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new RuntimeException("slave got no trust answer from the master within " + TRUST_SECONDS + " s", e);
-        }
+        return AutoTest.serverRole() == ServerRole.SLAVE_UNTRUSTED;
     }
 
     /** Opens the screen for the joined player and waits until its account list has shown rows. */

@@ -168,14 +168,19 @@ public class ShareSymbolStore {
             entries.set(idx, updated);
             byId.put(id, updated);
         } else {
-            int ordinal = entries.isEmpty() ? 0 : entries.get(entries.size() - 1).ordinal() + 1;
-            SymbolEntry entry = new SymbolEntry(id, ordinal, hash, bytes.length);
-            entries.add(entry);
-            byId.put(id, entry);
+            addNew(id, hash, bytes.length);
         }
 
         bumpRevision();
         return null;
+    }
+
+    /** Append a new symbol with the next free ordinal. */
+    private void addNew(String id, byte[] hash, int size) {
+        int ordinal = entries.isEmpty() ? 0 : entries.get(entries.size() - 1).ordinal() + 1;
+        SymbolEntry entry = new SymbolEntry(id, ordinal, hash, size);
+        entries.add(entry);
+        byId.put(id, entry);
     }
 
     /**
@@ -198,7 +203,9 @@ public class ShareSymbolStore {
     }
 
     /**
-     * Rescan the folder: re-hash all PNGs, update manifest if anything changed.
+     * Rescan the folder: re-hash known PNGs, drop deleted ones, and add new valid PNGs with the
+     * next ordinal (as {@link #adminAdd} does). Existing symbols keep their ordinals.
+     * Updates the manifest if anything changed.
      *
      * @return {@code null} if unchanged, an info string describing changes otherwise.
      */
@@ -220,7 +227,38 @@ public class ShareSymbolStore {
             }
         }
         entries.clear(); entries.addAll(updated);
+        byId.clear(); // BS-294: a deleted file must not stay findable by id
         updated.forEach(e -> byId.put(e.id(), e));
+
+        // BS-294: PNGs copied straight into the folder are added too, in file name order.
+        List<Path> files = new ArrayList<>();
+        try (DirectoryStream<Path> dir = Files.newDirectoryStream(symbolDir, "*.png")) {
+            dir.forEach(files::add);
+        } catch (IOException e) {
+            logger.warn("[ShareSymbolStore] Cannot list " + symbolDir + ": " + e.getMessage());
+        }
+        files.sort(null);
+        for (Path file : files) {
+            String name = file.getFileName().toString();
+            String id = name.substring(0, name.length() - 4);
+            if (byId.containsKey(id) || !ID_PATTERN.matcher(id).matches()) continue;
+            if (entries.size() >= MAX_SYMBOLS) {
+                logger.warn("[ShareSymbolStore] Symbol limit reached (" + MAX_SYMBOLS + "), skipped " + name + " and later files.");
+                break;
+            }
+            byte[] bytes;
+            try { bytes = Files.readAllBytes(file); } catch (IOException e) {
+                logger.warn("[ShareSymbolStore] Cannot read " + name + ": " + e.getMessage());
+                continue;
+            }
+            String err = validatePng(bytes);
+            if (err != null) {
+                logger.warn("[ShareSymbolStore] Skipped " + name + ": " + err);
+                continue;
+            }
+            addNew(id, sha256(bytes), bytes.length);
+            changed++;
+        }
 
         if (changed > 0) {
             bumpRevision();

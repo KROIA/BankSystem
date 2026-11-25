@@ -205,6 +205,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
     private static final Component FILTER_LABEL_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".filter");
     private static final Component USE_BANK_ITEMS_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.use_bank_items");
     private static final Component AUTO_DEPOSIT_OUTPUT_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.deposit_crafted_to_bank");
+    private static final Component HISTORY_BUTTON_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".bank_terminal_screen.history_button");
     private static final Component NO_ANSWER_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".request.no_answer");
     private static final Component COULD_NOT_LOAD_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".request.could_not_load");
 
@@ -328,7 +329,7 @@ public class BankTerminalScreen extends BankSystemGuiContainerScreen<BankTermina
         receiveItemsFromBankButton = new Button(RECEIVE_ITEMS_FROM_BANK_BUTTON_TEXT.getString());
         receiveItemsFromBankButton.setOnFallingEdge(this::onReceiveItemsFromBank);
 
-        balanceHistoryButton = new Button("History");
+        balanceHistoryButton = new Button(HISTORY_BUTTON_TEXT.getString());
         balanceHistoryButton.setOnFallingEdge(() -> {
             if (selectedBankAccountNr > 0) {
                 BalanceHistoryScreen historyScreen = new BalanceHistoryScreen(this, selectedBankAccountNr);

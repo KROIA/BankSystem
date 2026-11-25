@@ -11,8 +11,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Company entity — Phase 1 (Task #43) foundation for the Company Feature program.
@@ -43,6 +45,8 @@ public final class Company {
     private long totalSharesIssued;
     private ShareVisuals shareVisuals;
     private final List<PayoutSchedule> payoutSchedules;
+    /** BS-293: failure state of each failing ONE_TIME schedule (by schedule id); PayoutExecutor-owned, not persisted. */
+    final Map<Long, PayoutExecutor.OneTimeFailure> oneTimeFailures = new ConcurrentHashMap<>();
     /** Task #45 — monotonic schedule id allocator, scoped per Company. */
     private long nextScheduleId = 1L;
     /** v2.1.0 — last-used timeframe index for the Statistics tab (0=24h, 1=7d, 2=30d, 3=90d, 4=all). */
@@ -212,6 +216,7 @@ public final class Company {
     }
 
     boolean removeSchedule(long scheduleId) {
+        oneTimeFailures.remove(scheduleId);
         return payoutSchedules.removeIf(s -> s.getScheduleId() == scheduleId);
     }
 
