@@ -14,9 +14,8 @@ import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.testkit.TestResult;
 import net.kroia.testkit.gui.Gui;
 import net.kroia.testkit.gui.GuiNode;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.kroia.modutilities.ItemUtilities;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -70,7 +69,7 @@ public class DocsCurrencyShotsSuite extends DocsScreenshotSuite {
                     throw new IllegalStateException("Numismatics account: " + e, e);
                 }
             });
-            ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(SPUR)));
+            ItemStack stack = ItemUtilities.createItemStackFromId(SPUR);
             IAsyncBankManager bank = BankSystemMod.getAPI().getServerBankManager().getAsync();
             ItemID id = await(ItemIDManager.registerItemStackServerSide(stack), WAIT_MS);
             await(bank.allowItemIDAsync(id), WAIT_MS);
