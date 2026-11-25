@@ -122,17 +122,6 @@ public abstract class BankSystemGuiScreen extends GuiScreen {
     }
 
     /**
-     * BS-296: {@code text} cut at the end with "..." so it fits {@code maxWidth}, measured with {@code measure}'s font
-     * scale. A ModUtilities Label scrolls text that is too wide back and forth, which looks cut at both ends.
-     */
-    public static String ellipsize(net.kroia.modutilities.gui.elements.base.GuiElement measure, String text, int maxWidth) {
-        if (measure.getTextWidth(text) <= maxWidth) return text;
-        int end = text.length();
-        while (end > 0 && measure.getTextWidth(text.substring(0, end) + "...") > maxWidth) end--;
-        return text.substring(0, end).stripTrailing() + "...";
-    }
-
-    /**
      * @return true if the server this client is connected to is the MASTER server
      *         (or a regular single server, which acts as its own master). Synced at
      *         player join via {@code PlayerJoinSyncPacket}; used to gate master-only
