@@ -521,7 +521,6 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
                             iv.setBounds(1, 1, 16, 16);
                         } else if (child instanceof Button btn) {
                             btn.setBounds(19, 0, getWidth() - 19, 18);
-                            btn.setText(BankSystemGuiScreen.ellipsize(btn, name, btn.getWidth() - 2 * GuiElement.DEFAULT_PADDING));
                         }
                     }
                 }
@@ -540,6 +539,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
             int hoverColor = ColorUtilities.setBrightness(color, 1.4f);
             int inactiveColor = ColorUtilities.getRGB(60, 60, 60);
             Button toggleButton = new Button(name);
+            toggleButton.setEllipsisEnabled(true);
             toggleButton.setBackgroundColor(series.visible ? activeColor : inactiveColor);
             toggleButton.setHoverColor(hoverColor);
             final short fItemId = itemId;
