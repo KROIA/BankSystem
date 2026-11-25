@@ -47,6 +47,43 @@ public class BankSystemTextMessages {
         return replaceVariable(STILL_ADMIN_VIA_LUCKPERMS_GROUP.getString(), Variables.PLAYER, player);
     }
 
+    private static final Component LUCKPERMS_WRITE_FAILED = Component.translatable(prefix+"luckperms_write_failed");
+    public static String getLuckPermsWriteFailedMessage(String node, String player)
+    {
+        return replaceVariable(LUCKPERMS_WRITE_FAILED.getString().replace("{node}", node), Variables.PLAYER, player);
+    }
+
+    // Admin and trust commands (/banksystem op|deop|trust|untrust|manage)
+    private static final Component ONLY_FOR_ADMINS = Component.translatable(prefix+"only_for_admins");
+    public static String getOnlyForAdminsMessage() { return ONLY_FOR_ADMINS.getString(); }
+
+    private static final Component PLAYER_UUID_NOT_FOUND = Component.translatable(prefix+"player_uuid_not_found");
+    public static String getPlayerUUIDNotFoundMessage(String player)
+    {
+        return replaceVariable(PLAYER_UUID_NOT_FOUND.getString(), Variables.PLAYER, player);
+    }
+
+    private static final Component ADMIN_MODE_ON = Component.translatable(prefix+"admin_mode_on");
+    private static final Component ADMIN_MODE_OFF = Component.translatable(prefix+"admin_mode_off");
+    public static String getAdminModeSetMessage(boolean isAdmin, String player)
+    {
+        return replaceVariable((isAdmin ? ADMIN_MODE_ON : ADMIN_MODE_OFF).getString(), Variables.PLAYER, player);
+    }
+
+    private static final Component SLAVE_ALREADY_TRUSTED = Component.translatable(prefix+"slave_already_trusted");
+    private static final Component SLAVE_NOW_TRUSTED = Component.translatable(prefix+"slave_now_trusted");
+    private static final Component SLAVE_WAS_NOT_TRUSTED = Component.translatable(prefix+"slave_was_not_trusted");
+    private static final Component SLAVE_NO_LONGER_TRUSTED = Component.translatable(prefix+"slave_no_longer_trusted");
+    private static final Component SLAVE_NOT_TRUSTED_FOR_WITHDRAW = Component.translatable(prefix+"slave_not_trusted_for_withdraw");
+    public static String getSlaveAlreadyTrustedMessage(String slaveID) { return SLAVE_ALREADY_TRUSTED.getString().replace("{slave_id}", slaveID); }
+    public static String getSlaveNowTrustedMessage(String slaveID) { return SLAVE_NOW_TRUSTED.getString().replace("{slave_id}", slaveID); }
+    public static String getSlaveWasNotTrustedMessage(String slaveID) { return SLAVE_WAS_NOT_TRUSTED.getString().replace("{slave_id}", slaveID); }
+    public static String getSlaveNoLongerTrustedMessage(String slaveID) { return SLAVE_NO_LONGER_TRUSTED.getString().replace("{slave_id}", slaveID); }
+    public static String getSlaveNotTrustedForWithdrawMessage(String slaveID) { return SLAVE_NOT_TRUSTED_FOR_WITHDRAW.getString().replace("{slave_id}", slaveID); }
+
+    private static final Component MASTER_REQUEST_FAILED = Component.translatable(prefix+"master_request_failed");
+    public static String getMasterRequestFailedMessage() { return MASTER_REQUEST_FAILED.getString(); }
+
     private static final Component TRANSFERED_TO_USER = Component.translatable(prefix+"transferred_to_user");
     public static String getTransferedMessage(String amount, String itemName, String receiver)
     {

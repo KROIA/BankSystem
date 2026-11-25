@@ -83,12 +83,15 @@ if (!(rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean()) {
         include 'net/kroia/banksystem/testing/**'
     }
     // Without the TestKit jar (e.g. on JitPack) skip the offline tests instead of failing the release build.
-    def hasTestKit = {
+    // BS-285: some suites import ModUtilities' testing package, which only a dev ModUtilities jar has; skip with a
+    // release ModUtilities jar too.
+    def jarHas = { String prefix ->
         sourceSets.test.compileClasspath.files.any { f -> f.name.endsWith('.jar') &&
-                new java.util.zip.ZipFile(f).withCloseable { it.getEntry('net/kroia/testkit/OfflineTests.class') != null } }
-    }.memoize()
-    compileTestJava.onlyIf('TestKit jar is on the classpath') { hasTestKit() }
-    test.onlyIf('TestKit jar is on the classpath') { hasTestKit() }
+                new java.util.zip.ZipFile(f).withCloseable { z -> z.entries().find { it.name.startsWith(prefix) } != null } }
+    }
+    def hasTestKit = { jarHas('net/kroia/testkit/OfflineTests.class') && jarHas('net/kroia/modutilities/testing/') }.memoize()
+    compileTestJava.onlyIf('TestKit jar and a dev ModUtilities jar are on the classpath') { hasTestKit() }
+    test.onlyIf('TestKit jar and a dev ModUtilities jar are on the classpath') { hasTestKit() }
     // Test detection loads every class in the test output, now including the suites; the LuckPerms suites' nested
     // classes need the compileOnly LuckPerms API. Only scan the JUnit classes (suites are named *Tests).
     test.include '**/*Test.class'

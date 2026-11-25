@@ -29,6 +29,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.alchemy.PotionContents;
@@ -43,6 +44,16 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
+
+    // Labels set on the server side render in the server language (English on a dedicated server).
+    private static final String PREFIX = "gui.banksystem.display.";
+    public static final Component BALANCE_OVERVIEW_TEXT = Component.translatable(PREFIX + "balance_overview");
+    public static final Component BALANCE_HISTORY_TEXT = Component.translatable("gui.banksystem.balance_history.title");
+    private static final Component TITLE_TEXT = Component.translatable("block.banksystem.banksystem_display_block");
+    private static final Component CONFIGURE_HINT_TEXT = Component.translatable(PREFIX + "configure_hint");
+    private static final Component LOADING_TEXT = Component.translatable(PREFIX + "loading");
+    private static final Component STATUS_LOADING_TEXT = Component.translatable(PREFIX + "status_loading");
+    private static final Component STATUS_NO_DATA_TEXT = Component.translatable(PREFIX + "status_no_data");
 
     public enum DisplayType {
         NONE("none", "Select Display"),
@@ -495,13 +506,13 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
     // =========================================================================
 
     private static void buildUnconfiguredUI(Gui gui, int w, int h) {
-        Label title = new Label("Bank Display");
+        Label title = new Label(TITLE_TEXT.getString());
         title.setBounds(0, h / 2 - 16, w, 14);
         title.setAlignment(GuiElement.Alignment.CENTER);
         title.setTextColor(ColorUtilities.getRGB(200, 220, 255));
         gui.addElement(title);
 
-        Label hint = new Label("Right-click to configure");
+        Label hint = new Label(CONFIGURE_HINT_TEXT.getString());
         hint.setBounds(0, h / 2 + 2, w, 12);
         hint.setAlignment(GuiElement.Alignment.CENTER);
         hint.setTextColor(ColorUtilities.getRGB(140, 140, 160));
@@ -579,7 +590,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 pendingRebuild = true;
                 return;
             }
-            String notFoundText = "Account #" + accountNumber + " (not found)";
+            String notFoundText = Component.translatable(PREFIX + "account_not_found", accountNumber).getString();
             if (overviewAccountLabel != null && !notFoundText.equals(overviewAccountLabel.getText())) {
                 overviewAccountLabel.setText(notFoundText);
                 syncToClientPublic();
@@ -746,14 +757,14 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         int iconLabelGap = 3;
         int y = OV_MARGIN;
 
-        Label title = new Label("Balance Overview");
+        Label title = new Label(BALANCE_OVERVIEW_TEXT.getString());
         title.setBounds(0, y, w, 14);
         title.setAlignment(GuiElement.Alignment.CENTER);
         title.setTextColor(ColorUtilities.getRGB(200, 220, 255));
         gui.addElement(title);
         y += 18;
 
-        Label accountLabel = new Label("loading...");
+        Label accountLabel = new Label(LOADING_TEXT.getString());
         accountLabel.setId("account_label");
         accountLabel.setBounds(0, y, w, 12);
         accountLabel.setAlignment(GuiElement.Alignment.CENTER);
@@ -880,7 +891,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         if (records.isEmpty()) {
             historyChart.clearSeries();
             clearLegend(0);
-            if (historyStatusLabel != null) historyStatusLabel.setText("Status: no data");
+            if (historyStatusLabel != null) historyStatusLabel.setText(STATUS_NO_DATA_TEXT.getString());
             syncToClientPublic();
             return;
         }
@@ -955,7 +966,7 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         historyChart.scrollToPresent();
 
         if (historyStatusLabel != null) {
-            historyStatusLabel.setText("Status: " + sortedItems.size() + " items");
+            historyStatusLabel.setText(Component.translatable(PREFIX + "status_items", sortedItems.size()).getString());
         }
 
         syncToClientPublic();
@@ -1016,14 +1027,14 @@ public class BankSystemDisplayBlockEntity extends AbstractDisplayBlockEntity {
         int legendX = w - HIST_MARGIN - LEGEND_WIDTH;
         int chartWidth = legendX - HIST_MARGIN * 2;
 
-        Label title = new Label("Balance History");
+        Label title = new Label(BALANCE_HISTORY_TEXT.getString());
         title.setBounds(0, y, w, 14);
         title.setAlignment(GuiElement.Alignment.CENTER);
         title.setTextColor(ColorUtilities.getRGB(200, 220, 255));
         gui.addElement(title);
         y += 18;
 
-        Label status = new Label("Status: loading...");
+        Label status = new Label(STATUS_LOADING_TEXT.getString());
         status.setId("status");
         status.setBounds(HIST_MARGIN, y, chartWidth, 10);
         status.setAlignment(GuiElement.Alignment.LEFT);
