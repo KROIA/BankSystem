@@ -238,7 +238,9 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         dividendCheckBox.setHoverTooltipSupplier(MODE_DIVIDEND_TOOLTIP::getString);
         dividendCheckBox.setOnStateChanged(checked -> {
             dirty = true;
-            applyModeVisibility(checked || (oneTimeCheckBox != null && oneTimeCheckBox.isChecked()));
+            // BS-293: one-time payouts pay one target, so dividend and one-time exclude each other.
+            if (checked && oneTimeCheckBox != null) oneTimeCheckBox.setChecked(false);
+            applyModeVisibility(checked);
         });
 
         // Feature C — ONE_TIME mode toggle.
@@ -248,6 +250,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         oneTimeCheckBox.setHoverTooltipSupplier(ONE_TIME_TOOLTIP::getString);
         oneTimeCheckBox.setOnStateChanged(checked -> {
             dirty = true;
+            if (checked) dividendCheckBox.setChecked(false); // BS-293
             applyOneTimeModeVisibility(checked);
         });
 
@@ -364,7 +367,7 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         for (Button b : intervalButtons) b.setEnabled(!oneTime && canManage);
         customMinutesBox.setEnabled(!oneTime && canManage && selectedIntervalIdx == intervalButtons.length - 1);
         executeInBox.setEnabled(oneTime && canManage);
-        // ONE_TIME + DIVIDEND is valid; re-apply dividend visibility.
+        // Re-apply dividend visibility (ONE_TIME always has a target).
         applyModeVisibility(dividendCheckBox.isChecked());
     }
 
@@ -522,9 +525,9 @@ public class PayoutEditScreen extends BankSystemGuiScreen {
         byte mode = (byte) modeEnum.ordinal();
         UUID target = dividend ? null : targetUUID;
         int accountNr = dividend ? PayoutSchedule.NO_TARGET_ACCOUNT : targetAccountNr;
+        if (modeEnum != PayoutSchedule.Mode.DIVIDEND && target == null) return; // BS-293: server refuses it too
 
         if (original == null) {
-            if (!dividend && targetUUID == null) return;
             AsyncCompanyManager.createPayoutAsync(companyId, target, amount, intervalTicks, 0L, caller,
                             accountNr, mode, currencyItem)
                     // Bug D fix (v2.1.0) — hop to render thread before firing onDirty
