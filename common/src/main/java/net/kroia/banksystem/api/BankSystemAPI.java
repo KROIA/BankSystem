@@ -81,7 +81,7 @@ public interface BankSystemAPI {
      * <p>
      * Adapters call this during their mod-init phase to make themselves discoverable
      * for the binding UI and for {@code ServerBank} balance delegation (see
-     * {@code documentation/developer-guide/CurrencyIntegration.md}).
+     * https://kroia.github.io/BanksystemStockmarketDoku/developers/banksystem/currency-integration/).
      * <p>
      * If a provider with the same {@link ExternalCurrencyProvider#providerId()} is
      * already registered, the previous registration is replaced — this lets

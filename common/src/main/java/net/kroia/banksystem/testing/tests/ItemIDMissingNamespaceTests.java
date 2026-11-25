@@ -51,7 +51,7 @@ public class ItemIDMissingNamespaceTests extends TestSuite {
         plain.putString("note", "not an id: just text");
 
         Map<String, Integer> counts = ItemIDManager.countMissingNamespaces(List.of(item, book, listed, plain), loaded::contains);
-        return assertEquals("create counted twice (item + enchantment), othermod once, unexplained entry as unknown",
-                Map.of("create", 2, "othermod", 1, "unknown", 1), counts);
+        return assertEquals("create counted twice (item + enchantment), othermod once, unexplained entry as changed by an update",
+                Map.of("create", 2, "othermod", 1, ItemIDManager.CHANGED_BY_UPDATE, 1), counts);
     }
 }
