@@ -860,7 +860,7 @@ public class AsyncBankSystemCommandHandler implements IAsyncBankSystemCommandHan
     static void reportFailure(UUID executor, Throwable ex)
     {
         error("Async command execution failed for player: " + Request.tryGetPlayerName(executor), TransferStatusRequest.cause(ex));
-        ServerPlayerUtilities.printToClientConsole(executor, "Request to the master server failed or timed out; check the result before retrying.");
+        ServerPlayerUtilities.printToClientConsole(executor, net.kroia.banksystem.util.BankSystemTextMessages.getMasterRequestFailedMessage());
     }
 
     /** Issue #79: when {@code src} fails, {@code dst} fails with it and the admin is told once. */

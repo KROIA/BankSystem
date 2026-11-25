@@ -153,9 +153,8 @@ public final class AdminFlagSync {
         CompletableFuture<Boolean> write = LuckPermsBridge.setNode(player, BankSystemPermissions.ADMIN, admin);
         write.thenAccept(ok -> {
             if (!ok)
-                onServerThread(() -> ServerBankSystemCommandHandler.sendMessage(executor, "Failed to write the LuckPerms node '"
-                        + BankSystemPermissions.ADMIN + "' for " + playerName + " (see the server log). "
-                        + "The BankSystem flag was changed, but the next LuckPerms change of that node overwrites it."));
+                onServerThread(() -> ServerBankSystemCommandHandler.sendMessage(executor,
+                        BankSystemTextMessages.getLuckPermsWriteFailedMessage(BankSystemPermissions.ADMIN, playerName)));
         });
         if (admin)
             return;

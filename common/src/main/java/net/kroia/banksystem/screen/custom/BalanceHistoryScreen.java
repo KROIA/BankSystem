@@ -58,6 +58,8 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
     private static final String VIEWPORT_KEY = "viewport";
 
     private static final Component FILTER_LABEL_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".filter");
+    private static final Component TITLE_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.title");
+    private static final Component TOTAL_WEALTH_TEXT = Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.total_wealth");
 
     private record ToggleRow(GuiElement element, String name) {}
 
@@ -123,13 +125,13 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
      * @param adminView     Task #116: also show the account's suspicion flags as markers (admin only)
      */
     public BalanceHistoryScreen(Screen parent, int accountNumber, boolean adminView) {
-        super(Component.literal("Balance History"), parent);
+        super(TITLE_TEXT, parent);
         this.accountNumber = accountNumber;
         this.adminView = adminView;
 
         titleLabel = new Label(isServerWide()
                 ? Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.server_title").getString()
-                : "Balance History - Account #" + accountNumber);
+                : Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.title_account", accountNumber).getString());
         titleLabel.setTextFontScale(1.0f);
         addElement(titleLabel);
 
@@ -205,7 +207,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
         getBankManager().getBankAccountDataAsync(accountNumber).thenAccept(data ->
                 Minecraft.getInstance().execute(() -> {
                     if (data != null) {
-                        titleLabel.setText("Balance History - " + data.accountName + " (#" + accountNumber + ")");
+                        titleLabel.setText(Component.translatable("gui." + BankSystemMod.MOD_ID + ".balance_history.title_account_name", data.accountName, accountNumber).getString());
                         ratioByItem.clear();
                         for (Map.Entry<ItemID, net.kroia.banksystem.banking.clientdata.BankData> e : data.bankData.entrySet()) {
                             ratioByItem.put(e.getKey().getShort(), e.getValue().rawUnitsPerItem());
@@ -610,7 +612,7 @@ public class BalanceHistoryScreen extends BankSystemGuiScreen {
      */
     private void addWealthSeries(List<BalanceHistoryRecord> wealthRecords, double scaleFactor) {
         int wealthColor = ColorUtilities.getRGB(255, 215, 0);
-        String wealthName = "Total Wealth";
+        String wealthName = TOTAL_WEALTH_TEXT.getString();
         short wealthId = BalanceHistoryRecord.WEALTH_ITEM_ID;
 
         BalanceHistoryChart.LineSeries wealthSeries = new BalanceHistoryChart.LineSeries(wealthName, wealthColor);
