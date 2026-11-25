@@ -1,5 +1,6 @@
 package net.kroia.banksystem.banking.bankaccount;
 
+import net.kroia.banksystem.util.ServerThread;
 import net.kroia.modutilities.NbtCompat;
 import java.util.Objects;
 import com.google.gson.JsonArray;
@@ -310,7 +311,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<BankAccountData> getAccountDataAsync()
     {
-        return CompletableFuture.completedFuture(getAccountData());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getAccountData());
+        });
     }
 
 
@@ -398,7 +401,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<@Nullable BankAccountData> getAccountDataAsync(ItemID itemID)
     {
-        return CompletableFuture.completedFuture(getAccountData(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getAccountData(itemID));
+        });
     }
 
 
@@ -421,7 +426,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<@Nullable BankData> getBankDataAsync(ItemID itemID)
     {
-        return CompletableFuture.completedFuture(getBankData(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankData(itemID));
+        });
     }
 
 
@@ -438,7 +445,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<List<BankData>> getBankDataAsync()
     {
-        return CompletableFuture.completedFuture(getBankData());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getBankData());
+        });
     }
 
 
@@ -457,7 +466,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<@Nullable BankUserData> getUserDataAsync(UUID userUUID) {
-        return CompletableFuture.completedFuture(getUserData(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getUserData(userUUID));
+        });
     }
 
 
@@ -471,7 +482,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<List<BankUserData>> getUserDataAsync() {
-        return CompletableFuture.completedFuture(getUserData());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getUserData());
+        });
     }
 
 
@@ -486,7 +499,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<@Nullable UserData> getPersonalBankOwnerDataAsync() {
-        return CompletableFuture.completedFuture(getPersonalBankOwnerData());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getPersonalBankOwnerData());
+        });
     }
 
 
@@ -528,7 +543,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<String> getAccountNameAsync() {
-        return CompletableFuture.completedFuture(accountName);
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(accountName);
+        });
     }
 
 
@@ -574,7 +591,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<@Nullable ItemID> getAccountIconAsync() {
-        return CompletableFuture.completedFuture(accountIcon); // Get the icon of the bank account
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(accountIcon); // Get the icon of the bank account
+        });
     }
 
 
@@ -596,7 +615,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<Integer> getPermissionAsync(UUID userUUID) {
-        return CompletableFuture.completedFuture(getPermission(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(getPermission(userUUID));
+        });
     }
 
 
@@ -618,7 +639,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<Boolean> hasPermissionAsync(UUID userUUID, int permission)
     {
-        return CompletableFuture.completedFuture(hasPermission(userUUID, permission));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(hasPermission(userUUID, permission));
+        });
     }
 
 
@@ -850,7 +873,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<Boolean> hasAnyUserAsync() {
-        return CompletableFuture.completedFuture(hasAnyUser());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(hasAnyUser());
+        });
     }
 
 
@@ -863,7 +888,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<Boolean> hasUserAsync(UUID userUUID) {
-        return CompletableFuture.completedFuture(hasUser(userUUID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(hasUser(userUUID));
+        });
     }
 
 
@@ -882,7 +909,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<@Nullable User> getPersonalBankOwnerAsync() {
-        return CompletableFuture.completedFuture(personalBankOwner); // Get the personalBankOwnerData of the bank account
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(personalBankOwner); // Get the personalBankOwnerData of the bank account
+        });
     }
 
 
@@ -920,22 +949,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<@Nullable IAsyncBank> createBankAsync(ItemID itemID, long startBalance)
     {
-        if (itemID == null || !itemID.isValid()) {
-            return CompletableFuture.completedFuture(null); // Invalid item ID
-        }
-        itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
-        if (banks.containsKey(itemID)) {
-            return CompletableFuture.completedFuture(banks.get(itemID)); // Return existing bank if it already exists
-        }
-        ServerBank bank = ServerBank.create(itemID, startBalance); // Create a new bank with 0 balance
-        if (bank != null) {
-            bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
-            banks.put(itemID, bank); // Add new bank to the account
-            hasChanges = true;
-            logRawSlot(bank, bank.getTotalBalance(), "bank created"); // BS-254
-            return CompletableFuture.completedFuture(bank);
-        }
-        return CompletableFuture.completedFuture(null); // Failed to create bank
+        return ServerThread.call(() -> CompletableFuture.completedFuture(createBank(itemID, startBalance)));
     }
 
 
@@ -1007,7 +1021,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<List<ItemID>> removeEmptyBanksAsync()
     {
-        return CompletableFuture.completedFuture(removeEmptyBanks());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(removeEmptyBanks());
+        });
     }
 
 
@@ -1038,7 +1054,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<Boolean> hasAnyBankAsync() {
-        return CompletableFuture.completedFuture(hasAnyBank());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(hasAnyBank());
+        });
     }
 
 
@@ -1051,7 +1069,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<Boolean> hasBankAsync(ItemID itemID) {
-        return CompletableFuture.completedFuture(hasBank(itemID));
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(hasBank(itemID));
+        });
     }
 
 
@@ -1067,11 +1087,13 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getBankAsync(ItemID itemID) {
-        if (itemID == null) {
-            return CompletableFuture.completedFuture(null); // Invalid item ID
-        }
-        // Alias safety net: merged IDs resolve to their canonical bank (see getAccountData).
-        return CompletableFuture.completedFuture(banks.get(ItemIDManager.resolveAlias(itemID))); // Get bank by item ID
+        return ServerThread.call(() -> {
+            if (itemID == null) {
+                return CompletableFuture.completedFuture(null); // Invalid item ID
+            }
+            // Alias safety net: merged IDs resolve to their canonical bank (see getAccountData).
+            return CompletableFuture.completedFuture(banks.get(ItemIDManager.resolveAlias(itemID))); // Get bank by item ID
+        });
     }
 
 
@@ -1097,19 +1119,7 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<@Nullable IAsyncBank> getOrCreateBankAsync(ItemID itemID)
     {
-        if (itemID == null) {
-            return CompletableFuture.completedFuture(null); // Invalid item ID
-        }
-        itemID = ItemIDManager.resolveAlias(itemID); // alias safety net (see getAccountData)
-        ServerBank bank = banks.get(itemID);
-        if (bank == null) {
-            bank = ServerBank.create(itemID, 0); // Create a new bank with 0 balance if it doesn't exist
-            if (bank != null) {
-                bank.attachToAccount(this.accountNumber); // Task #33: attach for bindings lookup
-                banks.put(itemID, bank); // Add new bank to the account
-            }
-        }
-        return CompletableFuture.completedFuture(bank); // Return the existing or newly created bank
+        return ServerThread.call(() -> CompletableFuture.completedFuture(getOrCreateBank(itemID)));
     }
 
 
@@ -1122,8 +1132,10 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     }
     @Override
     public CompletableFuture<Map<ItemID, IAsyncBank>> getAllBanksAsync() {
-        Map<ItemID, IAsyncBank> bankMap = new HashMap<>(banks);
-        return CompletableFuture.completedFuture(bankMap);
+        return ServerThread.call(() -> {
+            Map<ItemID, IAsyncBank> bankMap = new HashMap<>(banks);
+            return CompletableFuture.completedFuture(bankMap);
+        });
     }
 
     @Override
@@ -1332,7 +1344,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<JsonElement> toJsonAsync()
     {
-        return CompletableFuture.completedFuture(toJson());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(toJson());
+        });
     }
 
 
@@ -1345,7 +1359,9 @@ public class ServerBankAccount implements ServerSaveable, IServerBankAccount {
     @Override
     public CompletableFuture<String> toJsonStringAsync()
     {
-        return CompletableFuture.completedFuture(toJsonString());
+        return ServerThread.call(() -> {
+            return CompletableFuture.completedFuture(toJsonString());
+        });
     }
 
     @Override
