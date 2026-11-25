@@ -65,6 +65,8 @@ public class ExternalCurrencyBindingTests extends TestSuite {
     // The shared test account (non-personal). One instance recycled across cases;
     // setup() zeroes and re-populates its slots each time.
     private static final String TEST_ACCOUNT_NAME = "ExtCurrTestAccount";
+    /** BS-283: db-worker reads stall several seconds per task when parallel cells load the disk; 10 s timed out once. */
+    private static final long DB_READ_TIMEOUT_S = 30;
 
     /** Provider key for the primary bound account used by most tests. */
     private static final String STUB_KEY_A = "stub_account_a";
@@ -573,7 +575,7 @@ public class ExternalCurrencyBindingTests extends TestSuite {
             long since = System.currentTimeMillis();
             if (!manager.suspendIfForeign(row) || !row.suspended()) return fail("foreign binding not suspended");
             if (!BindingRow.fromNbt(row.toNbt()).suspended()) return fail("suspension not persisted in the row NBT");
-            for (var f : flags.getRecent(testAccountNr, since, 0).get(10, java.util.concurrent.TimeUnit.SECONDS))
+            for (var f : flags.getRecent(testAccountNr, since, 0).get(DB_READ_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS))
                 if (f.flagType() == net.kroia.banksystem.banking.ledger.SuspicionChecks.EXTERNAL_BINDING_SUSPENDED
                         && FOREIGN_FLAG_REF.equals(f.ref()))
                     return f.details() != null && f.details().contains(TEST_OWNER.toString())
@@ -763,13 +765,13 @@ public class ExternalCurrencyBindingTests extends TestSuite {
         if (ext != FOREIGN_BALANCE) return "external balance moved: " + ext;
         long left = LEFT_LOCKED + LEFT_DUST, closed = 0;
         int rows = 0;
-        for (var r : BankSystemModBackend.getTransactionLogManager().getByAccount(nr, 0).get(10, TimeUnit.SECONDS)) {
+        for (var r : BankSystemModBackend.getTransactionLogManager().getByAccount(nr, 0).get(DB_READ_TIMEOUT_S, TimeUnit.SECONDS)) {
             if (r.itemId() != slotItemA.getShort() || r.time() < since) continue;
             if (r.type() == LedgerType.ACCOUNT_DELETE_PAYOUT || r.type() == LedgerType.ACCOUNT_DELETE_LOSS) return "paid out: " + r;
             if (r.type() == LedgerType.BANK_CLOSED) { closed += r.amount(); rows++; }
         }
         if (rows != 1 || closed != left) return rows + " BANK_CLOSED row(s) summing " + closed + ", expected one of " + left;
-        for (var f : BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER.getRecent(nr, since, 0).get(10, TimeUnit.SECONDS))
+        for (var f : BankSystemModBackend.getInstances_forTesting().SUSPICION_FLAG_MANAGER.getRecent(nr, since, 0).get(DB_READ_TIMEOUT_S, TimeUnit.SECONDS))
             if (f.flagType() == SuspicionChecks.EXTERNAL_BINDING_SUSPENDED && FOREIGN_FLAG_REF.equals(f.ref()) && f.amount() == left)
                 return null;
         return "no EXTERNAL_BINDING_SUSPENDED flag of " + left;
@@ -818,7 +820,7 @@ public class ExternalCurrencyBindingTests extends TestSuite {
             long since = System.currentTimeMillis();
             var result = manager.removeUserWithPayout(doomed);
             if (result == null) return fail("user not removed");
-            result.get(10, TimeUnit.SECONDS);
+            result.get(DB_READ_TIMEOUT_S, TimeUnit.SECONDS);
             String why = droppedUnpaid(nr, since);
             return why == null ? pass("user deleted: suspended slot paid nothing, one BANK_CLOSED + flag, external untouched")
                     : fail(why);
