@@ -106,10 +106,10 @@ public interface ExternalCurrencyProvider {
 
     /**
      * The set of capability flags this provider advertises. Returned set is
-     * immutable / snapshot-like; BankSystem inspects it before offering shared
-     * bindings, before calling {@link ExternalAccount#syncMembership(Set)}
-     * expecting propagation, and to decide whether
-     * {@link ExternalAccount#canWithdraw(long)} is authoritative.
+     * immutable / snapshot-like. BankSystem currently only passes it on to the
+     * client with the provider list; it does not call
+     * {@link ExternalAccount#syncMembership(Set)} or
+     * {@link ExternalAccount#canWithdraw(long)} yet.
      *
      * @return the feature set. Never {@code null}; may be empty (but a provider
      *         with no features is not very useful).

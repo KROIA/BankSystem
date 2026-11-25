@@ -5,10 +5,11 @@ package net.kroia.banksystem.api.currency;
  * {@link ExternalCurrencyProvider#features()}.
  * <p>
  * A provider returns the subset of these flags that describes what its underlying
- * currency mod can actually do. BankSystem inspects the set before offering binding
- * options in the UI, before attempting shared-account membership synchronization,
- * and to decide whether {@link ExternalAccount#canWithdraw(long)} may be relied on
- * as authoritative.
+ * currency mod can actually do. BankSystem currently only passes the set on to the
+ * client with the provider list; it does not call
+ * {@link ExternalAccount#syncMembership(java.util.Set)} or
+ * {@link ExternalAccount#canWithdraw(long)} yet, so the flags about them describe
+ * the adapter for future use.
  * <p>
  * What each flag implies for currency units and permission mapping:
  * https://kroia.github.io/BanksystemStockmarketDoku/developers/banksystem/currency-integration/#feature-flags
@@ -39,8 +40,8 @@ public enum ProviderFeature {
 
     /**
      * The provider will honor {@link ExternalAccount#syncMembership(java.util.Set)}
-     * calls. If absent, BankSystem still calls {@code syncMembership} on user changes
-     * (as a best-effort no-op) but does not treat lack of propagation as an error.
+     * calls. BankSystem does not call {@code syncMembership} yet, so members of a
+     * shared BankSystem account are not synced to the external mod either way.
      */
     MEMBERSHIP_SYNC,
 
