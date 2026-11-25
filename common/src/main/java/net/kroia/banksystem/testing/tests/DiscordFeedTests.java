@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -314,6 +315,14 @@ public class DiscordFeedTests extends TestSuite {
      * The URL is a secret: it never goes into a result, log or exception text.
      */
     private TestResult live() {
+        return postLive(BankSystemDiscord.TYPES, v -> LIVE.equals(v.get("note")) || LIVE.equals(v.get("details")), this::writeLiveRows);
+    }
+
+    /**
+     * Routes {@code types} to the live webhook, runs {@code write} plus a flush on the server thread and forwards the
+     * posts {@code mine} accepts; each type must be forwarded once. Also used by {@link DocsDiscordPostsSuite}.
+     */
+    protected TestResult postLive(List<String> types, Predicate<Map<String, String>> mine, Runnable write) {
         String file = System.getenv("MC_DISCORD_TEST_WEBHOOK_FILE");
         if (file == null || file.isBlank()) return skip("env MC_DISCORD_TEST_WEBHOOK_FILE not set");
         String url;
@@ -338,7 +347,7 @@ public class DiscordFeedTests extends TestSuite {
         TestResult result;
         boolean restored;
         try {
-            result = livePosts(url, dir, hooksFile, routesFile, setting);
+            result = livePosts(url, dir, hooksFile, routesFile, setting, types, mine, write);
         } catch (IOException e) {
             result = fail("cannot write the Discord config: " + e);
         } finally {
@@ -361,14 +370,15 @@ public class DiscordFeedTests extends TestSuite {
         }
     }
 
-    /** Body of {@link #live()}: writes the test config, posts 10 types, waits for the sender. Caller restores. */
-    private TestResult livePosts(String url, Path dir, Path hooksFile, Path routesFile, Setting<Boolean> setting) throws IOException {
+    /** Body of {@link #postLive}: writes the test config, posts {@code types}, waits for the sender. Caller restores. */
+    private TestResult livePosts(String url, Path dir, Path hooksFile, Path routesFile, Setting<Boolean> setting,
+                                 List<String> postTypes, Predicate<Map<String, String>> mine, Runnable write) throws IOException {
         JsonObject hooks = new JsonObject();
         hooks.addProperty("live-test", url.trim());
         JsonObject hooksRoot = new JsonObject();
         hooksRoot.add("webhooks", hooks);
         JsonObject types = new JsonObject();
-        for (String t : BankSystemDiscord.TYPES) {
+        for (String t : postTypes) {
             JsonObject route = new JsonObject();
             JsonArray names = new JsonArray();
             names.add("live-test");
@@ -388,11 +398,24 @@ public class DiscordFeedTests extends TestSuite {
         // other suites write ledger rows concurrently: only rows of this test reach Discord
         Map<String, Integer> forwarded = new ConcurrentHashMap<>();
         BankSystemDiscord.sink = (type, v) -> {
-            if (!LIVE.equals(v.get("note")) && !LIVE.equals(v.get("details"))) return;
+            if (!mine.test(v)) return;
             forwarded.merge(type, 1, Integer::sum);
             DiscordWebhooks.post(BankSystemMod.MOD_ID, type, v);
         };
         setting.set(true);
+        onServer(() -> {
+            write.run();
+            BankSystemDiscord.flush(); // posts coalesced dividends
+        });
+        for (String t : postTypes)
+            if (forwarded.getOrDefault(t, 0) != 1) return fail("forwarded per type " + forwarded);
+        // ponytail: no public drain hook on DiscordWebhooks; fixed wait for the sender (batching, rate limits).
+        // Queued items keep their URL, so a slower send still goes out after the caller's restore.
+        pump(10_000);
+        return pass("posted " + postTypes.size() + " types to the live webhook; check the channel");
+    }
+
+    private void writeLiveRows() {
         int cid = company.getCompanyId();
         LedgerActor player = LedgerActor.player(LIVE_PLAYER, "LiveTestPlayer");
         List<TransactionLogRecord> rows = List.of(
@@ -406,18 +429,9 @@ public class DiscordFeedTests extends TestSuite {
                 liveRow(holderAccount, LedgerType.ADMIN_ADD, 50_000L, LedgerActor.admin(LIVE_PLAYER, "LiveTestPlayer"), null, null),
                 liveRow(holderAccount, LedgerType.STARTING_BALANCE, 10_000L, LedgerActor.system(), null, null));
         int flag = SuspicionChecks.LARGE_NOTE_WITHDRAWAL;
-        onServer(() -> {
-            TransactionLedger.writeAll(rows);
-            BankSystemMod.getAPI().getEvents().getSuspicionFlaggedEvent().notifyListeners(new SuspicionFlaggedEvent(
-                    holderAccount, flag, SuspicionChecks.typeName(flag), 1, 42_050L, null, LIVE, System.currentTimeMillis()));
-            BankSystemDiscord.flush(); // posts the coalesced dividend
-        });
-        for (String t : BankSystemDiscord.TYPES)
-            if (forwarded.getOrDefault(t, 0) != 1) return fail("forwarded per type " + forwarded);
-        // ponytail: no public drain hook on DiscordWebhooks; fixed wait for the sender (batching, rate limits).
-        // Queued items keep their URL, so a slower send still goes out after the caller's restore.
-        pump(10_000);
-        return pass("posted 10 types to the live webhook; check the channel");
+        TransactionLedger.writeAll(rows);
+        BankSystemMod.getAPI().getEvents().getSuspicionFlaggedEvent().notifyListeners(new SuspicionFlaggedEvent(
+                holderAccount, flag, SuspicionChecks.typeName(flag), 1, 42_050L, null, LIVE, System.currentTimeMillis()));
     }
 
     // ------------------------------------------------------------------ helpers

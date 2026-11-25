@@ -1172,11 +1172,11 @@ public class BankSystemDataHandler extends DataPersistence implements IBankSyste
 
     /**
      * Loose "is version A newer than version B" comparison on dotted version strings
-     * (numeric segment-wise; non-numeric segments compared lexicographically). Used only
-     * for the downgrade WARN — never for load decisions — so a parse oddity harmlessly
-     * suppresses or emits a warning and nothing else.
+     * (numeric segment-wise; non-numeric segments compared lexicographically). Used for
+     * the downgrade WARN and, in ItemIDManager, to tell pre-2.2.0 saves apart (BS-308),
+     * where a parse oddity falls back to the safe "source unknown" path.
      */
-    private static boolean isVersionNewerThan(String a, String b)
+    static boolean isVersionNewerThan(String a, String b)
     {
         if (a == null || b == null)
             return false;

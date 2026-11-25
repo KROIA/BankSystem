@@ -93,12 +93,12 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
         if (!(controllerBase instanceof BankSystemDisplayBlockEntity ctrl))
             return InteractionResult.PASS;
 
-        if (ctrl.opensSyncedScreenOnUse()) {
+        if (!opensSetupScreen(ctrl, player)) {
             if (ctrl.getGui() == null) return InteractionResult.PASS;
             if (!level.isClientSide()) {
                 if (!ctrl.tryAcquireEditor(player.getUUID())) {
                     net.kroia.modutilities.PlayerCompat.sendMessage(player,
-                            Component.literal("Display is being edited by another player."), true);
+                            Component.translatable("gui.banksystem.display.being_edited"), true);
                     return InteractionResult.FAIL;
                 }
             } else {
@@ -115,6 +115,14 @@ public class BankSystemDisplayBlock extends AbstractDisplayBlock {
                 OpenDisplayConfigScreenPacket.send(sPlayer, ctrl.getBlockPos());
         }
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * BS-295: right-click on a display that shows an account opens its interactive view; sneak + right-click
+     * (empty hands, vanilla skips the block when sneaking with an item) opens the setup screen instead.
+     */
+    public static boolean opensSetupScreen(BankSystemDisplayBlockEntity ctrl, Player player) {
+        return player.isSecondaryUseActive() || !ctrl.opensSyncedScreenOnUse();
     }
 
     @Override

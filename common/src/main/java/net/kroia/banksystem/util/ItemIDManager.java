@@ -19,6 +19,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -974,6 +975,13 @@ public class ItemIDManager implements ServerSaveable {
 
     public static List<ItemID> registerItemStackServerSide_direct(List<ItemStack> itemStacks)
     {
+        return registerItemStackServerSide_direct(itemStacks, null);
+    }
+
+    /** @param byItem BS-286: per-Item view of {@link #itemIDMap} kept in step here, see {@link #getItemID(ItemStack, Map)}; or {@code null} */
+    private static List<ItemID> registerItemStackServerSide_direct(List<ItemStack> itemStacks,
+                                                                   @Nullable Map<Item, List<Map.Entry<ItemID, ItemStack>>> byItem)
+    {
         // Task #23: on the slave, minting is delegated to the master via an ARRS round-trip.
         // The slave-branch is a pure lookup-or-delegate — no fresh shorts are ever allocated
         // locally, guaranteeing zero cross-server ID divergence (Acceptance Criterion A).
@@ -985,7 +993,7 @@ public class ItemIDManager implements ServerSaveable {
         synchronized (itemIDMap) {
             for (ItemStack stack : itemStacks) {
                 // Search the entire list to check if the same item stack already is registered
-                ItemID id = getItemID(stack);
+                ItemID id = getItemID(stack, byItem);
                 if (id != null && id.isValid()) {
                     ids.add(id);
                     continue;
@@ -1083,6 +1091,8 @@ public class ItemIDManager implements ServerSaveable {
                 cpy.setCount(1);
                 newItemIDMap.put(id, cpy);
                 itemIDMap.put(id, cpy);
+                if (byItem != null)
+                    byItem.computeIfAbsent(cpy.getItem(), k -> new ArrayList<>()).add(Map.entry(id, cpy));
                 ids.add(id);
             }
         }
@@ -1418,12 +1428,26 @@ public class ItemIDManager implements ServerSaveable {
      */
     public static @NotNull ItemID getItemID(@NotNull ItemStack itemStack)
     {
+        return getItemID(itemStack, null);
+    }
+
+    /**
+     * @param byItem BS-286: per-Item view of {@link #itemIDMap} (see {@link #createDefaultItemIDs()}),
+     *               or {@code null} to scan the whole map. Same result: only entries of the
+     *               query's Item can match either compare below.
+     */
+    private static @NotNull ItemID getItemID(@NotNull ItemStack itemStack,
+                                             @Nullable Map<Item, List<Map.Entry<ItemID, ItemStack>>> byItem)
+    {
         // Normalize into a working copy: never mutate the caller's stack
         // (the previous implementation temporarily changed its count).
         ItemStack query = VolatileItemComponents.normalize(itemStack);
         query.setCount(1);
+        Iterable<Map.Entry<ItemID, ItemStack>> entries = byItem != null
+                ? byItem.getOrDefault(query.getItem(), List.of())
+                : itemIDMap.entrySet();
         // Fast path: exact component comparison (works for items without registry-backed holders)
-        for(Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet())
+        for(Map.Entry<ItemID, ItemStack> entry : entries)
         {
             if(ItemStack.isSameItemSameComponents(query, entry.getValue()))
             {
@@ -1436,9 +1460,16 @@ public class ItemIDManager implements ServerSaveable {
         RegistryAccess access = UtilitiesPlatform.getRegistryAccessServerSide();
         if (access != null) {
             try {
-                Tag searchTag = ItemStackNbt.save(query, access);
-                for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet()) {
+                Tag searchTag = null;
+                for (Map.Entry<ItemID, ItemStack> entry : entries) {
+                    // BS-286: the tag carries the item id, so another Item never matches. Skipping
+                    // it keeps a miss from NBT-saving every registered item (quadratic server start).
+                    if (!query.is(entry.getValue().getItem()))
+                        continue;
+                    if (searchTag == null)
+                        searchTag = ItemStackNbt.save(query, access);
                     try {
+                        lookupTemplateSaves.incrementAndGet();
                         Tag existingTag = ItemStackNbt.save(entry.getValue(), access);
                         if (searchTag.equals(existingTag)) {
                             return entry.getKey();
@@ -1448,6 +1479,14 @@ public class ItemIDManager implements ServerSaveable {
             } catch (Exception ignored) {}
         }
         return ItemID.INVALID_ID;
+    }
+
+    /** BS-286: registered templates NBT-saved by lookups, for the test that keeps lookups from going quadratic. */
+    private static final java.util.concurrent.atomic.AtomicLong lookupTemplateSaves = new java.util.concurrent.atomic.AtomicLong();
+
+    public static long getLookupTemplateSaves_forTesting()
+    {
+        return lookupTemplateSaves.get();
     }
 
     /*private static @NotNull ItemID generateIdFromItemStack(@NotNull ItemStack itemStack)
@@ -1668,8 +1707,16 @@ public class ItemIDManager implements ServerSaveable {
         // sit at that slot on this side's runtime registry table.
         RegistryAccess syncRegistryAccess = UtilitiesPlatform.getRegistryAccess();
         Map<ItemID, CompoundTag> items = packet.getItems();
+        // BS-287: progress log for a slave's full sync (its bulk item work at start); clients and
+        // incremental syncs stay silent.
+        Progress progress = ownsRegistryMaps && packet.isFullSync()
+                && BACKEND_INSTANCES != null && BACKEND_INSTANCES.isSlaveServer
+                ? new Progress("Applying the master's item IDs", items.size()) : null;
+        int adopted = 0;
         for(Map.Entry<ItemID, CompoundTag> entry : items.entrySet())
         {
+            if (progress != null)
+                progress.step(adopted);
             ItemID id = entry.getKey();
             CompoundTag stackTag = entry.getValue();
             ItemStack itemStack;
@@ -1733,10 +1780,12 @@ public class ItemIDManager implements ServerSaveable {
             // in the network queue while a renormalize pass merges the ID into a canonical
             // one — re-inserting it here would leave the ID both aliased AND registered
             // (an inconsistent registry that would even be saved to disk in singleplayer).
-            if (ownsRegistryMaps && !itemIDAliasMap.containsKey(id))
-                adoptMasterItem(id, cpy);
+            if (ownsRegistryMaps && !itemIDAliasMap.containsKey(id) && adoptMasterItem(id, cpy))
+                adopted++;
             id.tryUpdateNameCache();
         }
+        if (progress != null)
+            progress.done(adopted);
         if (ownsRegistryMaps)
             dropShortsMissingFromFullSync(packet);
         MoneyItem.resetItemID();
@@ -1941,7 +1990,53 @@ public class ItemIDManager implements ServerSaveable {
         // never re-issued (Task #11 / ISSUES.md #56). Stored as an int so an admin can spot
         // the value approaching Short.MAX_VALUE (32767) in the world data.
         tag.putInt("nextShortCounter", usedCounter);
+        // BS-308: the Minecraft data version the item templates are written in, so a world moved
+        // to a newer Minecraft upgrades them with vanilla's DataFixer on load.
+        tag.putInt(net.minecraft.SharedConstants.DATA_VERSION_TAG, net.minecraft.SharedConstants.WORLD_VERSION);
         return true;
+    }
+
+    /** BS-308: Minecraft 1.21.1, the only version BankSystem ran on before 2.2.0, so the oldest source of an unstamped save. */
+    public static final int LEGACY_SOURCE_DATA_VERSION = 3955;
+    /** BS-308: source version of an unstamped save written by 2.2.0/2.2.1 on a newer port: native or 1.21.1, unknown. */
+    public static final int UNKNOWN_SOURCE_DATA_VERSION = 0;
+
+    /**
+     * BS-308: Minecraft data version the items of an ItemIDs.nbt without a {@code DataVersion} stamp were
+     * written in. Before 2.2.0 BankSystem only ran on 1.21.1; a save by 2.2.0/2.2.1 on a newer port may be
+     * native or a 1.21.1 world moved up, so it is {@link #UNKNOWN_SOURCE_DATA_VERSION}.
+     */
+    private static int unstampedSourceDataVersion() {
+        if (net.minecraft.SharedConstants.WORLD_VERSION <= LEGACY_SOURCE_DATA_VERSION)
+            return LEGACY_SOURCE_DATA_VERSION;
+        String lastSavedBy = BACKEND_INSTANCES != null && BACKEND_INSTANCES.SERVER_DATA_HANDLER != null
+                ? BACKEND_INSTANCES.SERVER_DATA_HANDLER.getLastSavedByModVersion() : null;
+        if (lastSavedBy != null && BankSystemDataHandler.isVersionNewerThan("2.2.0", lastSavedBy))
+            return LEGACY_SOURCE_DATA_VERSION;
+        return UNKNOWN_SOURCE_DATA_VERSION;
+    }
+
+    /**
+     * BS-308: strict decode of a saved item template written by Minecraft data version {@code sourceVersion},
+     * upgraded with vanilla's DataFixer first. {@link #UNKNOWN_SOURCE_DATA_VERSION}: decodes as is, and only
+     * when that fails upgrades from 1.21.1 (a native tag must not run through older fixes).
+     */
+    public static Optional<ItemStack> decodeSavedStack(net.minecraft.core.HolderLookup.Provider access, CompoundTag stackTag, int sourceVersion) {
+        if (sourceVersion != UNKNOWN_SOURCE_DATA_VERSION)
+            return parseUpgraded(access, stackTag, sourceVersion);
+        Optional<ItemStack> asIs = ItemStackNbt.parseStrict(access, stackTag);
+        return asIs.isPresent() ? asIs : parseUpgraded(access, stackTag, LEGACY_SOURCE_DATA_VERSION);
+    }
+
+    private static Optional<ItemStack> parseUpgraded(net.minecraft.core.HolderLookup.Provider access, CompoundTag stackTag, int sourceVersion) {
+        try {
+            return ItemStackNbt.parseStrict(access, ItemStackNbt.upgrade(stackTag, sourceVersion));
+        } catch (RuntimeException e) {
+            // A fixer that chokes on the tag leaves the entry unresolved (kept raw, refused by the guard).
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.warn("[ItemIDManager] Could not upgrade a saved item from data version " + sourceVersion + ": " + e);
+            return Optional.empty();
+        }
     }
 
     @Override
@@ -1987,6 +2082,14 @@ public class ItemIDManager implements ServerSaveable {
         if(access == null)
             return false;
 
+        // BS-308: Minecraft data version of the templates. The next save writes them in the
+        // current format with a fresh stamp, so flag the one-shot re-save when that changes.
+        final String dataVersionKey = net.minecraft.SharedConstants.DATA_VERSION_TAG;
+        final int currentDataVersion = net.minecraft.SharedConstants.WORLD_VERSION;
+        int fileDataVersion = tag.contains(dataVersionKey) ? NbtCompat.getInt(tag, dataVersionKey) : unstampedSourceDataVersion();
+        if (!tag.contains(dataVersionKey) || fileDataVersion != currentDataVersion)
+            lastLoadRequiresResave = true;
+
         ListTag listTag =  NbtCompat.getList(tag, "itemIDs", Tag.TAG_COMPOUND);
         for(Tag tagElement : listTag)
         {
@@ -2004,11 +2107,19 @@ public class ItemIDManager implements ServerSaveable {
             // Strict decode (BS-195): a partial decode silently drops unknown data (e.g. an
             // enchantment of a removed mod), so two distinct saved items could collapse into
             // one and merge. Anything that does not decode completely stays unresolved.
-            Optional<ItemStack> itemStackOptional = ItemStackNbt.parseStrict(access, itemStackTag);
+            // BS-308: upgraded from the data version it was written in; a raw entry kept from
+            // an earlier load carries its own.
+            int sourceDataVersion = compoundTag.contains(dataVersionKey) ? NbtCompat.getInt(compoundTag, dataVersionKey) : fileDataVersion;
+            Optional<ItemStack> itemStackOptional = decodeSavedStack(access, itemStackTag, sourceDataVersion);
             if(itemStackOptional.isEmpty()) {
                 // BS-194: keep the raw entry (written back unchanged by save()); the
                 // missing-mod guard below refuses the load or, when confirmed, removes it.
-                unresolvedEntries.put(id, compoundTag.copy());
+                // BS-308: it stays in its old format, so it keeps its source data version
+                // when the file's next stamp will not match it.
+                CompoundTag raw = compoundTag.copy();
+                if (sourceDataVersion != currentDataVersion)
+                    raw.putInt(dataVersionKey, sourceDataVersion);
+                unresolvedEntries.put(id, raw);
                 continue;
             }
 
@@ -3540,12 +3651,14 @@ public class ItemIDManager implements ServerSaveable {
                     mergeList.append("\n  ").append(line);
             }
             throw new ItemIDMissingModsException("[ItemIDManager] " + unresolvedEntries.size()
-                    + " saved ItemID(s) no longer load because their mod is not installed (or they carry data of a missing mod):"
+                    + " saved ItemID(s) no longer load because their mod is not installed, they carry data of a missing mod,"
+                    + " or an update of Minecraft or their mod changed them (\"" + CHANGED_BY_UPDATE + "\"):"
                     + list
                     + mergeList
                     + "\nBankSystem refused to load this world; nothing was changed or saved."
                     + "\nTo fix it, either:"
-                    + "\n  1) install the missing mod(s) again, or"
+                    + "\n  1) install the missing mod(s) again (for items changed by an update: use the versions that last saved"
+                    + "\n     this world), or"
                     + "\n  2) remove these items once: set \"CONFIRM_ITEMID_REMOVE_MISSING\": true in the \"ServerBank\" group of"
                     + "\n     <world>/data/BankSystem/settings.json and start again. Their balances are removed from every bank"
                     + "\n     account (the BankSystem data folder is backed up first); the flag resets itself.",
@@ -3607,10 +3720,16 @@ public class ItemIDManager implements ServerSaveable {
     private static final java.util.regex.Pattern RESOURCE_ID = java.util.regex.Pattern.compile("([a-z0-9_.-]+):[a-z0-9_./-]+");
 
     /**
+     * BS-308: group of saved entries whose mods are all installed: Minecraft or the mod changed or removed
+     * the item in an update (e.g. a renamed item the upgrade does not cover).
+     */
+    public static final String CHANGED_BY_UPDATE = "changed by an update";
+
+    /**
      * Counts saved entries per namespace that {@code isLoaded} does not know: every
      * {@code namespace:path} key or string value in the raw tag is checked, so an installed
      * item carrying data of a removed mod counts for that mod. Entries with no foreign
-     * namespace count as {@code "unknown"}. Sorted by namespace.
+     * namespace count as {@link #CHANGED_BY_UPDATE}. Sorted by namespace.
      */
     public static Map<String, Integer> countMissingNamespaces(Collection<CompoundTag> entries,
                                                              java.util.function.Predicate<String> isLoaded) {
@@ -3619,7 +3738,7 @@ public class ItemIDManager implements ServerSaveable {
             Set<String> found = new TreeSet<>();
             collectForeignNamespaces(entry, isLoaded, found);
             if (found.isEmpty())
-                found.add("unknown");
+                found.add(CHANGED_BY_UPDATE);
             for (String ns : found)
                 counts.merge(ns, 1, Integer::sum);
         }
@@ -3640,7 +3759,7 @@ public class ItemIDManager implements ServerSaveable {
             collectForeignNamespaces(e.getValue(), isLoaded, found);
             String item = NbtCompat.getString(NbtCompat.getCompound(e.getValue(), "itemStack"), "id");
             lines.add("#" + e.getKey().getShort() + " " + (item.isEmpty() ? "?" : item)
-                    + " (" + (found.isEmpty() ? "unknown" : String.join(", ", found)) + ")");
+                    + " (" + (found.isEmpty() ? CHANGED_BY_UPDATE : String.join(", ", found)) + ")");
         }
         return lines;
     }
@@ -3776,15 +3895,76 @@ public class ItemIDManager implements ServerSaveable {
             return;
 
         ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
-        for(ItemStack itemStack : moneyItems)
-        {
-            registerItemStackServerSide_direct(itemStack);
-        }
-        MoneyItem.resetItemID();
+        List<ItemStack> registryItems = new ArrayList<>();
+        access.lookupOrThrow(Registries.ITEM).listElements()
+                .forEach(listElement -> registryItems.add(listElement.value().getDefaultInstance()));
+        Progress progress = new Progress("Registering default item IDs", moneyItems.size() + registryItems.size());
+        // BS-286: lookups only compare entries of the same Item (see getItemID), so index them by
+        // Item once instead of scanning the whole map per item: linear instead of quadratic on
+        // big mod packs. The lock for the whole pass keeps the index in step with itemIDMap; the
+        // only mutation in here is registerItemStackServerSide_direct's put, which adds to it.
+        synchronized (itemIDMap) {
+            int sizeBefore = itemIDMap.size();
+            Map<Item, List<Map.Entry<ItemID, ItemStack>>> byItem = new HashMap<>();
+            for (Map.Entry<ItemID, ItemStack> entry : itemIDMap.entrySet())
+                byItem.computeIfAbsent(entry.getValue().getItem(), k -> new ArrayList<>()).add(Map.entry(entry.getKey(), entry.getValue()));
 
-        access.lookupOrThrow(Registries.ITEM).listElements().forEach(listElement -> {
-            registerItemStackServerSide_direct(listElement.value().getDefaultInstance());
-        });
+            for(ItemStack itemStack : moneyItems)
+            {
+                registerItemStackServerSide_direct(List.of(itemStack), byItem);
+                progress.step(itemIDMap.size() - sizeBefore);
+            }
+            MoneyItem.resetItemID();
+
+            for(ItemStack itemStack : registryItems)
+            {
+                registerItemStackServerSide_direct(List.of(itemStack), byItem);
+                progress.step(itemIDMap.size() - sizeBefore);
+            }
+            progress.done(itemIDMap.size() - sizeBefore);
+        }
+    }
+
+    /**
+     * BS-287: INFO start line, a time-throttled progress line about every 5 s ("x/N (p%), k new")
+     * and a done line, so a long bulk registration on a big mod pack is visible in the server log.
+     */
+    private static final class Progress
+    {
+        private static final long INTERVAL_MS = 5000;
+        private final String what;
+        private final int total;
+        private final long startMs = System.currentTimeMillis();
+        private long lastLogMs = startMs;
+        private int done;
+
+        Progress(String what, int total)
+        {
+            this.what = what;
+            this.total = total;
+            log(what + ": " + total + " items");
+        }
+
+        void step(int newCount)
+        {
+            done++;
+            long now = System.currentTimeMillis();
+            if (now - lastLogMs < INTERVAL_MS)
+                return;
+            lastLogMs = now;
+            log(what + ": " + done + "/" + total + " (" + (total == 0 ? 100 : done * 100L / total) + "%), " + newCount + " new");
+        }
+
+        void done(int newCount)
+        {
+            log(what + ": done, " + done + " items, " + newCount + " new, " + (System.currentTimeMillis() - startMs) + " ms");
+        }
+
+        private static void log(String msg)
+        {
+            if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.LOGGER != null)
+                BACKEND_INSTANCES.LOGGER.info("[ItemIDManager] " + msg);
+        }
     }
 
     /*@Override
