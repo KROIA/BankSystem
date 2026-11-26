@@ -39,7 +39,7 @@ public class ShareSymbolStoreTests extends TestSuite {
     }
 
     /** Smallest bytes {@link ShareSymbolStore#validatePng} accepts: signature + IHDR of a square power-of-two image. */
-    private static byte[] png(int size) {
+    static byte[] png(int size) {
         ByteBuffer b = ByteBuffer.allocate(33);
         b.put(new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A});
         b.putInt(13).put("IHDR".getBytes()).putInt(size).putInt(size);

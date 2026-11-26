@@ -1444,12 +1444,17 @@ public class TransactionLedgerTests extends TestSuite {
         return id;
     }
 
-    /** Reads an account's rows; the single-thread DB worker orders this after every queued write. */
+    /**
+     * Reads an account's rows; the single-thread DB worker orders this after every queued write. BS-310: a failed or
+     * timed-out read throws (the runner reports it) instead of looking like missing rows; 30 s rides out a DB stall.
+     */
     private List<TransactionLogRecord> rows(int account) {
         try {
-            return ledger.getByAccount(account, 0).get(10, TimeUnit.SECONDS);
+            return ledger.getByAccount(account, 0).get(30, TimeUnit.SECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new IllegalStateException("ledger read for account " + account + " timed out after 30 s (DB worker stalled)", e);
         } catch (Exception e) {
-            return List.of();
+            throw new IllegalStateException("ledger read for account " + account + " failed: " + e, e);
         }
     }
 
