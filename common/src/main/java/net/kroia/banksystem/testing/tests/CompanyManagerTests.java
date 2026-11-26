@@ -90,6 +90,73 @@ public class CompanyManagerTests extends TestSuite {
         addTest("uninstall_drops_companies_of_previous_world", this::testUninstallDropsCompanies); // BS-275
         // BS-238 — dividends count every share variant
         addTest("dividend_holdings_sum_all_share_variants", this::testDividendHoldingsSumAllVariants);
+        addTest("one_time_payout_unfunded_backs_off_live", this::testOneTimeUnfundedLive); // BS-293
+    }
+
+    /**
+     * BS-293 on the live bank: a one-time payout from an empty company account, evaluated every second for 30 s
+     * (the executor's cadence), tries 3 times and records 1 failure; once the account is funded the next try pays,
+     * the schedule goes away, and the saved payout history shows the failure and the payment.
+     */
+    private TestResult testOneTimeUnfundedLive() {
+        BankSystemModBackend.Instances i = BankSystemModBackend.getInstances_forTesting();
+        IServerBankManager bm = i == null || i.SERVER_BANK_MANAGER == null ? null : i.SERVER_BANK_MANAGER.getSync();
+        CompanyManager cm = CompanyManager.get();
+        if (bm == null || cm == null || i.PAYOUT_HISTORY_MANAGER == null) return fail("no master bank, company or history manager");
+        UUID target = UUID.fromString("00000000-0000-0000-0000-0000AAAA0293");
+        boolean addedUser = !bm.userExists(target);
+        if (addedUser) bm.addUser(new User(target, "Bs293Target"));
+        net.kroia.banksystem.api.bankaccount.IServerBankAccount source = bm.createBankAccount("__bs293_source");
+        net.kroia.banksystem.api.bankaccount.IServerBankAccount dest = bm.createBankAccount("__bs293_target");
+        Company c = null;
+        try {
+            if (source == null || dest == null) return fail("could not create test accounts");
+            dest.addUser(bm.getUserByUUID(target), net.kroia.banksystem.banking.BankPermission.DEPOSIT.getValue());
+            c = cm.createCompany("Bs293OneTime" + source.getAccountNumber(), source.getAccountNumber(), null, 100L).company;
+            if (c == null) return fail("test company not created");
+            long amount = 1_000L;
+            PayoutSchedule s = cm.createSchedule(c.getCompanyId(), target, amount, CompanyManager.MIN_INTERVAL_TICKS, 0L, null,
+                    dest.getAccountNumber(), "Bs293Target", "__bs293_target", PayoutSchedule.Mode.ONE_TIME,
+                    PayoutSchedule.MONEY_CURRENCY).schedule;
+            if (s == null) return fail("one-time schedule refused");
+            long sid = s.getScheduleId(), first = s.getNextRunTick(), step = PayoutExecutor.PAYOUT_TICK_INTERVAL;
+            List<PayoutHistoryRecord> history = new ArrayList<>();
+            List<TransactionLogRecord> ledgerRows = new ArrayList<>();
+            List<net.kroia.banksystem.api.event.PayoutExecutedInfo> events = new ArrayList<>();
+            int tries = 0;
+            for (long tick = first; tick < first + 600; tick += step) {
+                if (c.findSchedule(sid).getNextRunTick() <= tick) tries++;
+                PayoutExecutor.runDue(cm, c, bm, tick, System.currentTimeMillis(), history, ledgerRows, events);
+            }
+            if (c.findSchedule(sid) == null) return fail("unfunded one-time payout was removed");
+            if (tries != 3 || history.size() != 1 || events.size() != 1)
+                return fail("30 s unfunded: " + tries + " tries, " + history.size() + " history rows, " + events.size()
+                        + " events; expected 3 tries (5 s then 10 s apart), 1 row, 1 event");
+            if (history.get(0).status() != PayoutHistoryRecord.Status.INSUFFICIENT_FUNDS)
+                return fail("failure recorded as " + history.get(0).status());
+
+            source.getOrCreateBank(net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.getItemID()).deposit(amount);
+            for (long tick = first + 600; tick <= first + 700; tick += step)
+                PayoutExecutor.runDue(cm, c, bm, tick, System.currentTimeMillis(), history, ledgerRows, events);
+            if (c.findSchedule(sid) != null) return fail("funded one-time payout did not run at its next try (tick +700)");
+            var paid = dest.getBank(net.kroia.banksystem.minecraft.item.custom.money.MoneyItem.getItemID());
+            if (paid == null || paid.getTotalBalance() != amount) return fail("target got " + (paid == null ? 0 : paid.getTotalBalance()));
+
+            await(i.PAYOUT_HISTORY_MANAGER.save(history), 30_000);
+            List<PayoutHistoryRecord> saved = await(i.PAYOUT_HISTORY_MANAGER.getByScheduleId(sid, 50), 30_000);
+            if (saved == null) return fail("payout history read timed out");
+            int companyId = c.getCompanyId();
+            List<PayoutHistoryRecord.Status> statuses = saved.stream()
+                    .filter(r -> r.companyId() == companyId).map(PayoutHistoryRecord::status).sorted().toList();
+            if (!statuses.equals(List.of(PayoutHistoryRecord.Status.OK, PayoutHistoryRecord.Status.INSUFFICIENT_FUNDS)))
+                return fail("saved history " + statuses + ", expected one OK and one INSUFFICIENT_FUNDS");
+            return pass("unfunded: 3 tries in 30 s, 1 history row; funded: paid once, schedule removed, history saved");
+        } finally {
+            if (c != null) cm.deleteCompany(c.getCompanyId());
+            if (source != null) bm.deleteBankAccount(source.getAccountNumber());
+            if (dest != null) bm.deleteBankAccount(dest.getAccountNumber());
+            if (addedUser && bm.userExists(target)) bm.removeUser(target);
+        }
     }
 
     @Nullable
