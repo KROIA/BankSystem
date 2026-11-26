@@ -101,6 +101,7 @@ public class PortCheckTests extends TestSuite {
         addTest("recipes_loaded", this::recipesLoaded);
         addTest("block_entities_keep_data_on_save_load", this::blockEntityRoundTrip);
         addTest("display_sneak_use_opens_setup_screen", this::displaySneakOpensSetup);
+        addTest("display_sneak_use_placed_in_world", this::displaySneakUsePlaced); // BS-295
         addTest("break_terminal_drops_once", () -> breakDrops(BankSystemBlocks.BANK_TERMINAL_BLOCK.get(),
                 be -> ((BankTerminalBlockEntity) be).getInventory(UUID.randomUUID()).setItem(0, new ItemStack(Items.DIAMOND, 5)),
                 Map.of(BankSystemBlocks.BANK_TERMINAL_BLOCK.get().asItem(), 1, Items.DIAMOND, 5)));
@@ -416,6 +417,55 @@ public class PortCheckTests extends TestSuite {
             return pass("setup screen when unconfigured or sneaking, interactive view otherwise");
         } finally {
             player.setShiftKeyDown(sneaking);
+        }
+    }
+
+    /**
+     * BS-295 in the world: a placed one-block Bank Display that shows an account, used by the online player with
+     * empty hands through vanilla's block-use path. Plain use takes the interactive view (the editor lock), sneak +
+     * use makes the server open the setup screen for that display.
+     */
+    private TestResult displaySneakUsePlaced() {
+        ServerPlayer player = player();
+        if (player == null) return skip("no online player");
+        BlockPos[] row = freeRow(player, 1);
+        if (row == null) return skip("no free air next to the player");
+        ServerLevel level = (ServerLevel) player.level();
+        BlockPos pos = row[0];
+        ItemStack main = player.getMainHandItem().copy(), off = player.getOffhandItem().copy();
+        boolean sneaking = player.isShiftKeyDown();
+        List<BlockPos> opened = new java.util.concurrent.CopyOnWriteArrayList<>();
+        net.kroia.banksystem.networking.entity.OpenDisplayConfigScreenPacket.sent_forTesting = (p, at) -> {
+            if (p == player) opened.add(at);
+        };
+        try {
+            level.setBlock(pos, BankSystemBlocks.BANKSYSTEM_DISPLAY_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
+            if (!(level.getBlockEntity(pos) instanceof BankSystemDisplayBlockEntity display) || !display.isController())
+                return fail("placed block is not a one-block display");
+            display.setConfig(BankSystemDisplayBlockEntity.DisplayType.BALANCE_OVERVIEW, 77);
+            player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            player.setItemInHand(InteractionHand.OFF_HAND, ItemStack.EMPTY);
+            BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false);
+
+            player.setShiftKeyDown(false);
+            player.gameMode.useItemOn(player, level, ItemStack.EMPTY, InteractionHand.MAIN_HAND, hit);
+            if (!opened.isEmpty()) return fail("plain use opened the setup screen");
+            if (!player.getUUID().equals(display.getEditorPlayer()))
+                return fail("plain use did not open the interactive view (editor " + display.getEditorPlayer() + ")");
+            display.releaseEditor(player.getUUID());
+
+            player.setShiftKeyDown(true);
+            player.gameMode.useItemOn(player, level, ItemStack.EMPTY, InteractionHand.MAIN_HAND, hit);
+            if (!opened.equals(List.of(pos))) return fail("sneak + use opened " + opened + ", expected the setup screen of " + pos);
+            if (display.getEditorPlayer() != null) return fail("sneak + use opened the interactive view");
+            return pass("placed display: plain use opens the interactive view, sneak + use the setup screen");
+        } finally {
+            net.kroia.banksystem.networking.entity.OpenDisplayConfigScreenPacket.sent_forTesting = null;
+            player.setShiftKeyDown(sneaking);
+            player.setItemInHand(InteractionHand.MAIN_HAND, main);
+            player.setItemInHand(InteractionHand.OFF_HAND, off);
+            if (level.getBlockEntity(pos) instanceof BankSystemDisplayBlockEntity d) d.releaseEditor(player.getUUID());
+            level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         }
     }
 

@@ -31,7 +31,12 @@ public class OpenDisplayConfigScreenPacket extends BankSystemNetworkPacket {
         this.pos = pos;
     }
 
+    /** Test hook (dev suites only, null otherwise): sees each setup screen the server opens for a player. */
+    public static volatile @org.jetbrains.annotations.Nullable java.util.function.BiConsumer<ServerPlayer, BlockPos> sent_forTesting;
+
     public static void send(ServerPlayer player, BlockPos pos) {
+        java.util.function.BiConsumer<ServerPlayer, BlockPos> hook = sent_forTesting;
+        if (hook != null) hook.accept(player, pos);
         new OpenDisplayConfigScreenPacket(pos).sendToClient(player);
     }
 
