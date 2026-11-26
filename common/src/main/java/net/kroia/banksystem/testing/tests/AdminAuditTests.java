@@ -126,6 +126,8 @@ public class AdminAuditTests extends TestSuite {
         addTest("suspicion_flagged_event_once", this::flagEvent); // Task #119
         addTest("alert_chat_readable", this::alertChatReadable); // BS-241
         addTest("server_network_info_admin_only", this::networkInfoAccess); // Task #142
+        addTest("server_network_info_typed_by_player", this::networkInfoTyped); // BS-292
+        addTest("symbols_reload_reads_world_folder", this::symbolsReloadLive); // BS-294
         // BS-196: flag-gated admin commands
         addTest("permission_nodes_fallback_levels", this::nodeFallbackLevels);
         addTest("admin_command_non_player_uses_op_level", this::gateNonPlayer);
@@ -541,6 +543,73 @@ public class AdminAuditTests extends TestSuite {
         CompletableFuture<Boolean> cmdAdmin = h.banksystem_serverNetworkInfo_async(ADMIN);
         if (!pumpUntil(cmdAdmin::isDone, WAIT_MS) || !cmdAdmin.getNow(false)) return fail("admin command failed");
         return pass("non-admin and untrusted slave refused (request + command); admin served");
+    }
+
+    /**
+     * BS-292 as the player types it: the online player (non-op) runs {@code /banksystem serverNetworkInfo} on the
+     * master. Without the BankSystem admin flag they are told it is admin-only; with it they are not refused.
+     */
+    private TestResult networkInfoTyped() {
+        if (manager == null || getServer() == null) return skip("no master server");
+        List<ServerPlayer> players = getServer().getPlayerList().getPlayers();
+        if (players.isEmpty()) return skip("no online player");
+        ServerPlayer player = players.get(0);
+        UUID id = player.getUUID();
+        boolean before = manager.isBanksystemAdmin(id);
+        List<String> told = new CopyOnWriteArrayList<>();
+        ServerBankSystemCommandHandler.messageListener_forTesting = (to, msg) -> { if (id.equals(to)) told.add(msg); };
+        try {
+            if (!manager.setBanksystemAdminMode(id, false)) return fail("player has no master user");
+            getServer().getCommands().performPrefixedCommand(nonOp(player, new Capture()), "banksystem serverNetworkInfo");
+            if (!pumpUntil(() -> told.stream().anyMatch(m -> m.contains(ServerBankSystemCommandHandler.NO_ADMIN_MESSAGE)), WAIT_MS))
+                return fail("player without the admin flag was not refused: " + told);
+            told.clear();
+            manager.setBanksystemAdminMode(id, true);
+            getServer().getCommands().performPrefixedCommand(nonOp(player, new Capture()), "banksystem serverNetworkInfo");
+            pump(500);
+            if (!told.isEmpty()) return fail("player with the admin flag was refused: " + told);
+            return pass("typed command: refused without the admin flag, served with it");
+        } finally {
+            ServerBankSystemCommandHandler.messageListener_forTesting = null;
+            manager.setBanksystemAdminMode(id, before);
+        }
+    }
+
+    /**
+     * BS-294 in the running world: a PNG copied into the world's share symbol folder is a symbol after
+     * {@code /banksystem symbols reload} (and in {@code symbols list}); once deleted, the next reload drops it.
+     */
+    private TestResult symbolsReloadLive() {
+        var store = BankSystemModBackend.getInstances_forTesting().SHARE_SYMBOL_STORE;
+        if (manager == null || getServer() == null || store == null) return skip("no master server");
+        String id = "zz_bs294_live";
+        Path file = getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
+                .resolve("data").resolve("BankSystem").resolve("share_symbols").resolve(id + ".png");
+        try {
+            Files.write(file, ShareSymbolStoreTests.png(16));
+            Capture reload = console("banksystem symbols reload");
+            if (!store.isValidSymbolId(id)) return fail("copied PNG is no symbol after reload: " + reload.lines);
+            Capture list = console("banksystem symbols list");
+            if (!list.has("  " + id + "  ")) return fail("symbols list does not show it: " + list.lines);
+            Files.delete(file);
+            reload = console("banksystem symbols reload");
+            if (store.isValidSymbolId(id)) return fail("deleted PNG still a symbol after reload: " + reload.lines);
+            return pass("reload added the copied PNG (listed) and dropped it once deleted");
+        } catch (Exception e) {
+            return fail("threw " + e);
+        } finally {
+            try {
+                if (Files.deleteIfExists(file)) store.adminReload();
+            } catch (Exception ignored) {}
+        }
+    }
+
+    /** Runs {@code command} as the server console and returns what it printed. */
+    private Capture console(String command) {
+        Capture out = new Capture();
+        getServer().getCommands().performPrefixedCommand(getServer().createCommandSourceStack().withSource(out), command);
+        pumpUntil(() -> !out.lines.isEmpty(), WAIT_MS);
+        return out;
     }
 
     private static boolean refused(CompletableFuture<ServerNetworkInfoRequest.OutputData> reply) {
